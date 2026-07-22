@@ -26,7 +26,7 @@
 
 ## 🤖 自动配置全平台 AI 助手技能
 
-内置自动化脚本，可自动扫描本机已安装的 AI 工具（Claude Code、Gemini/Antigravity、OpenAI Codex、Cursor、Windsurf、OpenClaw 等），并将本仓库中的全量技能自动软链接/配置到各个 AI 助手中：
+内置自动化脚本，可自动扫描本机已安装的 AI 工具（OpenCode、WorkBuddy、Trae、Claude Code、Gemini/Antigravity、OpenAI Codex、Cursor、Windsurf 等），并将本仓库中的全量技能自动软链接/配置到各个 AI 助手中：
 
 ```bash
 # 自动检测本机已安装的 AI 助手并一键挂载全量技能
@@ -36,14 +36,17 @@ python3 scripts/auto_config_ai.py
 python3 scripts/auto_config_ai.py --dry-run
 ```
 
-### 支持的 AI 助手与配置路径
+### 支持与已配置的 AI 助手路径
 
+- **OpenCode Agent** (`~/.opencode/skills/`)
+- **WorkBuddy AI** (`~/.workbuddy/skills/`)
+- **Trae CN / Trae IDE** (`~/.trae-cn/skills/`)
 - **Claude Code / Claude Agent** (`~/.claude/skills/`)
 - **Google Gemini / Antigravity Agent** (`~/.gemini/config/skills.json` 与 `~/.gemini/config/skills/`)
 - **OpenAI Codex Agent** (`~/.codex/skills/`)
 - **Cursor IDE** (`~/.cursor/skills/`)
 - **Windsurf IDE** (`~/.codeium/windsurf/skills/`)
-- **OpenClaw Agent** (`~/.openclaw/skills/`)
+- **OpenClaw / Cline / Roo Code / OpenHands**
 
 ---
 

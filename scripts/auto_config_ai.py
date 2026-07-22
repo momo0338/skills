@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Momo Skills — 自动检测本机 AI 工具并配置技能共享
-自动扫描系统中的 Claude Code、Gemini/Antigravity、Codex、Cursor、Windsurf、OpenClaw 等 AI 助手配置，
+自动扫描系统中的 Claude Code、Gemini/Antigravity、Codex、WorkBuddy、Trae、OpenCode、Cursor、Windsurf、OpenClaw 等 AI 助手配置，
 将本 repo 中的技能自动挂载/配置到各大 AI 助手中，实现全平台 AI 技能统一管理。
 
 Usage:
@@ -43,6 +43,24 @@ AI_TARGETS = [
         "type": "symlink_dir",
     },
     {
+        "name": "WorkBuddy AI",
+        "detect_paths": [os.path.join(HOME_DIR, ".workbuddy"), os.path.join(HOME_DIR, "Workbuddy")],
+        "skills_dir": os.path.join(HOME_DIR, ".workbuddy", "skills"),
+        "type": "symlink_dir",
+    },
+    {
+        "name": "Trae CN / Trae IDE",
+        "detect_paths": [os.path.join(HOME_DIR, ".trae-cn"), os.path.join(HOME_DIR, ".trae")],
+        "skills_dir": os.path.join(HOME_DIR, ".trae-cn", "skills"),
+        "type": "symlink_dir",
+    },
+    {
+        "name": "OpenCode Agent",
+        "detect_paths": [os.path.join(HOME_DIR, ".opencode"), os.path.join(HOME_DIR, "opencode")],
+        "skills_dir": os.path.join(HOME_DIR, ".opencode", "skills"),
+        "type": "symlink_dir",
+    },
+    {
         "name": "Cursor IDE",
         "detect_paths": [os.path.join(HOME_DIR, ".cursor"), os.path.join(HOME_DIR, ".cursorrules")],
         "skills_dir": os.path.join(HOME_DIR, ".cursor", "skills"),
@@ -58,6 +76,18 @@ AI_TARGETS = [
         "name": "OpenClaw Agent",
         "detect_paths": [os.path.join(HOME_DIR, ".openclaw")],
         "skills_dir": os.path.join(HOME_DIR, ".openclaw", "skills"),
+        "type": "symlink_dir",
+    },
+    {
+        "name": "Cline / Roo Code",
+        "detect_paths": [os.path.join(HOME_DIR, ".cline")],
+        "skills_dir": os.path.join(HOME_DIR, ".cline", "skills"),
+        "type": "symlink_dir",
+    },
+    {
+        "name": "OpenHands Agent",
+        "detect_paths": [os.path.join(HOME_DIR, ".openhands")],
+        "skills_dir": os.path.join(HOME_DIR, ".openhands", "skills"),
         "type": "symlink_dir",
     },
 ]
