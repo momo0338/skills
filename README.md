@@ -24,9 +24,30 @@
 
 ---
 
-## 🛠️ 快速安装与配置指南
+## 🤖 自动配置全平台 AI 助手技能
 
-### 1. 基础系统依赖安装
+内置自动化脚本，可自动扫描本机已安装的 AI 工具（Claude Code、Gemini/Antigravity、OpenAI Codex、Cursor、Windsurf、OpenClaw 等），并将本仓库中的全量技能自动软链接/配置到各个 AI 助手中：
+
+```bash
+# 自动检测本机已安装的 AI 助手并一键挂载全量技能
+python3 scripts/auto_config_ai.py
+
+# 预览拟配置的 AI 助手与路径 (不实际写文件)
+python3 scripts/auto_config_ai.py --dry-run
+```
+
+### 支持的 AI 助手与配置路径
+
+- **Claude Code / Claude Agent** (`~/.claude/skills/`)
+- **Google Gemini / Antigravity Agent** (`~/.gemini/config/skills.json` 与 `~/.gemini/config/skills/`)
+- **OpenAI Codex Agent** (`~/.codex/skills/`)
+- **Cursor IDE** (`~/.cursor/skills/`)
+- **Windsurf IDE** (`~/.codeium/windsurf/skills/`)
+- **OpenClaw Agent** (`~/.openclaw/skills/`)
+
+---
+
+## 🛠️ 基础系统依赖安装
 
 ```bash
 # macOS (Homebrew)
@@ -37,41 +58,6 @@ pip install --break-system-packages scrapling html2text browserforge requests yt
 
 # npm 全局工具
 npm install -g defuddle @jackwener/opencli
-```
-
-### 2. 核心技能命令示例
-
-#### 抖音专项与搜索/下载
-
-```bash
-# 抖音关键词搜索 (短索引流机制)
-dy search "AI Agent 教程" --limit 10
-
-# 抖音无水印视频/图文下载 (按编号 1 或 URL)
-dy dl 1
-
-# 抖音实时热榜 Top 50
-dy trending
-```
-
-#### 代理管理与请求转发
-
-```bash
-# 从 GitHub 同步最新代理数据
-python3 proxy/scripts/proxy_manager.py sync
-
-# 随机获取一个 HTTP 代理
-python3 proxy/scripts/proxy_manager.py get --protocol http
-```
-
-#### 网页正文提取与阅读
-
-```bash
-# 使用 Scrapling 本地抓取并提取 Markdown (支持 Fast 和 Stealth 无头浏览器模式)
-python3 scrapling/scripts/fetch.py "https://sspai.com/post/73145" --json
-
-# 使用 Jina Reader 云端即时读取网页
-curl -s "https://r.jina.ai/https://example.com"
 ```
 
 ---
