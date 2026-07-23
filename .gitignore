@@ -4,3 +4,4 @@
 *.webm
 *.mkv
 *.log
+__pycache__/
