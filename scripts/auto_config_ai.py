@@ -15,6 +15,8 @@ import os
 import json
 import argparse
 import shutil
+import platform
+import subprocess
 
 # 获取根技能目录
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -113,6 +115,69 @@ def is_target_installed(target):
             return True
     return False
 
+def _create_link(source, link_name):
+    """跨平台创建目录链接：Windows 用 junction（无需管理员），其他平台用 symlink"""
+    if platform.system() == "Windows":
+        # Windows: 优先使用 junction（无需特权），失败则回退到 symlink
+        ret = subprocess.run(
+            ["cmd", "/c", "mklink", "/J", link_name, source],
+            capture_output=True, text=True
+        )
+        if ret.returncode == 0:
+            return True
+        # junction 失败，尝试 symlink（需要管理员或开发者模式）
+        os.symlink(source, link_name)
+        return True
+    else:
+        os.symlink(source, link_name)
+        return True
+
+def _readlink_compat(link_name):
+    """跨平台读取链接目标路径（支持 junction 和 symlink）"""
+    if platform.system() == "Windows":
+        # Python 3.12+ 原生支持 readlink junction
+        try:
+            return os.readlink(link_name)
+        except (OSError, NotImplementedError):
+            pass
+        # 回退：用 subst 命令解析 junction
+        try:
+            out = subprocess.run(
+                ["cmd", "/c", "dir", link_name],
+                capture_output=True, text=True, encoding="gbk"
+            )
+            for line in out.stdout.splitlines():
+                if "<JUNCTION>" in line or "<SYMLINK>" in line:
+                    # 格式: <JUNCTION>     link_name [target]
+                    parts = line.split("[")
+                    if len(parts) > 1:
+                        return parts[-1].rstrip("]")
+        except Exception:
+            pass
+        return None
+    else:
+        return os.readlink(link_name)
+
+
+def _is_link(path):
+    """跨平台检测路径是否为 symlink 或 junction"""
+    if os.path.islink(path):
+        return True
+    # Windows Python < 3.12 不识别 junction 为 symlink，用 junction 属性检测
+    if platform.system() == "Windows" and os.path.exists(path):
+        try:
+            out = subprocess.run(
+                ["cmd", "/c", "dir", os.path.dirname(path)],
+                capture_output=True, text=True, encoding="gbk"
+            )
+            basename = os.path.basename(path)
+            for line in out.stdout.splitlines():
+                if ("<JUNCTION>" in line or "<SYMLINK>" in line) and basename in line:
+                    return True
+        except Exception:
+            pass
+    return False
+
 def configure_symlink_dir(target_name, target_skills_dir, valid_skills, dry_run=False):
     """创建软链接共享技能到 AI 工具的技能目录"""
     print(f"\n📦 配置 {target_name} -> 技能目录: {target_skills_dir}")
@@ -124,16 +189,23 @@ def configure_symlink_dir(target_name, target_skills_dir, valid_skills, dry_run=
     for skill_name, skill_path in valid_skills:
         link_target = os.path.join(target_skills_dir, skill_name)
         
-        if os.path.islink(link_target):
-            existing_src = os.readlink(link_target)
-            if existing_src == skill_path:
+        if _is_link(link_target):
+            existing_src = _readlink_compat(link_target)
+            if existing_src and os.path.normpath(existing_src) == os.path.normpath(skill_path):
                 print(f"  ✓ {skill_name} 已完成链接")
                 linked_count += 1
                 continue
             else:
                 print(f"  🔄 更新软链接: {skill_name} -> {skill_path}")
                 if not dry_run:
-                    os.unlink(link_target)
+                    try:
+                        os.unlink(link_target)
+                    except OSError:
+                        # Windows junction 需要用 rmdir 删除
+                        subprocess.run(
+                            ["cmd", "/c", "rmdir", link_target],
+                            capture_output=True
+                        )
         elif os.path.exists(link_target):
             print(f"  ⚠️ 已存在同名物理目录/文件: {skill_name}，跳过覆盖")
             continue
@@ -142,7 +214,7 @@ def configure_symlink_dir(target_name, target_skills_dir, valid_skills, dry_run=
             print(f"  [DryRun] 创建软链接: {link_target} -> {skill_path}")
         else:
             try:
-                os.symlink(skill_path, link_target)
+                _create_link(skill_path, link_target)
                 print(f"  ✨ 成功链接技能: {skill_name}")
                 linked_count += 1
             except Exception as e:
