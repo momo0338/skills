@@ -1,6 +1,6 @@
 # Momo Skills Core Library (AI Agent 技能库)
 
-> 包含 **13 个通用与专项 AI Agent 技能**，覆盖网页正文提取、媒体音视频下载、万站 CLI 操作、抖音专项 CLI、网络代理管理、企业情报深度调研及微信公众号采集等场景。
+> 包含 **14 个通用与专项 AI Agent 技能**，覆盖网页正文提取、智能视频看懂抽帧、媒体音视频下载、万站 CLI 操作、抖音专项 CLI、网络代理管理、企业情报深度调研及微信公众号采集等场景。
 
 ---
 
@@ -8,6 +8,7 @@
 
 | 技能名称 | 目录路径 | 核心用途 | 主要依赖 / 接口 |
 |---------|---------|---------|----------------|
+| **[claude-real-video](./claude-real-video)** | `claude-real-video/` | 智能视频看懂与抽帧（场景检测变动抽帧、去重、3x3网格拼图、Whisper转写） | `claude-real-video`, `ffmpeg` |
 | **[opencli](./opencli)** | `opencli/` | 万站合一 CLI 工具（覆盖抖音、知乎、B站、YouTube、小红书、雪球等 164 站点 + 10 桌面应用） | Node.js, `@jackwener/opencli`, Chrome Extension |
 | **[dy-cli](./dy-cli)** | `dy-cli/` | 抖音全功能 CLI 工具（搜索、无水印音视频/图文下载、热榜 Top 50、点赞/评论/收藏互动、发布与数据分析） | Python `dy-cli` |
 | **[proxy](./proxy)** | `proxy/` | 代理池获取与管理工具（实时同步 `momo0338/proxy` 节点，支持 HTTP/SOCKS5 轮换、延迟测试与环境变量导出） | Python `proxy_manager.py`, GitHub raw |

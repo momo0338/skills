@@ -41,10 +41,10 @@ def test(name, ok, detail=""):
 print("\n=== 1. Skill Discovery ===")
 skills = discover_valid_skills(SKILLS_DIR)
 skill_names = [s[0] for s in skills]
-test("Discover finds 13 skills", len(skills) == 13, f"found {len(skills)}: {skill_names}")
+test("Discover finds 14 skills", len(skills) == 14, f"found {len(skills)}: {skill_names}")
 
 expected_skills = [
-    "defuddle", "dy-cli", "fengniao-search", "jina-reader", "lux",
+    "claude-real-video", "defuddle", "dy-cli", "fengniao-search", "jina-reader", "lux",
     "mptext-api", "opencli", "proxy", "qibook-company-profile",
     "qibook-company-wiki-deepresearch", "scrapling", "yt-dlp", "zhihu-search",
 ]
