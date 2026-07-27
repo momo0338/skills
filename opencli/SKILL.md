@@ -126,10 +126,19 @@ opencli <site> <command> [options]
 | 命令 | 用途 | 类型 |
 |------|------|------|
 | `opencli twitter search <query>` | 搜索推文 | cookie |
+| `opencli twitter thread <id>` | 抓取完整推文串 | cookie |
 | `opencli twitter trending` | 热门趋势 | cookie |
 | `opencli twitter user <username>` | 用户资料 | cookie |
 | `opencli twitter timeline` | 时间线 | cookie |
 | `opencli twitter download <URL>` | 下载媒体 | cookie |
+
+> **Twitter Thread/推文串避坑方案**：
+> 当使用 `opencli twitter thread` 遇到登录墙或 429 限流时，使用技能内置的免登录并发抓取脚本：
+> ```bash
+> python3 <SKILL_DIR>/scripts/fetch_twitter_thread.py <URL_or_StatusID>
+> ```
+> 机制：结合 Twitter Syndication API + `opencli twitter search "from:<author>"` 免登录抓取并自动拼合整个 Thread。
+
 
 ### 雪球 (xueqiu)
 
@@ -246,33 +255,43 @@ opencli browser <session> tab close <targetId>
 | `ui` | 通过 CDP 操作 UI | 需桌面应用运行中 |
 | `auto-install` | 首次使用自动安装 | 无 |
 
-## 常用参数
+## 常用通用参数
 
 | 参数 | 说明 | 示例 |
 |------|------|------|
 | `--limit <N>` | 限制结果数量 | `opencli hackernews top --limit 5` |
-| `--output <DIR>` | 输出目录 | `opencli zhihu download --output /tmp/article` |
-| `--download-images true` | 下载文章中的图片 | `opencli zhihu download --download-images true` |
-| `-f json` | JSON 格式输出 | `opencli xueqiu stock SH600519 -f json` |
-| `--profile <name>` | 指定 Chrome 配置 | `opencli --profile work browser main state` |
+| `--url <URL>` | 指定文章/内容网页链接 | `opencli zhihu download --url "https://zhuanlan.zhihu.com/p/xxx"` |
+| `--output <DIR>` | 指定文件/下载保存目录 | `opencli zhihu download --url "https://..." --output /tmp/article` |
+| `--download-images <bool>` | 下载文章中的图片 (true/false) | `opencli zhihu download --url "https://..." --download-images true` |
+| `-f <fmt>` | 输出格式: `json`, `md`, `csv`, `yaml`, `table` | `opencli xueqiu stock SH600519 -f json` |
+| `--profile <name>` | 指定 Chrome 配置名 | `opencli --profile work browser main state` |
 
-## 环境诊断
+## 环境诊断与登录排查工作流
 
-如果命令不工作，先运行诊断：
+如果命令不工作或提示超时 (`did not render result cards within the timeout`)，按以下步骤排查：
 
-```bash
-opencli doctor
-```
+1. **环境诊断**：
+   ```bash
+   opencli doctor
+   ```
+2. **账号登录排查**（标注为 `cookie` 类型的站点）：
+   - 若遇到 403、429 或卡在无头浏览器渲染，先确认对应站点是否已在 Chrome 浏览器中登录；
+   - 支持特定站点的交互式登录命令，例如：
+     ```bash
+     opencli twitter login
+     ```
+   - 确认 Chrome 已安装并启用了 OpenCLI Browser Bridge 扩展。
 
-常见问题：
+常见问题排查汇总：
 
 | 问题 | 解决方案 |
 |------|---------| 
 | opencli 未安装 | `npm i -g @jackwener/opencli` |
 | 权限错误 EACCES | `sudo chown -R $(whoami) ~/.opencli` |
-| Browser Bridge 未连接 | 安装 Chrome 扩展并确保 Chrome 已打开 |
+| Browser Bridge 未连接 | 安装 Chrome 扩展并确保 Chrome 已在后台打开 |
 | Node.js 版本过低 | 升级到 Node.js >= 20 |
-| cookie 类型命令失败 | 需先在浏览器中登录对应网站 |
+| cookie 类型命令失败 / 超时 | 需先在浏览器中登录对应网站，或运行 `opencli <site> login` |
+
 
 ## 完整站点覆盖
 

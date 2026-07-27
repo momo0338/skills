@@ -39,24 +39,31 @@ URL 输入
       - 适用于微信公众号、知乎专栏、掘金等 JS 渲染页面
 ```
 
-## 常用命令
+## 常用命令与标准传参语法
+
+> 传参格式：`python3 <SKILL_DIR>/scripts/fetch.py <url> [max_chars] [--stealth] [--json]`
 
 ```bash
-# 1. 基础提取 (自动选择 Fast / Stealth)
+# 1. 基础提取 (自动选择 Fast 快速模式 / 低于 200 字自动降级 Stealth 无头浏览器)
 python3 <SKILL_DIR>/scripts/fetch.py "https://sspai.com/post/73145"
 
-# 2. 强制 Stealth 无头浏览器模式 (用于微信公众号/知乎等)
+# 2. 强制 Stealth 无头浏览器模式 (用于微信公众号/知乎等需执行 JS 的页面)
 python3 <SKILL_DIR>/scripts/fetch.py "https://mp.weixin.qq.com/s/xxx" --stealth
 
-# 3. 指定最大字符数 (默认 30000)
+# 3. 指定最大字符数 (默认 30000 字符上限，位置参数放 URL 之后)
 python3 <SKILL_DIR>/scripts/fetch.py "https://example.com/article" 15000
 
-# 4. JSON 结构化输出 (包含 URL、匹配选择器、模式与字数)
-python3 <SKILL_DIR>/scripts/fetch.py "https://example.com/article" --json
+# 4. 组合使用：指定 15000 字符限制 + 无头浏览器模式 + JSON 结构化输出
+python3 <SKILL_DIR>/scripts/fetch.py "https://example.com/article" 15000 --stealth --json
 ```
 
-## 关键支持与特色
+## 关键支持与故障排查
 
 1. **选择器优先级**：内置 `div#js_content` (微信)、`article`、`main`、`.Post-RichText` (知乎)、`#article_content` (CSDN)、`.article-area` (掘金) 等 18+ 常用文章正文 CSS 选择器。
 2. **懒加载图片修复**：自动将 `data-src` 链接转换为 `src`，解决微信/知乎转换成 Markdown 后图片丢失或变成占位符的问题。
-3. **安全降级**：Fast 模式抓取字数小于 200 字时，自动触发无头浏览器重试。
+3. **安全降级机制**：Fast 模式抓取字数小于 200 字时，自动触发无头浏览器重试。
+4. **无头浏览器依赖排查**：若使用 `--stealth` 模式报错提示缺少 Chromium 驱动，可运行：
+   ```bash
+   playwright install chromium
+   ```
+

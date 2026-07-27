@@ -64,10 +64,15 @@ pip install "claude-real-video[whisper]"
 pip install claude-real-video
 ```
 
-### 验证安装
+### 验证安装与环境配置
 ```bash
+# 验证全局命令
 crv --help
 ffmpeg -version
+
+# 若提示 command not found (Python 脚本路径未加入 PATH)，可建立软链接：
+mkdir -p ~/.local/bin
+ln -sf $(python3 -c "import sys, os; print(os.path.join(sys.prefix, 'bin', 'crv'))") ~/.local/bin/crv
 ```
 
 ---
@@ -99,13 +104,13 @@ ffmpeg -version
 | `--export llc` | `None` | 导出 LosslessCut 剪辑工程文件 (`highlights.llc`) |
 | `--speakers` | 关闭 | 开启离线说话人识别（区分 `[SPEAKER_00]` 说话人角色，需安装 `[speakers]`） |
 | `--lang` | `auto` | 强制 Whisper 转写语言（如 `zh`、`en`、`ja` 等） |
-| `--whisper-model` | `base` | Whisper 模型类型 (`tiny`, `base`, `small`, `medium`, `large`, `turbo`) |
-| `--no-transcribe` | 关闭 | 跳过语音转写（仅提取画面，速度极快） |
-| `--keep-audio` | 关闭 | 导出全轨音频文件 `audio.m4a`（供全模态模型如 Gemini/GPT-4o 听音频） |
-| `--viewer` | 关闭 | 自动生成离线交互式网页 `viewer.html`（支持点击关键帧直接跳转播放对应视频节点） |
+| `--whisper-model` | `base` | Whisper 模型选择 (`tiny`, `base`, `small`, `medium`, `large`, `turbo`，其中 `turbo` 兼具大模型精度与 8x 速度) |
+| `--no-transcribe` | 关闭 | 跳过语音转写（仅提取画面关键帧，速度极快） |
+| `--keep-audio` | 关闭 | 导出全轨音频 `audio.m4a`（供 Gemini/GPT-4o 等支持语音的多模态大模型分析） |
+| `--viewer` | 关闭 | 自动生成离线交互式网页 `viewer.html`（点击图片即刻跳转视频播放节点） |
+| `--cookies-from-browser` | `None` | 从本地浏览器自动读取 Cookie (`chrome`, `safari`, `firefox`, `edge`) 突破受限视频限制 |
 | `--kb` | `None` | 将分析结果导出为带日期索引的 Markdown 笔记存储到指定文件夹 |
-| `--cookies` | `None` | Netscape 格式的 Cookie 文件路径（针对需要登录的视频） |
-| `--cookies-from-browser` | `None` | 从本地浏览器自动读取 Cookie (`chrome`, `firefox`, `safari`, `edge`) |
+
 
 ---
 
