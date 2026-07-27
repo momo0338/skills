@@ -5,3 +5,4 @@
 *.mkv
 *.log
 __pycache__/
+dy-cli/outputs/

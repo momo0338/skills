@@ -15,7 +15,8 @@
 ### 核心亮点 / Highlights
 
 - **短索引高效流**：`dy search` 搜索后直接用数字索引（`dy read 1`, `dy dl 1`, `dy like 1`）操作，无需复制长 URL
-- **无水印下载**：一键下载高清视频与高清图文，支持单个视频或用户全量批量下载
+- **无水印下载**：一键下载高清视频与高清图文，支持单个视频或用户批量下载
+- **统一元数据归档**：技能脚本同时保存作品、作者、互动快照、评论状态、原始详情和本地文件校验信息，每个作品只生成一个 `.metadata.json`
 - **作品发布**：支持命令行发布视频与图文，设置标题、话题标签、封面与定时排期
 - **实时热榜**：一键获取抖音热搜榜单 Top 50
 - **数据分析**：内置创作者看板与数据统计命令
@@ -61,6 +62,7 @@ dy like 1
 |------|------|
 | `dy search <query>` | 搜索视频或用户 |
 | `dy download <url|index>` | 下载视频/图文（无水印） |
+| `python scripts/download_with_metadata.py <url|index>` | 下载媒体并生成统一元数据侧车 |
 | `dy detail <url|index>` | 查看视频详情 |
 | `dy trending` | 查看实时抖音热榜 Top 50 |
 | `dy like <url|index>` | 点赞视频 |
@@ -88,3 +90,25 @@ pip install dy-cli
 dy search "keyword"
 dy dl 1
 ```
+
+### 媒体与元数据归档
+
+在 `dy-cli` 技能目录中运行：
+
+```bash
+# 视频/图文 + 一个标准化 metadata.json
+python scripts/download_with_metadata.py 1 -o /absolute/output/path
+
+# 增加封面、头像和音乐
+python scripts/download_with_metadata.py 1 -o /absolute/output/path --archive
+
+# 只有调试接口时才保存脱敏原始详情
+python scripts/download_with_metadata.py 1 \
+  -o /absolute/output/path --archive --include-raw
+
+# 用户作品批量归档
+python scripts/download_with_metadata.py <sec_user_id> \
+  --user --limit 20 -o /absolute/output/path --archive
+```
+
+归档脚本是 `dy-cli 0.2.2` 的技能内兼容层，不会修改已安装的 Python 包。
