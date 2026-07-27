@@ -46,6 +46,13 @@ def sample_detail() -> dict:
 
 
 class FakeClient:
+    def __init__(self) -> None:
+        self.resolved_urls: list[str] = []
+
+    def resolve_share_url(self, url: str) -> str:
+        self.resolved_urls.append(url)
+        return "7635914294399817961"
+
     def download_file(self, url: str, output_path: str) -> str:
         path = Path(output_path)
         if "play" in url:
@@ -87,6 +94,70 @@ def options(**overrides) -> argparse.Namespace:
 
 
 class MetadataTests(unittest.TestCase):
+    def test_resolve_bare_aweme_id_without_cache_or_network(self):
+        calls = []
+        value = MODULE.resolve_aweme_id(
+            FakeClient(),
+            lambda target: calls.append(target),
+            "7635914294399817961",
+        )
+        self.assertEqual(value, "7635914294399817961")
+        self.assertEqual(calls, [])
+
+    def test_resolve_formal_video_url_without_redirect_request(self):
+        client = FakeClient()
+        value = MODULE.resolve_aweme_id(
+            client,
+            lambda target: self.fail("formal URL must not use the index cache"),
+            "https://www.douyin.com/video/7635914294399817961?previous_page=app_code_link",
+        )
+        self.assertEqual(value, "7635914294399817961")
+        self.assertEqual(client.resolved_urls, [])
+
+    def test_resolve_iesdouyin_share_url_without_redirect_request(self):
+        client = FakeClient()
+        value = MODULE.resolve_aweme_id(
+            client,
+            lambda target: self.fail("share URL must not use the index cache"),
+            "https://www.iesdouyin.com/share/video/7635914294399817961/",
+        )
+        self.assertEqual(value, "7635914294399817961")
+        self.assertEqual(client.resolved_urls, [])
+
+    def test_resolve_short_url_from_full_share_text(self):
+        client = FakeClient()
+        text = (
+            "7.17 03/15 N@j.cA :0pm VyT:/ 开甲陀螺 "
+            "https://v.douyin.com/lSvQylqiJwA/ 复制此链接，打开Dou音搜索"
+        )
+        value = MODULE.resolve_aweme_id(
+            client,
+            lambda target: self.fail("share text must not use the index cache"),
+            text,
+        )
+        self.assertEqual(value, "7635914294399817961")
+        self.assertEqual(client.resolved_urls, ["https://v.douyin.com/lSvQylqiJwA/"])
+
+    def test_resolve_short_index_through_cache(self):
+        client = FakeClient()
+        value = MODULE.resolve_aweme_id(
+            client,
+            lambda target: "https://www.douyin.com/video/7635914294399817961"
+            if target == "1"
+            else "",
+            "1",
+        )
+        self.assertEqual(value, "7635914294399817961")
+        self.assertEqual(client.resolved_urls, [])
+
+    def test_rejects_non_douyin_url(self):
+        with self.assertRaisesRegex(MODULE.ArchiveError, "只接受"):
+            MODULE.resolve_aweme_id(
+                FakeClient(),
+                lambda target: target,
+                "https://example.com/video/7635914294399817961",
+            )
+
     def test_normalize_preserves_unknown_play_count_as_null(self):
         value = MODULE.normalize_detail(sample_detail())
         self.assertEqual(value["identity"]["aweme_id"], "7666337719992499300")

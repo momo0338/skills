@@ -11,6 +11,25 @@ description: |
 
 > 基于 [Youhai020616/douyin](https://github.com/Youhai020616/douyin) 开发，提供搜索、无水印下载、发布、互动、热榜、直播录制与数据分析一站式 CLI 操作。
 
+## 明确作品 ID 下载快速路径（最高优先级）
+
+当用户要求下载单个视频，且输入包含一个 15–25 位纯数字作品 ID 时，立即执行本节；不要进入搜索、短索引或通用故障诊断流程。
+
+1. 将数字原样作为 `aweme_id`，不要搜索作品、匹配标题、查询短索引、拼接作品链接、解析跳转、预查详情或预检登录状态。
+2. 将输出目录设为用户指定的绝对路径；用户未指定时，使用当前任务目录下的 `downloads/<aweme_id>/`。
+3. 直接运行以下命令。脚本会下载视频并生成用于哈希、大小和媒体探测校验的 `.metadata.json`；除非用户明确要求，否则不要增加 `--archive`、封面、头像、音乐、评论或原始详情。
+
+```bash
+python "$SKILL_DIR/scripts/download_with_metadata.py" \
+  "<aweme_id>" \
+  -o "<absolute-output-dir>"
+```
+
+4. 在已知网络受限的代理环境中，首次执行即申请完成该命令所需的最小网络权限，不要先等待 DNS、连接或 403 重试失败。若环境是否受限未知，保持同一命令和同一 ID 取得权限后重试。
+5. 仅在真实返回未登录、Cookie 过期或 `verify_check` 时运行 `dy status` 或登录诊断；不要把这些检查作为下载前置步骤。
+6. 成功后优先读取脚本生成的 `.metadata.json` 核对作品 ID、媒体状态、格式、大小、哈希和可用的 `ffprobe` 结果；仅在元数据缺项时补充运行 `file`、`du` 或 `ffprobe`。
+7. 向用户返回视频文件、绝对输出目录、格式、大小和时长。不要展开后台规则读取或本地说明检索过程。
+
 ## 安装与初始化 / Installation
 
 ```bash
@@ -111,14 +130,41 @@ dy dl "MS4wLjABAAAA..." --user --limit 10 -o ~/Downloads/user_videos/
 
 ### 3. 视频与元数据统一归档
 
-当用户只要求普通媒体下载时使用 `dy dl`。当用户要求元数据、归档、原始详情、封面、头像、评论、本地文件哈希或可恢复下载时，使用技能目录中的 `scripts/download_with_metadata.py`，不要修改已安装的 `dy_cli` 包。
+明确作品 ID 的单视频下载始终优先使用上述快速路径。其他普通媒体下载使用 `dy dl`。当用户要求元数据、归档、原始详情、封面、头像、评论、本地文件哈希或可恢复下载时，使用技能目录中的 `scripts/download_with_metadata.py`，不要修改已安装的 `dy_cli` 包。
+
+按以下固定顺序识别单作品输入，不要先搜索标题，也不要手工改写链接：
+
+| 输入 | 识别规则 | 处理路径 |
+|------|----------|----------|
+| 明确作品 ID | 15–25 位纯数字，例如 `7635914294399817961` | 直接作为 `aweme_id` 获取详情，不访问短索引缓存，不解析跳转 |
+| 正式作品链接 | `douyin.com/video/<ID>`、`iesdouyin.com/share/video/<ID>` 或 `douyin.com/note/<ID>` | 从路径直接提取 ID，不发起跳转请求 |
+| 短链接 | `v.douyin.com/<token>/` | 将原短链接交给 `dy-cli` 解析 302 跳转，取得 ID 后获取详情 |
+| 整段分享口令 | 文本中包含上述抖音链接 | 先提取第一个受信任的抖音链接，再按正式链接或短链接路径处理 |
+| 搜索短索引 | 较短的数字，例如搜索结果中的 `1` | 先查 `dy search` 缓存；缓存值再按正式链接或短链接路径处理 |
+
+只接受 `douyin.com`、其子域名、`iesdouyin.com` 及其子域名中的 HTTP(S) 链接。短链接解析失败时，报告原短链接和网络/登录错误；不要回退到标题搜索，因为搜索结果可能对应错误作品。若运行环境因网络隔离报 DNS、连接或 403 错误，保持同一条命令和原始输入，在取得网络授权后重试。
 
 先解析当前 `SKILL.md` 所在目录为 `SKILL_DIR`，再运行：
 
 ```bash
+# 明确作品 ID：直接获取，不走短链接解析
+python "$SKILL_DIR/scripts/download_with_metadata.py" \
+  "7635914294399817961" \
+  -o /absolute/output/path
+
 # 视频/图文 + 一个标准化 metadata.json
 python "$SKILL_DIR/scripts/download_with_metadata.py" \
   "https://www.douyin.com/video/7657851624437665070" \
+  -o /absolute/output/path
+
+# 短链接：脚本内部解析跳转，不要预先手工 curl 或拼正式链接
+python "$SKILL_DIR/scripts/download_with_metadata.py" \
+  "https://v.douyin.com/lSvQylqiJwA/" \
+  -o /absolute/output/path
+
+# 整段分享口令：可原样传入，脚本先提取其中的抖音链接
+python "$SKILL_DIR/scripts/download_with_metadata.py" \
+  "7.17 03/15 N@j.cA :0pm VyT:/ 开甲陀螺 https://v.douyin.com/lSvQylqiJwA/ 复制此链接，打开Dou音搜索" \
   -o /absolute/output/path
 
 # 完整媒体归档：增加封面、头像和音乐
@@ -185,7 +231,8 @@ dy publish -t "预发布内容" -v video.mp4 --schedule "2026-03-16T10:00:00+08:
 
 ## 故障排除与登录诊断工作流
 
-1. **执行前 / 出错时优先诊断登录状态**：
+1. **仅在下载返回登录或风控错误后诊断登录状态**：
+   - 明确作品 ID 下载不得预先运行 `dy status`。
    - 运行 `dy status` 检查 Cookie 验证状态。
    - 若提示未登录或 Cookie 过期，优先引导或运行：
      - `dy login`（弹窗/扫码登录）

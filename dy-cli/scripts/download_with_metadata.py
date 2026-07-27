@@ -35,6 +35,13 @@ SENSITIVE_QUERY_KEY = re.compile(
     re.IGNORECASE,
 )
 SHANGHAI = ZoneInfo("Asia/Shanghai")
+AWEME_ID_PATTERN = re.compile(r"^\d{15,25}$")
+DOUYIN_URL_PATTERN = re.compile(r"https?://[^\s<>\"]+", re.IGNORECASE)
+DIRECT_AWEME_URL_PATTERN = re.compile(
+    r"/(?:(?:share/)?video|note)/(\d{15,25})(?:[/?#]|$)",
+    re.IGNORECASE,
+)
+URL_TRAILING_PUNCTUATION = "，。！？；：、,!?;:）)]】}>'\""
 
 
 class ArchiveError(RuntimeError):
@@ -600,11 +607,66 @@ def load_dy_cli(allow_unsupported: bool) -> tuple[Any, Any, str]:
     return DouyinAPIClient, resolve_id, version
 
 
+def is_douyin_host(hostname: str | None) -> bool:
+    host = (hostname or "").lower().rstrip(".")
+    return (
+        host == "douyin.com"
+        or host.endswith(".douyin.com")
+        or host == "iesdouyin.com"
+        or host.endswith(".iesdouyin.com")
+    )
+
+
+def extract_douyin_url(target: str) -> str | None:
+    for match in DOUYIN_URL_PATTERN.finditer(target):
+        url = match.group(0).rstrip(URL_TRAILING_PUNCTUATION)
+        try:
+            parts = urlsplit(url)
+        except ValueError:
+            continue
+        if parts.scheme in {"http", "https"} and is_douyin_host(parts.hostname):
+            return url
+    return None
+
+
+def direct_aweme_id_from_url(url: str) -> str | None:
+    match = DIRECT_AWEME_URL_PATTERN.search(urlsplit(url).path)
+    return match.group(1) if match else None
+
+
+def validate_aweme_id(value: Any, *, source: str) -> str:
+    aweme_id = str(value or "")
+    if not AWEME_ID_PATTERN.fullmatch(aweme_id):
+        raise ArchiveError(f"{source} 未解析出有效作品 ID: {aweme_id or '<empty>'}")
+    return aweme_id
+
+
 def resolve_aweme_id(client: Any, resolve_id: Any, target: str) -> str:
-    value = resolve_id(target)
-    if value.isdigit():
+    """Resolve one target through a deterministic ID/index/URL decision tree."""
+    value = target.strip()
+    if AWEME_ID_PATTERN.fullmatch(value):
         return value
-    return client.resolve_share_url(value)
+
+    url = extract_douyin_url(value)
+    if url:
+        direct_id = direct_aweme_id_from_url(url)
+        if direct_id:
+            return direct_id
+        return validate_aweme_id(client.resolve_share_url(url), source="短链接")
+
+    if "://" in value:
+        raise ArchiveError("只接受 douyin.com 或 iesdouyin.com 的作品链接")
+
+    resolved = str(resolve_id(value))
+    if AWEME_ID_PATTERN.fullmatch(resolved):
+        return resolved
+    resolved_url = extract_douyin_url(resolved)
+    if not resolved_url:
+        raise ArchiveError(f"短索引未解析为有效抖音作品: {value}")
+    direct_id = direct_aweme_id_from_url(resolved_url)
+    if direct_id:
+        return direct_id
+    return validate_aweme_id(client.resolve_share_url(resolved_url), source="短索引")
 
 
 def iter_user_posts(client: Any, sec_user_id: str, limit: int) -> Iterable[dict[str, Any]]:
