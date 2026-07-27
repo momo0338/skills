@@ -1,0 +1,122 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.skills/analyze-viral-commerce-video/breakdown.schema.json",
+  "title": "带货视频结构化拆解",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "source",
+    "evidence_coverage",
+    "segments",
+    "claims",
+    "mechanism",
+    "decisions",
+    "experiment",
+    "limitations"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0"
+    },
+    "source": {
+      "type": "object",
+      "required": ["platform", "video_id", "local_video"],
+      "properties": {
+        "platform": {"type": ["string", "null"]},
+        "video_id": {"type": ["string", "null"]},
+        "canonical_url": {"type": ["string", "null"]},
+        "local_video": {"type": ["string", "null"]},
+        "metadata_file": {"type": ["string", "null"]}
+      },
+      "additionalProperties": true
+    },
+    "evidence_coverage": {
+      "type": "object",
+      "required": ["video", "audio", "text", "timing_precision"],
+      "properties": {
+        "video": {"enum": ["complete", "partial", "unavailable", "unchecked"]},
+        "audio": {"enum": ["complete_listen", "sampled_listen", "stream_only", "unavailable", "unchecked"]},
+        "text": {"enum": ["manual_all", "ocr_all_reviewed", "ocr_sampled", "asr_reviewed", "unchecked"]},
+        "timing_precision": {"enum": ["frame_accurate", "half_second_approx", "one_second_approx", "platform_range", "unknown"]}
+      },
+      "additionalProperties": true
+    },
+    "segments": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "start_seconds",
+          "end_seconds",
+          "purpose",
+          "visual",
+          "shot_and_camera",
+          "subject_and_action",
+          "scene",
+          "speech_and_text",
+          "sell_points",
+          "evidence",
+          "transition_and_pacing",
+          "evidence_status"
+        ],
+        "properties": {
+          "start_seconds": {"type": ["number", "null"]},
+          "end_seconds": {"type": ["number", "null"]},
+          "purpose": {"type": "string"},
+          "visual": {"type": "string"},
+          "shot_and_camera": {"type": "string"},
+          "subject_and_action": {"type": "string"},
+          "scene": {"type": "string"},
+          "speech_and_text": {"type": "string"},
+          "sell_points": {"type": "array", "items": {"type": "string"}},
+          "evidence": {"type": "string"},
+          "transition_and_pacing": {"type": "string"},
+          "evidence_status": {"enum": ["observed", "platform_reported", "inferred", "uncertain"]}
+        },
+        "additionalProperties": true
+      }
+    },
+    "claims": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["claim", "location", "direct_evidence", "external_support", "strength", "decision"],
+        "properties": {
+          "claim": {"type": "string"},
+          "location": {"type": "string"},
+          "direct_evidence": {"type": "string"},
+          "external_support": {"type": "string"},
+          "strength": {"enum": ["strong", "medium", "weak", "unsupported", "uncertain"]},
+          "decision": {"enum": ["adopt", "conditional", "avoid"]}
+        },
+        "additionalProperties": true
+      }
+    },
+    "mechanism": {
+      "type": "object",
+      "required": ["one_sentence", "attention", "understanding", "proof", "trust", "conversion"],
+      "additionalProperties": true
+    },
+    "decisions": {
+      "type": "object",
+      "required": ["adopt", "conditional", "avoid"],
+      "properties": {
+        "adopt": {"type": "array"},
+        "conditional": {"type": "array"},
+        "avoid": {"type": "array"}
+      },
+      "additionalProperties": true
+    },
+    "experiment": {
+      "type": "object",
+      "required": ["variable", "controls", "primary_metric", "success_rule", "window"],
+      "additionalProperties": true
+    },
+    "limitations": {
+      "type": "array",
+      "items": {"type": "string"}
+    }
+  },
+  "additionalProperties": true
+}

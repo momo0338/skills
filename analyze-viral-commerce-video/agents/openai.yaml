@@ -1,0 +1,4 @@
+interface:
+  display_name: "带货视频证据拆解"
+  short_description: "核验视频证据，拆解带货结构、宣称强度与可复制决策"
+  default_prompt: "使用 $analyze-viral-commerce-video 对这条带货视频做证据化结构拆解；没有榜单或表现依据时不要预设它是爆款。"
