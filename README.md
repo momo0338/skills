@@ -53,14 +53,24 @@ python3 scripts/auto_config_ai.py --dry-run
 
 ## 🛠️ 基础系统依赖安装
 
+我们推荐您使用内置的自动配置脚本来一键安装所有需要的依赖（脚本内置了国内加速镜像）：
+
+```bash
+# 自动检测本机缺失的依赖并安装（推荐）
+python3 scripts/auto_config_ai.py --install
+```
+
+如果您希望手动安装，或者需要查看所有依赖的官方及镜像下载地址，请查阅详细的 **[依赖项下载与安装指南 (DEPENDENCIES.md)](./DEPENDENCIES.md)**。
+
+*(以下是手动安装的基础参考命令)*
 ```bash
 # macOS (Homebrew)
 brew install node ffmpeg yt-dlp lux
 
-# Python 全局依赖包
+# Python 全局依赖包 (可加上 -i https://pypi.tuna.tsinghua.edu.cn/simple 提速)
 pip install --break-system-packages scrapling html2text browserforge requests yt-dlp dy-cli
 
-# npm 全局工具
+# npm 全局工具 (可加上 --registry=https://registry.npmmirror.com 提速)
 npm install -g defuddle @jackwener/opencli
 ```
 

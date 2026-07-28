@@ -636,7 +636,7 @@ def install_missing_deps(skill_name, missing, dry_run=False):
             pkg_names = list(missing["pip"])
             # 用完整命令字符串通过 shell 执行，避免 Windows 路径问题
             pip_cmd = _find_pip_cmd()
-            full_cmd = " ".join(pip_cmd) + " install " + " ".join(pkg_names)
+            full_cmd = " ".join(pip_cmd) + " install -i https://pypi.tuna.tsinghua.edu.cn/simple " + " ".join(pkg_names)
             print(f"    Running: {full_cmd}")
             result = _safe_subprocess_run(full_cmd, shell=True, timeout=120)
             if result.returncode == 0:
@@ -685,7 +685,7 @@ def install_missing_deps(skill_name, missing, dry_run=False):
         else:
             # 用完整命令字符串通过 shell 执行
             pkg_names = list(missing["npm"])
-            full_cmd = "npm install -g " + " ".join(pkg_names)
+            full_cmd = "npm install -g --registry=https://registry.npmmirror.com " + " ".join(pkg_names)
             print(f"    Running: {full_cmd}")
             result = _safe_subprocess_run(full_cmd, shell=True, timeout=120)
             if result.returncode == 0:
