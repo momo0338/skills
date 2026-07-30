@@ -55,7 +55,7 @@ dy login --browser  # 从已登录抖音的浏览器直接提取 Cookie
 | `dy search` | `--sort [综合\|最多点赞\|最新发布]`<br>`--time [不限\|一天内\|一周内\|半年内]`<br>`--type [general\|video\|user]`<br>`--count <N>` `-o <file>` `--json-output` | 搜索抖音视频/用户<br>示例: `dy search "Codex 教程" --sort 最多点赞 --count 10` |
 | `dy detail` | `--comments` `--comment-count <N>` `--json-output` | 查看视频详情 (支持短索引: `dy detail 1` 或 `dy detail <URL>`) |
 | `dy download` | `-o <dir>` `--music` `--user` `--limit <N>` `--json-output` | 普通无水印下载视频/图文<br>示例: `dy dl 1` 或 `dy dl <sec_user_id> --user --limit 10` |
-| 技能归档脚本 | `--archive` `--cover` `--avatar` `--music` `--include-raw` `--comments <N>` `--user` `--limit <N>` | 下载作品，并为每个作品生成一个统一的 `.metadata.json` |
+| 技能归档脚本 | `--archive` `--cover` `--avatar` `--music` `--include-raw` `--comments <N>` `--user` `--favorite` `--mix` `--limit <N>` | 下载作品 (含实况动图提取)，并为每个作品生成一个统一的 `.metadata.json` |
 | `dy trending` | `--count <N>` `--watch` `-o <file>` `--json-output` | 查看抖音热榜<br>示例: `dy trending --count 20` 或 `dy trending --watch` |
 | `dy like` | `--unlike` `--account <name>` | 点赞/取消点赞视频 (支持短索引: `dy like 1`) |
 | `dy favorite` | `--unfavorite` `--account <name>` | 收藏/取消收藏视频 (支持短索引: `dy fav 1`) |
@@ -189,6 +189,21 @@ python "$SKILL_DIR/scripts/download_with_metadata.py" "MS4wLjABAAAA..." \
   --user --limit 20 \
   -o /absolute/output/path \
   --archive
+
+# 批量归档用户喜欢/收藏的作品 (依赖已登录的关联账号 Cookie)
+python "$SKILL_DIR/scripts/download_with_metadata.py" "MS4wLjABAAAA..." \
+  --favorite --limit 20 \
+  -o /absolute/output/path \
+  --archive
+
+# 批量归档合集作品 (传入 mix_id 或合集内任一作品的分享链接)
+python "$SKILL_DIR/scripts/download_with_metadata.py" "https://www.douyin.com/video/7657851624437665070" \
+  --mix --limit 50 \
+  -o /absolute/output/path \
+  --archive
+
+# 实况照片 (Live Photo) 的提取说明
+# 如果目标作品是“实况图集”，本脚本会自动提取出各帧背后的动态 `.mp4` 视频部分，而抛弃纯静态的封面图，从而实现实况动态媒体的无损下载。
 ```
 
 每个作品只生成一个 JSON：

@@ -219,9 +219,22 @@ def extract_asset_urls(detail: dict[str, Any]) -> dict[str, list[str]]:
         assets["video"].append(video_url.replace("playwm", "play"))
 
     for image in detail.get("images") or []:
-        url = first_url(image, prefer_last=True)
-        if url:
-            assets["image"].append(url)
+        video_data = image.get("video")
+        if isinstance(video_data, dict):
+            url = None
+            bit_rate = video_data.get("bit_rate")
+            if isinstance(bit_rate, list) and bit_rate:
+                best_quality = bit_rate[0]
+                if isinstance(best_quality, dict):
+                    url = first_url(best_quality.get("play_addr"), prefer_last=True)
+            if not url:
+                url = first_url(video_data.get("play_addr"), prefer_last=True)
+            if url:
+                assets["video"].append(url.replace("playwm", "play"))
+        else:
+            url = first_url(image, prefer_last=True)
+            if url:
+                assets["image"].append(url)
 
     for cover_key in ("origin_cover", "cover", "dynamic_cover"):
         url = first_url(video.get(cover_key), prefer_last=True)
@@ -709,13 +722,98 @@ def iter_user_posts(client: Any, sec_user_id: str, limit: int) -> Iterable[dict[
         cursor = next_cursor
 
 
+def iter_favorite_posts(client: Any, sec_user_id: str, limit: int) -> Iterable[dict[str, Any]]:
+    from dy_cli.engines.api_client import get_base_params
+    cursor = 0
+    seen: set[str] = set()
+    while len(seen) < limit:
+        seen_before_page = len(seen)
+        params = {
+            **get_base_params(),
+            "sec_user_id": sec_user_id,
+            "max_cursor": str(cursor),
+            "count": str(min(20, limit - len(seen))),
+        }
+        data = client._get("https://www.douyin.com/aweme/v1/web/aweme/favorite/", params=params)
+        posts = data.get("aweme_list") if isinstance(data.get("aweme_list"), list) else []
+        if not posts:
+            break
+        for post in posts:
+            if not isinstance(post, dict):
+                continue
+            aweme_id = str(post.get("aweme_id") or "")
+            if aweme_id and aweme_id not in seen:
+                seen.add(aweme_id)
+                yield post
+                if len(seen) >= limit:
+                    return
+        if len(seen) == seen_before_page:
+            break
+        if not data.get("has_more"):
+            break
+        next_cursor = data.get("max_cursor")
+        if next_cursor in (None, cursor):
+            break
+        cursor = next_cursor
+
+
+def iter_mix_posts(client: Any, mix_id: str, limit: int) -> Iterable[dict[str, Any]]:
+    from dy_cli.engines.api_client import get_base_params
+    cursor = 0
+    seen: set[str] = set()
+    while len(seen) < limit:
+        seen_before_page = len(seen)
+        params = {
+            **get_base_params(),
+            "mix_id": mix_id,
+            "cursor": str(cursor),
+            "count": str(min(20, limit - len(seen))),
+        }
+        data = client._get("https://www.douyin.com/aweme/v1/web/mix/aweme/", params=params)
+        posts = data.get("aweme_list") if isinstance(data.get("aweme_list"), list) else []
+        if not posts:
+            break
+        for post in posts:
+            if not isinstance(post, dict):
+                continue
+            aweme_id = str(post.get("aweme_id") or "")
+            if aweme_id and aweme_id not in seen:
+                seen.add(aweme_id)
+                yield post
+                if len(seen) >= limit:
+                    return
+        if len(seen) == seen_before_page:
+            break
+        if not data.get("has_more"):
+            break
+        next_cursor = data.get("cursor")
+        if next_cursor in (None, cursor):
+            break
+        cursor = next_cursor
+
+
+def resolve_mix_id(client: Any, resolve_id: Any, target: str) -> str:
+    try:
+        aweme_id = resolve_aweme_id(client, resolve_id, target)
+        detail = client.get_video_detail(aweme_id)
+        mix_info = detail.get("mix_info") or {}
+        mix_id = str(mix_info.get("mix_id") or "")
+        if mix_id:
+            return mix_id
+    except Exception:
+        pass
+    return target.strip()
+
+
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="下载抖音作品并为每个作品生成一个统一的 .metadata.json"
     )
-    parser.add_argument("target", help="作品 URL、aweme_id、搜索短索引，或 --user 模式的 sec_user_id")
+    parser.add_argument("target", help="作品 URL、aweme_id、搜索短索引，或用户/合集相关的 ID/URL")
     parser.add_argument("-o", "--output-dir", default=None, help="输出目录")
-    parser.add_argument("--user", action="store_true", help="将 target 视为 sec_user_id 并批量下载")
+    parser.add_argument("--user", action="store_true", help="将 target 视为 sec_user_id 并批量下载用户发布的作品")
+    parser.add_argument("--favorite", action="store_true", help="将 target 视为 sec_user_id 并批量下载该用户喜欢/收藏的作品")
+    parser.add_argument("--mix", action="store_true", help="将 target 视为 mix_id (合集 ID) 或合集内的任一视频 URL，批量下载整个合集")
     parser.add_argument("--limit", type=int, default=20, help="批量下载数量，默认 20")
     parser.add_argument("--account", default=None, help="dy-cli 账号名称")
     parser.add_argument("--archive", action="store_true", help="下载封面、头像和音乐")
@@ -753,18 +851,27 @@ def main(argv: list[str] | None = None) -> int:
 
     statuses: list[str] = []
     try:
-        if args.user:
-            posts = list(iter_user_posts(client, args.target, args.limit))
+        if args.user or args.favorite or args.mix:
+            if args.user:
+                posts = list(iter_user_posts(client, args.target, args.limit))
+                detail_source = "user_posts"
+            elif args.favorite:
+                posts = list(iter_favorite_posts(client, args.target, args.limit))
+                detail_source = "favorite_posts"
+            elif args.mix:
+                mix_id = resolve_mix_id(client, resolve_id, args.target)
+                posts = list(iter_mix_posts(client, mix_id, args.limit))
+                detail_source = "mix_posts"
+                
             if not posts:
-                raise ArchiveError("未找到用户作品")
+                raise ArchiveError("未找到相关作品")
             for position, detail in enumerate(posts, 1):
                 try:
                     urls = extract_asset_urls(detail)
-                    detail_source = "user_posts"
                     if not urls["video"] and not urls["image"]:
                         aweme_id = str(detail.get("aweme_id") or "")
                         if not aweme_id:
-                            raise ArchiveError("用户作品条目缺少 aweme_id")
+                            raise ArchiveError("作品条目缺少 aweme_id")
                         detail = client.get_video_detail(aweme_id)
                         detail_source = "video_detail"
                     path, status = archive_one(
