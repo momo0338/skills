@@ -202,7 +202,19 @@ def extract_asset_urls(detail: dict[str, Any]) -> dict[str, list[str]]:
         "avatar": [],
         "music": [],
     }
-    video_url = first_url(video.get("play_addr"), prefer_last=True)
+
+    video_url = None
+    bit_rate = video.get("bit_rate")
+    if isinstance(bit_rate, list) and bit_rate:
+        # 优先从 bit_rate 列表中获取最佳画质（通常索引 0 是最高画质）
+        best_quality = bit_rate[0]
+        if isinstance(best_quality, dict):
+            video_url = first_url(best_quality.get("play_addr"), prefer_last=True)
+    
+    if not video_url:
+        # 回退到默认的 play_addr
+        video_url = first_url(video.get("play_addr"), prefer_last=True)
+
     if video_url:
         assets["video"].append(video_url.replace("playwm", "play"))
 

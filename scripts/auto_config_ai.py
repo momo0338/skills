@@ -61,6 +61,7 @@ SKILL_DEPS = {
         "install_cmds": {
             "pip": "pip install -U yt-dlp imageio-ffmpeg",
             "brew": "brew install yt-dlp ffmpeg",
+            "windows_download": "_install_ffmpeg_windows",
             "post_install": "_post_install_ffmpeg",
         },
     },
@@ -93,7 +94,7 @@ SKILL_DEPS = {
     },
     "mptext-api": {
         "pip": ["requests"],
-        "env": ["MPTEXT_AUTH_KEY"],
+        "env": ["MPTEXT_API_KEY"],
         "install_cmds": {
             "pip": "pip install requests",
         },
@@ -105,7 +106,7 @@ SKILL_DEPS = {
         },
     },
     "fengniao-search": {
-        "env": ["FENGNIAO_API_KEY"],
+        "env": ["FN_API_KEY"],
     },
     "qibook-company-profile": {
         "pip": ["requests"],
@@ -119,6 +120,13 @@ SKILL_DEPS = {
         "env": ["QIBOOK_ACCESS_KEY", "QIBOOK_BASE_URL"],
         "install_cmds": {
             "pip": "pip install requests",
+        },
+    },
+    "claude-real-video": {
+        "bins": ["crv"],
+        "pip": ["claude-real-video"],
+        "install_cmds": {
+            "pip": 'pip install "claude-real-video[fast]"',
         },
     },
 }
@@ -613,6 +621,22 @@ def _post_install_ffmpeg(dry_run=False):
     return True
 
 
+def _install_ffmpeg_windows(dry_run=False):
+    """Windows 下安装 ffmpeg: 先尝试 winget, 若失败则尝试从 imageio-ffmpeg 复制"""
+    print("    Trying to install ffmpeg via winget...")
+    if not dry_run:
+        result = _safe_subprocess_run("winget install Gyan.FFmpeg --accept-package-agreements --accept-source-agreements", shell=True, timeout=300)
+        if result.returncode == 0:
+            print("    OK: winget install Gyan.FFmpeg succeeded")
+            return True
+        else:
+            print("    winget install failed, fallback to imageio-ffmpeg...")
+            return _post_install_ffmpeg(dry_run=dry_run)
+    else:
+        print("    [DryRun] Would run: winget install Gyan.FFmpeg or fallback to imageio-ffmpeg")
+        return True
+
+
 def install_missing_deps(skill_name, missing, dry_run=False):
     """
     尝试自动安装缺失的 pip/npm 依赖。
@@ -919,7 +943,7 @@ def _is_link(path):
 
 def configure_symlink_dir(target_name, target_skills_dir, valid_skills, dry_run=False, skip_deps=False, pip_pkgs=None, npm_pkgs=None):
     """创建软链接共享技能到 AI 工具的技能目录（含依赖检查）"""
-    print(f"\n📦 配置 {target_name} -> 技能目录: {target_skills_dir}")
+    print(f"\n[TARGET] 配置 {target_name} -> 技能目录: {target_skills_dir}")
     
     if not dry_run:
         os.makedirs(target_skills_dir, exist_ok=True)
@@ -930,7 +954,7 @@ def configure_symlink_dir(target_name, target_skills_dir, valid_skills, dry_run=
     if npm_pkgs is None:
         npm_pkgs = set()
     if not skip_deps and not pip_pkgs and not npm_pkgs:
-        print("  🔍 Checking dependencies...")
+        print("  [*] Checking dependencies...")
         pip_pkgs = get_pip_packages()
         npm_pkgs = get_npm_global_packages()
 
@@ -944,18 +968,18 @@ def configure_symlink_dir(target_name, target_skills_dir, valid_skills, dry_run=
             all_ok, missing = check_skill_deps(skill_name, skill_path, pip_pkgs, npm_pkgs)
             if not all_ok:
                 skipped_deps += 1
-                print(f"  ⏭️ {skill_name} (deps missing)")
+                print(f"  [SKIP] {skill_name} (deps missing)")
                 print_deps_report(skill_name, missing, SKILL_DEPS.get(skill_name, {}).get("install_cmds", {}))
                 continue
 
         if _is_link(link_target):
             existing_src = _readlink_compat(link_target)
             if existing_src and os.path.normpath(existing_src) == os.path.normpath(skill_path):
-                print(f"  ✓ {skill_name} (linked)")
+                print(f"  [OK] {skill_name} (linked)")
                 linked_count += 1
                 continue
             else:
-                print(f"  🔄 {skill_name} (updating link)")
+                print(f"  [UPDATE] {skill_name} (updating link)")
                 if not dry_run:
                     try:
                         os.unlink(link_target)
@@ -965,7 +989,7 @@ def configure_symlink_dir(target_name, target_skills_dir, valid_skills, dry_run=
                             capture_output=True
                         )
         elif os.path.exists(link_target):
-            print(f"  ⚠️ {skill_name} (dir exists, skip)")
+            print(f"  [WARN] {skill_name} (dir exists, skip)")
             continue
             
         if dry_run:
@@ -973,18 +997,18 @@ def configure_symlink_dir(target_name, target_skills_dir, valid_skills, dry_run=
         else:
             try:
                 _create_link(skill_path, link_target)
-                print(f"  ✨ {skill_name}")
+                print(f"  [DONE] {skill_name}")
                 linked_count += 1
             except Exception as e:
-                print(f"  ❌ {skill_name}: {e}")
+                print(f"  [FAIL] {skill_name}: {e}")
                 
     if not skip_deps and skipped_deps > 0:
-        print(f"  ℹ️ {skipped_deps} skill(s) skipped due to missing dependencies")
+        print(f"  [INFO] {skipped_deps} skill(s) skipped due to missing dependencies")
     return linked_count
 
 def configure_gemini(target_name, skills_json_path, target_skills_dir, skills_root, valid_skills, dry_run=False, skip_deps=False, pip_pkgs=None, npm_pkgs=None):
     """配置 Gemini / Antigravity 专用的 skills.json 自动识别"""
-    print(f"\n📦 配置 {target_name} -> {skills_json_path}")
+    print(f"\n[TARGET] 配置 {target_name} -> {skills_json_path}")
     
     # 1. 链接技能到 skills 目录
     configure_symlink_dir(target_name, target_skills_dir, valid_skills, dry_run=dry_run, skip_deps=skip_deps, pip_pkgs=pip_pkgs, npm_pkgs=npm_pkgs)
@@ -1014,11 +1038,11 @@ def configure_gemini(target_name, skills_json_path, target_skills_dir, skills_ro
             try:
                 with open(skills_json_path, "w", encoding="utf-8") as f:
                     json.dump(current_config, f, indent=2, ensure_ascii=False)
-                print(f"  ✨ Updated {skills_json_path}")
+                print(f"  [DONE] Updated {skills_json_path}")
             except Exception as e:
-                print(f"  ❌ Write {skills_json_path} failed: {e}")
+                print(f"  [FAIL] Write {skills_json_path} failed: {e}")
     else:
-        print(f"  ✓ {skills_json_path} already indexed")
+        print(f"  [OK] {skills_json_path} already indexed")
 
 def main():
     parser = argparse.ArgumentParser(description="Auto-detect AI tools and configure skill sharing with dependency checking")
