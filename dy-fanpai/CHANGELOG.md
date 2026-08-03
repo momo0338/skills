@@ -289,3 +289,15 @@ WP6（收尾集成与发布）完成：把 WP1–WP5 的全部业务包通过 `p
 
 ### 验证
 - pytest 全仓 **216 passed, 1 skipped**（212 → 216 = +4 例）、ruff 全绿、pyright 0。
+
+## [0.1.0] — 2026-08-03 · Ark(Seed)实测:账号未开通 Seed 模型
+
+### 实测记录
+- 用户提供 ARK_API_KEY → doctor `[OK]`（key 有效，账号 2103053097 可连 Ark）。
+- `run --stage reverse --leg seed`（CLI 一体化）→ 压缩视频成功，但调用抛
+  `ModelNotOpen`：`doubao-seed-2-1-pro-260628` 未开通。
+- 探测：`doubao-seed-2-0-pro` / `doubao-seed-2-1-turbo` / `doubao-seedance-2-0` 均
+  `ModelNotOpen`；`doubao-seed-1-8` 返回 NotFound。**账号未开通任何 Seed 系列模型**。
+- 结论：非配置问题，需在火山方舟控制台开通「Seed 2.1 Pro（反推）」与
+  「Seedance 2.0（生成）」模型服务后才能用；当前反推腿 1（seed）不可用，
+  反推可用腿为 qwen（已实测通过）。
