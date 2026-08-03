@@ -16,6 +16,7 @@ from auto_config_ai import (
     command_exists,
     SKILL_DEPS,
 )
+from check_skill_sync import run_checks
 
 SKILLS_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 passed = 0
@@ -41,15 +42,20 @@ def test(name, ok, detail=""):
 print("\n=== 1. Skill Discovery ===")
 skills = discover_valid_skills(SKILLS_DIR)
 skill_names = [s[0] for s in skills]
-test("Discover finds 14 skills", len(skills) == 14, f"found {len(skills)}: {skill_names}")
 
+# 数量不再硬编码：由 check_skill_sync 校验 磁盘/README/注册表 三方一致
 expected_skills = [
-    "claude-real-video", "defuddle", "dy-cli", "fengniao-search", "jina-reader", "lux",
-    "mptext-api", "opencli", "proxy", "qibook-company-profile",
-    "qibook-company-wiki-deepresearch", "scrapling", "yt-dlp", "zhihu-search",
+    "analyze-viral-commerce-video", "claude-real-video", "defuddle", "dy-cli",
+    "fengniao-search", "jina-reader", "lux", "mptext-api", "opencli", "proxy",
+    "qibook-company-profile", "qibook-company-wiki-deepresearch", "scrapling",
+    "videodl", "yt-dlp", "zhihu-search",
 ]
 for es in expected_skills:
     test(f"  Skill '{es}' discovered", es in skill_names)
+
+print("\n=== 1b. Skill Sync (disk / README / SKILL_DEPS) ===")
+for ok, name, detail in run_checks(SKILLS_DIR):
+    test(f"  sync: {name}", ok, detail)
 
 # ============================================================
 # 2. Command detection

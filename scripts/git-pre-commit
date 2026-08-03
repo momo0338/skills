@@ -1,0 +1,12 @@
+#!/bin/sh
+# 提交前运行技能漂移检查：磁盘技能 / README 表格 / SKILL_DEPS 注册表三方必须一致。
+# 安装方式见 README「开发与维护」章节。
+ROOT="$(git rev-parse --show-toplevel)"
+if [ ! -f "$ROOT/scripts/check_skill_sync.py" ]; then
+    exit 0
+fi
+python3 "$ROOT/scripts/check_skill_sync.py" || {
+    echo "skill-sync 检查失败：磁盘技能目录、README 表格、SKILL_DEPS 注册表三者不一致。" >&2
+    echo "请运行 python3 scripts/check_skill_sync.py 查看具体漂移项。" >&2
+    exit 1
+}

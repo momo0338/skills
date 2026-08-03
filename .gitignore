@@ -7,3 +7,6 @@
 __pycache__/
 dy-cli/outputs/
 .omo/
+.venv/
+.ruff_cache/
+.workbuddy/
