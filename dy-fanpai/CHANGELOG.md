@@ -312,3 +312,19 @@ WP6（收尾集成与发布）完成：把 WP1–WP5 的全部业务包通过 `p
   key_colors、host_on_camera=false、product_role=none、dialogue="" 均正确。
 - plan 自动带入 → 产出 segments.json + segments.md。反推腿 1（seed）实测通过。
 - 至此两条反推腿可用：seed（本记录）+ qwen（此前记录）；Kimi 腿仍缺 K3 权限。
+
+## [0.1.0] — 2026-08-03 · Qwen vs Seed 真实视频反推对比
+
+### 对比记录(146.7s 青少年内裤带货视频,1080x1920)
+- 硬切同源:两边均检出 87 切点 → 88 镜(硬切纪律成立)。
+- 台词:全文归一化后**长度完全一致(731=731)**,唯一差异为「底档/底裆」一个同音字;
+  Qwen 按句切为 76 片段,Seed 合并为 61 片段(切句粒度差异,内容等价)。
+- 出镜判断一致:均为「仅露手」产品操作特写,host_on_camera=false。
+- 差异:product_role 分布 Qwen {hero_real:75,dynamic:10,package_text:2} vs
+  Seed {hero_real:67,dynamic:17,package_text:4};动作描述粒度不同(Seed 更细带时间轴,
+  Qwen 更平实)。overall.product 双方均正确识别内裤/纯棉/多色/腰头字样。
+- merge 双反推合并:88 镜、0 静音警告、264 抽帧点,__alt_* 候选字段就位,双向均可。
+
+### 结论
+- 反推质量两者同档:台词转写等价、实体识别正确;差异在切句粒度与描述详略,
+  恰为 merge 双反推合并的价值所在(Seed 基底+alt 细句 或 反之,人工按卷宗裁决)。
