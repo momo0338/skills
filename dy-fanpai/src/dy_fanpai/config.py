@@ -34,6 +34,27 @@ def _secret(name: str) -> str:
     return v
 
 
+def _find_ffmpeg_full() -> str:
+    """探测带 libass 的 ffmpeg（烧字幕需要 subtitles filter）。
+
+    优先 brew ffmpeg-full;其次检查 PATH 上的 ffmpeg 是否带 subtitles filter;
+    都没有则回退 "ffmpeg"（调用方会捕获 CalledProcessError 走降级路径）。
+    """
+    cands = [
+        "/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg",
+        "/usr/local/opt/ffmpeg-full/bin/ffmpeg",
+    ]
+    import shutil
+
+    for c in cands:
+        if os.path.exists(c):
+            return c
+    # PATH 上的 ffmpeg 若带 subtitles filter 也可用
+    p = shutil.which("ffmpeg")
+    return p or "ffmpeg"
+
+
+
 class ConfigError(RuntimeError):
     """配置缺失或非法。"""
 
@@ -80,6 +101,9 @@ class Config:
 
     # --- 即梦 CLI ---
     dreamina_bin: str = field(default_factory=lambda: os.path.expanduser("~/.local/bin/dreamina"))
+
+    # --- ffmpeg（烧字幕需 libass 构建;brew ffmpeg-full 路径,空则回退 PATH 上的 ffmpeg）---
+    ffmpeg_bin: str = field(default_factory=lambda: _find_ffmpeg_full())
 
     # --- 剪映草稿 ---
     jy_drafts: str = ""
@@ -128,6 +152,7 @@ class Config:
             dreamina_bin=_read(
                 "DY_FANPAI_DREAMINA_BIN", os.path.expanduser("~/.local/bin/dreamina")
             ),
+            ffmpeg_bin=_read("FFMPEG_BIN") or _find_ffmpeg_full(),
             jy_drafts=_read("DY_FANPAI_JY_DRAFTS", ""),
             jy_python=_read(
                 "DY_FANPAI_JY_PYTHON", os.path.expanduser("~/.venv-jianying/bin/python")

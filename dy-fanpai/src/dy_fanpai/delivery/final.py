@@ -132,15 +132,22 @@ def subtitle_filter(
     return f"subtitles='{esc}':force_style='{style}'"
 
 
-def burn_subtitles(video: str, srt: str, out: str, *, vf: str | None = None) -> str:
+def burn_subtitles(
+    video: str, srt: str, out: str, *, vf: str | None = None, ffmpeg_bin: str | None = None
+) -> str:
     """烧字幕（ffmpeg subtitles filter，需 libass 支持的构建）。
 
     依赖 libass；在无 subtitles filter 的 ffmpeg 构建上会抛 CalledProcessError，
     调用方应捕获并标记外部验收未完成。
+    ffmpeg_bin 缺省时自动探测（brew ffmpeg-full 优先,见 config._find_ffmpeg_full）。
     """
+    if ffmpeg_bin is None:
+        from ..config import Config
+
+        ffmpeg_bin = Config.load().ffmpeg_bin
     filt = vf or subtitle_filter(srt)
     cmd = [
-        "ffmpeg", "-y", "-v", "error", "-i", video,
+        ffmpeg_bin, "-y", "-v", "error", "-i", video,
         "-vf", filt, "-c:v", "libx264", "-crf", "20", "-pix_fmt", "yuv420p",
         "-c:a", "copy", out,
     ]
