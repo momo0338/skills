@@ -301,3 +301,14 @@ WP6（收尾集成与发布）完成：把 WP1–WP5 的全部业务包通过 `p
 - 结论：非配置问题，需在火山方舟控制台开通「Seed 2.1 Pro（反推）」与
   「Seedance 2.0（生成）」模型服务后才能用；当前反推腿 1（seed）不可用，
   反推可用腿为 qwen（已实测通过）。
+
+## [0.1.0] — 2026-08-03 · Ark(Seed)反推实测通过
+
+### 实测记录
+- 用户在火山方舟控制台开通 Seed 2.1 Pro 后重测：`doubao-seed-2-1-pro-260628`
+  文本探测 HTTP 200；`run --stage reverse --leg seed`（CLI 一体化）真实反推 8s 视频
+  返回 1639 字 / 27.1s，1 镜 shotlist。
+- 质量核对：scene（电视测试卡）、action（带时间轴的线条/粒子运动细节）、
+  key_colors、host_on_camera=false、product_role=none、dialogue="" 均正确。
+- plan 自动带入 → 产出 segments.json + segments.md。反推腿 1（seed）实测通过。
+- 至此两条反推腿可用：seed（本记录）+ qwen（此前记录）；Kimi 腿仍缺 K3 权限。
