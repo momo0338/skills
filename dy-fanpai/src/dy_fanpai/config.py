@@ -50,6 +50,11 @@ class Config:
     kimi_base_url: str = "https://api.moonshot.cn/v1"
     kimi_k3_model: str = "kimi-k3"
 
+    # --- 反推腿3（通义千问 Qwen，百炼原生视频输入；experimental，未实机验收）---
+    dashscope_api_key: str = field(default="", repr=False)
+    qwen_base_url: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    qwen_model: str = "qwen3.7-plus"
+
     # --- 小云雀 ---
     xyq_access_key: str = field(default="", repr=False)
     xyq_video_model: str = "Seedance_2.0_mini_lite"
@@ -91,6 +96,11 @@ class Config:
             kimi_api_key=_read("KIMI_API_KEY") or _read("MOONSHOT_API_KEY") or "",
             kimi_base_url=_read("KIMI_BASE_URL", "https://api.moonshot.cn/v1"),
             kimi_k3_model=_read("KIMI_K3_MODEL", "kimi-k3"),
+            dashscope_api_key=_read("DASHSCOPE_API_KEY") or "",
+            qwen_base_url=_read(
+                "QWEN_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1"
+            ),
+            qwen_model=_read("QWEN_MODEL", "qwen3.7-plus"),
             xyq_access_key=_read("XYQ_ACCESS_KEY") or "",
             xyq_video_model=_read("XYQ_VIDEO_MODEL", "Seedance_2.0_mini_lite"),
             cosyvoice_home=_read("COSYVOICE_HOME", os.path.expanduser("~/CosyVoice")),
@@ -129,4 +139,5 @@ class Config:
             "ARK_API_KEY": ok("ARK_API_KEY", self.ark_api_key, 30),
             "KIMI_API_KEY": ok("KIMI_API_KEY", self.kimi_api_key, 30),
             "XYQ_ACCESS_KEY": ok("XYQ_ACCESS_KEY", self.xyq_access_key, 20),
+            "DASHSCOPE_API_KEY": ok("DASHSCOPE_API_KEY", self.dashscope_api_key, 20),
         }

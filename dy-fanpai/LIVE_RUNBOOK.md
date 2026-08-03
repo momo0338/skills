@@ -97,6 +97,29 @@ echo -n "<你的key>" > ~/.config/dy-fanpai/kimi_api_key
 
 **验证**：`dy-fanpai doctor` 中 `KIMI_API_KEY` 不再 WARN。
 
+## 第 3.5 步 · 通义千问 Qwen(反推腿3,阿里云百炼原生视频输入;experimental)
+
+> 用途：Seed 之外的第三反推腿——百炼 `qwen3.7-plus` 等**原生支持视频输入**
+> （2 小时/2GB/64 个视频，OpenAI 兼容接口，本地视频以 base64 data URI 直传）。
+> ⚠ **未实机验收**（experimental）：代码与请求构造就绪，真实调用需 `DASHSCOPE_API_KEY`
+> 与预算；未测前不得宣称 Qwen 反推已验收。实现见 `reverse/qwen.py`（与 seed/kimi 同契约，
+> 可参与 merge 合并，alt 名称用 `Qwen`）。
+
+```bash
+# 1) 开通: 阿里云百炼 https://bailian.console.aliyun.com → 模型服务 → 创建 API Key
+# 2) 配置(与 Ark 同理,二选一)
+echo 'export DASHSCOPE_API_KEY="<你的key>"' >> ~/.zshrc && source ~/.zshrc
+# 或
+echo -n "<你的key>" > ~/.config/dy-fanpai/dashscope_api_key
+
+# 可选覆盖(默认已冻结,一般不用改)
+# export QWEN_MODEL=qwen3.7-plus          # 默认
+# export QWEN_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1   # 默认
+```
+
+**验证**：`dy-fanpai doctor` 中 `DASHSCOPE_API_KEY` 不再 WARN（doctor 新增该键检查后生效）。
+**跑法**：`python -m dy_fanpai.reverse.qwen` 的反推入口与 seed/kimi 同契约（`reverse(video, out, cuts)`）。
+
 ---
 
 ## 第 4 步 · 小云雀 XYQ(纯产品 i2v 第三后端,可选)

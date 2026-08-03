@@ -241,3 +241,21 @@ WP6（收尾集成与发布）完成：把 WP1–WP5 的全部业务包通过 `p
 
 ### 验证
 - pytest 全仓 **204 passed, 1 skipped**（WP6 166 → 204 = +38 例）、ruff 全绿、pyright 0。
+
+## [0.1.0] — 2026-08-03 · Qwen 反推腿3（experimental）
+
+### 新增
+- `reverse/qwen.py`：通义千问 Qwen 单反推腿（与 seed/kimi 同契约），阿里云百炼
+  OpenAI 兼容接口（compatible-mode/v1），视频以 base64 data URI 经 `video_url` 直传；
+  prompt 复用 seed SCHEMA + 实体纪律；未实机验收标 experimental。
+- `config.py`：新增 `dashscope_api_key`（`DASHSCOPE_API_KEY`）、`qwen_model`
+  （`QWEN_MODEL`，默认 `qwen3.7-plus`）、`qwen_base_url`（`QWEN_BASE_URL`）；doctor
+  `key_status` 增加 `DASHSCOPE_API_KEY` 检查。
+- `tests/unit/test_qwen.py`（8 例）：prompt 硬切/铁律、请求体 data URI、Mock 请求
+  （URL/密钥/NO_PROXY/超时）、无 key 抛错、extract_json 围栏、离线编排落盘。
+- `LIVE_RUNBOOK.md` 第 3.5 步：Qwen 配置指南；`DEGRADATION.md` 4b 降级项。
+
+### 验证
+- pytest 全仓 **212 passed, 1 skipped**（204 → 212 = +8 例）、ruff 全绿、pyright 0。
+- 依据：阿里云百炼官方文档 2026-08 核实 qwen3.7-plus 原生支持文本/图像/视频输入
+  （2 小时/2GB/64 个视频，结构化 JSON 输出）。
