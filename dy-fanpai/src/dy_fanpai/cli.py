@@ -160,6 +160,9 @@ def _run(args) -> int:
     except workflow.GateBlocked as e:
         print(f"[run] 闸口拦截，已停止：{e}", file=sys.stderr)
         return 1
+    except RuntimeError as e:
+        print(f"[run] 失败：{e}", file=sys.stderr)
+        return 1
     return 0
 
 
