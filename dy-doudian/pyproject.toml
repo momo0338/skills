@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dy-doudian"
+version = "0.1.0"
+description = "抖音小店（抖店）本地化数据工具与 MCP Server——订单/商品/评价/直播/流量/账单只读查询 + 浏览器自动化运营，access_token 自动刷新"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "zhugx" }]
+readme = "README.md"
+keywords = ["douyin", "doudian", "抖店", "电商", "mcp", "ecommerce"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Office/Business :: Financial",
+    "Framework :: AsyncIO",
+]
+urls = { Repository = "https://github.com/momo0338/skills" }
+
+dependencies = [
+    "mcp>=1.2,<2",
+    "httpx>=0.27,<1",
+    "python-dotenv>=1.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0", "pytest-asyncio", "pytest-cov", "ruff"]
+browser = ["playwright>=1.40"]
+
+[project.scripts]
+dy-doudian = "dy_doudian.cli:main"
+dy-doudian-mcp = "dy_doudian.mcp_server:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["dy_doudian*"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
