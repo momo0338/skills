@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import httpx
 import importlib.metadata
 import json
 import os
@@ -18,14 +19,22 @@ import subprocess
 import sys
 import tempfile
 import time
+import warnings
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from zoneinfo import ZoneInfo
 
+_VENDOR_DIR = Path(__file__).resolve().parent / "vendor"
+if _VENDOR_DIR.is_dir() and str(_VENDOR_DIR) not in sys.path:
+    sys.path.insert(0, str(_VENDOR_DIR))
+
 
 SUPPORTED_DY_CLI_VERSIONS = {"0.2.2"}
+COMMENT_REPLY_URL: str | None = None  # 由 load_dy_cli 注入: .../comment/list/reply/
+GET_BASE_PARAMS: Any | None = None    # 由 load_dy_cli 注入: dy_cli.utils.signature.get_base_params
+IESDOUYIN_COMMENT_URL = "https://www.iesdouyin.com/web/api/v2/comment/list/"
 SENSITIVE_KEY = re.compile(
     r"(?:authorization|cookie|credential|passport|secret|session|ticket|token|x-bogus)",
     re.IGNORECASE,
@@ -106,23 +115,36 @@ def sanitize_raw(value: Any, key: str = "") -> Any:
     return value
 
 
-def normalized_comments(items: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
+def normalized_comments(
+    items: Iterable[dict[str, Any]],
+    max_depth: int = 1,
+    depth: int = 0,
+) -> list[dict[str, Any]]:
+    """规范化评论列表。max_depth 控制嵌套回复的递归深度（0=不含回复）。"""
     result = []
     for item in items:
         user = item.get("user") if isinstance(item.get("user"), dict) else {}
-        result.append(
-            {
-                "comment_id": item.get("cid"),
-                "text": item.get("text"),
-                "created_at": local_time_from_epoch(item.get("create_time")),
-                "digg_count": item.get("digg_count"),
-                "reply_count": item.get("reply_comment_total"),
-                "user": {
-                    "nickname": user.get("nickname"),
-                    "sec_uid": user.get("sec_uid"),
-                },
-            }
-        )
+        entry = {
+            "comment_id": item.get("cid"),
+            "text": item.get("text"),
+            "created_at": local_time_from_epoch(item.get("create_time")),
+            "digg_count": item.get("digg_count"),
+            "reply_count": item.get("reply_comment_total"),
+            "user": {
+                "nickname": user.get("nickname"),
+                "sec_uid": user.get("sec_uid"),
+            },
+            "replies": [],
+        }
+        if depth < max_depth:
+            raw_replies = item.get("reply_comment")
+            if isinstance(raw_replies, list):
+                entry["replies"] = normalized_comments(
+                    raw_replies,
+                    max_depth=max_depth,
+                    depth=depth + 1,
+                )
+        result.append(entry)
     return result
 
 
@@ -384,6 +406,8 @@ def initial_metadata(
             "fetched": 0,
             "has_more": None,
             "cursor": None,
+            "reply_depth": requested.get("reply_depth", 1),
+            "source": None,
             "status": "pending",
             "items": [],
         }
@@ -476,12 +500,167 @@ def download_asset(
     return final_path
 
 
-def fetch_comments(client: Any, aweme_id: str, requested: int) -> dict[str, Any]:
+def _signed_douyin_comment_page(
+    cookie: str, aweme_id: str, cursor: int, count: int
+) -> list[dict[str, Any]]:
+    from abogus import ABogus as ABogusClass
+    from abogus import BrowserFingerprintGenerator as FpGen
+
+    ua = (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0"
+    )
+    params = {
+        "device_platform": "webapp",
+        "aid": "6383",
+        "channel": "channel_pc_web",
+        "aweme_id": aweme_id,
+        "cursor": str(cursor),
+        "count": str(count),
+        "item_type": "0",
+        "pc_client_type": "1",
+        "update_version_code": "170400",
+        "version_code": "170400",
+        "version_name": "17.4.0",
+        "cookie_enabled": "true",
+        "screen_width": "1920",
+        "screen_height": "1080",
+        "browser_language": "zh-CN",
+        "browser_platform": "Win32",
+        "browser_name": "Edge",
+        "browser_version": "120.0.0.0",
+        "browser_online": "true",
+        "engine_name": "Blink",
+        "engine_version": "120.0.0.0",
+        "os_name": "Windows",
+        "os_version": "10",
+        "cpu_core_num": "8",
+        "device_memory": "8",
+        "platform": "PC",
+        "downlink": "10",
+        "effective_type": "4g",
+        "round_trip_time": "100",
+    }
+    param_str = "&".join(f"{k}={v}" for k, v in params.items())
+    fingerprint = FpGen.generate_fingerprint("Edge")
+    signed = ABogusClass(fp=fingerprint, user_agent=ua).generate_abogus(param_str, "GET")
+    abogus = signed[1]
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        resp = httpx.get(
+            "https://www.douyin.com/aweme/v1/web/comment/list/",
+            params={**params, "a_bogus": abogus},
+            headers={
+                "User-Agent": ua,
+                "Referer": "https://www.douyin.com/",
+                "Cookie": cookie,
+            },
+            timeout=15,
+            verify=False,
+        )
+    resp.raise_for_status()
+    data = resp.json()
+    if data.get("status_code") != 0:
+        return []
+    page = data.get("comments") if isinstance(data.get("comments"), list) else []
+    return [item for item in page if isinstance(item, dict)]
+
+
+def fetch_douyin_web_comments(cookie: str, aweme_id: str, requested: int) -> dict[str, Any]:
+    """通过 a_bogus 签名 + Cookie 从 www.douyin.com 拉取一级评论（dy-cli 原生接口失败时用）。"""
+    if not cookie:
+        raise ArchiveError("无可用 Cookie，无法使用签名接口拉取评论")
+    items: list[dict[str, Any]] = []
+    cursor = 0
+    while len(items) < requested:
+        page = _signed_douyin_comment_page(cookie, aweme_id, cursor, min(20, requested - len(items)))
+        if not page:
+            break
+        items.extend(page)
+        cursor += len(page)
+        if len(page) < 20:
+            break
+    return {
+        "requested": requested,
+        "fetched": len(items),
+        "has_more": False,
+        "cursor": cursor,
+        "reply_depth": 0,
+        "source": "douyin_web",
+        "status": "complete" if len(items) >= requested or len(items) > 0 else "partial",
+        "items": items[:requested],
+    }
+
+
+def _iesdouyin_comment_page(aweme_id: str, cursor: int, count: int) -> list[dict[str, Any]]:
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        resp = httpx.get(
+            IESDOUYIN_COMMENT_URL,
+            params={"aweme_id": aweme_id, "cursor": cursor, "count": count},
+            headers={
+                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)",
+                "Referer": f"https://www.iesdouyin.com/share/video/{aweme_id}/",
+            },
+            timeout=15,
+            verify=False,
+        )
+    resp.raise_for_status()
+    data = resp.json()
+    sc = data.get("status_code")
+    if sc != 0 and not (isinstance(sc, dict) and sc.get("StatusCode") == 0):
+        return []
+    page = data.get("comments") if isinstance(data.get("comments"), list) else []
+    return [item for item in page if isinstance(item, dict)]
+
+
+def fetch_iesdouyin_comments(aweme_id: str, requested: int) -> dict[str, Any]:
+    """通过 iesdouyin 分享 API 拉取一级评论（免签名，dy-cli 接口失败时降级用）。"""
+    items: list[dict[str, Any]] = []
+    cursor = 0
+    while len(items) < requested:
+        page = _iesdouyin_comment_page(aweme_id, cursor, min(20, requested - len(items)))
+        if not page:
+            break
+        items.extend(page)
+        cursor += len(page)
+        if len(page) < 20:
+            break
+    return {
+        "requested": requested,
+        "fetched": len(items),
+        "has_more": False,
+        "cursor": cursor,
+        "reply_depth": 0,
+        "source": "iesdouyin",
+        "status": "complete" if len(items) >= requested or len(items) > 0 else "partial",
+        "items": items[:requested],
+    }
+
+
+def fetch_comment_replies(
+    client: Any,
+    aweme_id: str,
+    comment_id: str,
+    max_count: int = 20,
+) -> dict[str, Any]:
+    if not COMMENT_REPLY_URL or GET_BASE_PARAMS is None:
+        raise ArchiveError("dy-cli 未初始化，无法拉取评论回复")
     items: list[dict[str, Any]] = []
     cursor = 0
     has_more = True
-    while has_more and len(items) < requested:
-        data = client.get_comments(aweme_id, cursor=cursor, count=min(20, requested - len(items)))
+    while has_more and len(items) < max_count:
+        data = client._get(
+            COMMENT_REPLY_URL,
+            params={
+                **GET_BASE_PARAMS(),
+                "item_id": aweme_id,
+                "comment_id": comment_id,
+                "cursor": str(cursor),
+                "count": str(min(20, max_count - len(items))),
+                "item_type": "0",
+            },
+        )
         page = data.get("comments") if isinstance(data.get("comments"), list) else []
         items.extend(item for item in page if isinstance(item, dict))
         has_more = bool(data.get("has_more"))
@@ -490,12 +669,96 @@ def fetch_comments(client: Any, aweme_id: str, requested: int) -> dict[str, Any]
             break
         cursor = next_cursor
     return {
+        "requested": max_count,
+        "fetched": len(items),
+        "has_more": has_more,
+        "cursor": cursor,
+        "status": "complete" if len(items) >= max_count or not has_more else "partial",
+        "items": items[:max_count],
+    }
+
+
+def fetch_comments(
+    client: Any,
+    aweme_id: str,
+    requested: int,
+    reply_depth: int = 1,
+) -> dict[str, Any]:
+    items: list[dict[str, Any]] = []
+    cursor = 0
+    has_more = True
+    source = "douyin"
+    try:
+        while has_more and len(items) < requested:
+            data = client.get_comments(aweme_id, cursor=cursor, count=min(20, requested - len(items)))
+            page = data.get("comments") if isinstance(data.get("comments"), list) else []
+            items.extend(item for item in page if isinstance(item, dict))
+            has_more = bool(data.get("has_more"))
+            next_cursor = data.get("cursor")
+            if not page or next_cursor in (None, cursor):
+                break
+            cursor = next_cursor
+    except Exception:
+        if not items:
+            try:
+                fallback = fetch_douyin_web_comments(getattr(client, "cookie", ""), aweme_id, requested)
+                items = fallback["items"]
+                cursor = fallback["cursor"]
+                has_more = fallback["has_more"]
+                source = fallback["source"]
+            except Exception:
+                fallback = fetch_iesdouyin_comments(aweme_id, requested)
+                items = fallback["items"]
+                cursor = fallback["cursor"]
+                has_more = fallback["has_more"]
+                source = fallback["source"]
+            reply_depth = 0
+            for comment in items:
+                if "createTime" in comment:
+                    comment["create_time"] = comment.pop("createTime")
+            return {
+                "requested": requested,
+                "fetched": len(items),
+                "has_more": has_more,
+                "cursor": cursor,
+                "reply_depth": reply_depth,
+                "source": source,
+                "status": fallback["status"],
+                "items": normalized_comments(items[:requested], max_depth=0),
+            }
+
+    # 二级评论：对每条 reply_count>0 的一级评论串行拉取回复
+    reply_degraded = False
+    if reply_depth >= 1:
+        for comment in items[:requested]:
+            total = comment.get("reply_comment_total") or 0
+            comment["reply_comment"] = []
+            if total <= 0:
+                continue
+            cid = comment.get("cid")
+            if not cid:
+                continue
+            try:
+                replies = fetch_comment_replies(client, aweme_id, str(cid), max_count=total)
+                comment["reply_comment"] = replies["items"]
+                if replies["status"] == "partial":
+                    reply_degraded = True
+            except Exception:
+                comment["reply_comment"] = []
+                reply_degraded = True
+
+    status = "complete" if len(items) >= requested or not has_more else "partial"
+    if reply_degraded and status == "complete":
+        status = "partial"
+    return {
         "requested": requested,
         "fetched": len(items),
         "has_more": has_more,
         "cursor": cursor,
-        "status": "complete" if len(items) >= requested or not has_more else "partial",
-        "items": normalized_comments(items[:requested]),
+        "reply_depth": reply_depth,
+        "source": source,
+        "status": status,
+        "items": normalized_comments(items[:requested], max_depth=reply_depth),
     }
 
 
@@ -524,6 +787,7 @@ def archive_one(
         "avatar": bool(options.avatar or options.archive),
         "music": bool(options.music or options.archive),
         "comments": max(0, options.comments),
+        "reply_depth": max(0, options.reply_depth),
     }
     metadata = initial_metadata(
         detail,
@@ -592,7 +856,12 @@ def archive_one(
 
     if requested["comments"]:
         try:
-            metadata["comments"] = fetch_comments(client, aweme_id, requested["comments"])
+            metadata["comments"] = fetch_comments(
+                client,
+                aweme_id,
+                requested["comments"],
+                reply_depth=requested["reply_depth"],
+            )
             metadata["acquisition"]["components"]["comments"] = metadata["comments"]["status"]
         except Exception as exc:
             metadata["comments"]["status"] = "failed"
@@ -617,10 +886,12 @@ def archive_one(
 
 
 def load_dy_cli(allow_unsupported: bool) -> tuple[Any, Any, str]:
+    global COMMENT_REPLY_URL, GET_BASE_PARAMS
     try:
         version = importlib.metadata.version("dy-cli")
-        from dy_cli.engines.api_client import DouyinAPIClient
+        from dy_cli.engines.api_client import DouyinAPIClient, VIDEO_COMMENTS_URL
         from dy_cli.utils.index_cache import resolve_id
+        from dy_cli.utils.signature import get_base_params
     except (ImportError, importlib.metadata.PackageNotFoundError) as exc:
         raise ArchiveError("未安装 dy-cli；请先运行 pip install dy-cli==0.2.2") from exc
     if version not in SUPPORTED_DY_CLI_VERSIONS and not allow_unsupported:
@@ -629,6 +900,8 @@ def load_dy_cli(allow_unsupported: bool) -> tuple[Any, Any, str]:
             f"当前 dy-cli 版本 {version} 未经验证；支持版本: {supported}。"
             "如需自行承担兼容风险，请加 --allow-unsupported-version"
         )
+    COMMENT_REPLY_URL = f"{VIDEO_COMMENTS_URL}reply/"
+    GET_BASE_PARAMS = get_base_params
     return DouyinAPIClient, resolve_id, version
 
 
@@ -655,8 +928,14 @@ def extract_douyin_url(target: str) -> str | None:
 
 
 def direct_aweme_id_from_url(url: str) -> str | None:
-    match = DIRECT_AWEME_URL_PATTERN.search(urlsplit(url).path)
-    return match.group(1) if match else None
+    parts = urlsplit(url)
+    match = DIRECT_AWEME_URL_PATTERN.search(parts.path)
+    if match:
+        return match.group(1)
+    for key, value in parse_qsl(parts.query, keep_blank_values=True):
+        if key == "modal_id" and AWEME_ID_PATTERN.fullmatch(value):
+            return value
+    return None
 
 
 def validate_aweme_id(value: Any, *, source: str) -> str:
@@ -822,6 +1101,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--music", action="store_true", help="下载背景音乐")
     parser.add_argument("--include-raw", action="store_true", help="在 metadata.json 中保存脱敏原始详情")
     parser.add_argument("--comments", type=int, default=0, metavar="N", help="尝试下载前 N 条评论")
+    parser.add_argument(
+        "--reply-depth",
+        type=int,
+        default=1,
+        metavar="N",
+        help="评论回复深度：0=仅一级评论，1=含二级回复（默认 1）",
+    )
     parser.add_argument("--force", action="store_true", help="重新下载已有资源")
     parser.add_argument(
         "--allow-unsupported-version",
@@ -833,6 +1119,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         parser.error("--limit 必须大于 0")
     if args.comments < 0:
         parser.error("--comments 不能小于 0")
+    if args.reply_depth < 0:
+        parser.error("--reply-depth 不能小于 0")
     return args
 
 

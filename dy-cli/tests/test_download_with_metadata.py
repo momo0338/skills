@@ -14,6 +14,10 @@ MODULE = importlib.util.module_from_spec(SPEC)
 assert SPEC.loader is not None
 SPEC.loader.exec_module(MODULE)
 
+# fetch_comments 依赖 load_dy_cli 注入的模块级变量，测试直接注入
+MODULE.COMMENT_REPLY_URL = "https://www.douyin.com/aweme/v1/web/comment/list/reply/"
+MODULE.GET_BASE_PARAMS = lambda: {"device_platform": "webapp", "aid": "6383"}
+
 
 def sample_detail() -> dict:
     return {
@@ -72,7 +76,33 @@ class FakeClient:
                     "create_time": 1784958347,
                     "digg_count": 1,
                     "user": {"nickname": "用户", "sec_uid": "sec-user"},
+                    "reply_comment_total": 2,
                 }
+            ],
+            "has_more": False,
+            "cursor": 1,
+        }
+
+    def _get(self, url: str, params: dict | None = None, **kwargs) -> dict:
+        if url != MODULE.COMMENT_REPLY_URL:
+            raise AssertionError(f"unexpected url: {url}")
+        assert params is not None and params.get("comment_id") == "c1"
+        return {
+            "comments": [
+                {
+                    "cid": "r1",
+                    "text": "回复1",
+                    "create_time": 1784958347,
+                    "digg_count": 0,
+                    "user": {"nickname": "回复者", "sec_uid": "sec-reply"},
+                },
+                {
+                    "cid": "r2",
+                    "text": "回复2",
+                    "create_time": 1784958348,
+                    "digg_count": 1,
+                    "user": {"nickname": "回复者2", "sec_uid": "sec-reply2"},
+                },
             ],
             "has_more": False,
             "cursor": 1,
@@ -87,6 +117,7 @@ def options(**overrides) -> argparse.Namespace:
         "music": False,
         "include_raw": False,
         "comments": 0,
+        "reply_depth": 1,
         "force": False,
     }
     values.update(overrides)
@@ -120,6 +151,16 @@ class MetadataTests(unittest.TestCase):
             client,
             lambda target: self.fail("share URL must not use the index cache"),
             "https://www.iesdouyin.com/share/video/7635914294399817961/",
+        )
+        self.assertEqual(value, "7635914294399817961")
+        self.assertEqual(client.resolved_urls, [])
+
+    def test_resolve_jingxuan_modal_id_url_without_redirect_request(self):
+        client = FakeClient()
+        value = MODULE.resolve_aweme_id(
+            client,
+            lambda target: self.fail("jingxuan modal_id URL must not use the index cache"),
+            "https://www.douyin.com/jingxuan?modal_id=7635914294399817961",
         )
         self.assertEqual(value, "7635914294399817961")
         self.assertEqual(client.resolved_urls, [])
@@ -287,6 +328,219 @@ class MetadataTests(unittest.TestCase):
             self.assertEqual(status, "partial")
             data = json.loads(path.read_text(encoding="utf-8"))
             self.assertEqual(data["comments"]["status"], "partial")
+
+    def test_comment_replies_are_nested_by_default(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path, status = MODULE.archive_one(
+                FakeClient(),
+                sample_detail(),
+                Path(directory),
+                options(comments=1),
+                "0.2.2",
+            )
+            self.assertEqual(status, "complete")
+            data = json.loads(path.read_text(encoding="utf-8"))
+            comment = data["comments"]["items"][0]
+            self.assertEqual(comment["comment_id"], "c1")
+            self.assertEqual(comment["reply_count"], 2)
+            self.assertEqual([r["comment_id"] for r in comment["replies"]], ["r1", "r2"])
+            self.assertEqual(comment["replies"][0]["text"], "回复1")
+            self.assertEqual(data["comments"]["reply_depth"], 1)
+
+    def test_reply_depth_zero_skips_replies(self):
+        class NoReplyClient(FakeClient):
+            def _get(self, url: str, params: dict | None = None, **kwargs) -> dict:
+                raise AssertionError("_get must not be called with reply_depth=0")
+
+        with tempfile.TemporaryDirectory() as directory:
+            path, status = MODULE.archive_one(
+                NoReplyClient(),
+                sample_detail(),
+                Path(directory),
+                options(comments=1, reply_depth=0),
+                "0.2.2",
+            )
+            self.assertEqual(status, "complete")
+            data = json.loads(path.read_text(encoding="utf-8"))
+            self.assertEqual(data["comments"]["reply_depth"], 0)
+            self.assertEqual(data["comments"]["items"][0]["replies"], [])
+
+    def test_reply_fetch_failure_degrades_to_partial(self):
+        class FailingReplyClient(FakeClient):
+            def _get(self, url: str, params: dict | None = None, **kwargs) -> dict:
+                raise MODULE.ArchiveError("模拟回复接口失败")
+
+        with tempfile.TemporaryDirectory() as directory:
+            path, status = MODULE.archive_one(
+                FailingReplyClient(),
+                sample_detail(),
+                Path(directory),
+                options(comments=1),
+                "0.2.2",
+            )
+            self.assertEqual(status, "partial")
+            data = json.loads(path.read_text(encoding="utf-8"))
+            self.assertEqual(data["comments"]["status"], "partial")
+            self.assertEqual(data["comments"]["items"][0]["replies"], [])
+
+    def test_reply_pagination_aggregates_pages(self):
+        class PagedReplyClient(FakeClient):
+            def get_comments(self, aweme_id: str, cursor: int = 0, count: int = 20) -> dict:
+                data = super().get_comments(aweme_id, cursor=cursor, count=count)
+                data["comments"][0]["reply_comment_total"] = 3
+                return data
+
+            def _get(self, url: str, params: dict | None = None, **kwargs) -> dict:
+                assert params is not None
+                cursor = int(params.get("cursor", "0"))
+                if cursor == 0:
+                    return {
+                        "comments": [
+                            {"cid": "r1", "text": "第一页", "user": {}},
+                            {"cid": "r2", "text": "第一页2", "user": {}},
+                        ],
+                        "has_more": True,
+                        "cursor": 1,
+                    }
+                return {
+                    "comments": [{"cid": "r3", "text": "第二页", "user": {}}],
+                    "has_more": False,
+                    "cursor": 1,
+                }
+
+        with tempfile.TemporaryDirectory() as directory:
+            path, status = MODULE.archive_one(
+                PagedReplyClient(),
+                sample_detail(),
+                Path(directory),
+                options(comments=1),
+                "0.2.2",
+            )
+            self.assertEqual(status, "complete")
+            data = json.loads(path.read_text(encoding="utf-8"))
+            replies = data["comments"]["items"][0]["replies"]
+            self.assertEqual([r["comment_id"] for r in replies], ["r1", "r2", "r3"])
+
+    def test_iesdouyin_fallback_when_primary_comments_fail(self):
+        class FailingCommentsClient(FakeClient):
+            def get_comments(self, aweme_id: str, cursor: int = 0, count: int = 20) -> dict:
+                raise MODULE.ArchiveError("模拟 dy-cli 评论接口失败")
+
+        original_page = MODULE._iesdouyin_comment_page
+        MODULE._iesdouyin_comment_page = lambda aweme_id, cursor, count: [
+            {
+                "cid": "ies-1",
+                "text": "降级评论",
+                "createTime": 1784958347,
+                "digg_count": 2,
+                "user": {"nickname": "ies用户", "sec_uid": "sec-ies"},
+                "reply_comment_total": 0,
+            }
+        ]
+        try:
+            with tempfile.TemporaryDirectory() as directory:
+                path, status = MODULE.archive_one(
+                    FailingCommentsClient(),
+                    sample_detail(),
+                    Path(directory),
+                    options(comments=5),
+                    "0.2.2",
+                )
+                self.assertEqual(status, "complete")
+                data = json.loads(path.read_text(encoding="utf-8"))
+                self.assertEqual(data["comments"]["source"], "iesdouyin")
+                self.assertEqual(data["comments"]["fetched"], 1)
+                self.assertEqual(data["comments"]["items"][0]["comment_id"], "ies-1")
+                self.assertEqual(data["comments"]["items"][0]["created_at"], "2026-07-25T13:45:47+08:00")
+        finally:
+            MODULE._iesdouyin_comment_page = original_page
+
+    def test_primary_comments_source_is_douyin(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path, status = MODULE.archive_one(
+                FakeClient(),
+                sample_detail(),
+                Path(directory),
+                options(comments=1),
+                "0.2.2",
+            )
+            self.assertEqual(status, "complete")
+            data = json.loads(path.read_text(encoding="utf-8"))
+            self.assertEqual(data["comments"]["source"], "douyin")
+
+    def test_douyin_web_signed_fallback_when_primary_fails(self):
+        class FailingCommentsClient(FakeClient):
+            def get_comments(self, aweme_id: str, cursor: int = 0, count: int = 20) -> dict:
+                raise MODULE.ArchiveError("模拟 dy-cli 评论接口失败")
+
+        class CookieClient(FailingCommentsClient):
+            cookie = "ttwid=abc; sessionid=xyz"
+
+        original_page = MODULE._signed_douyin_comment_page
+        MODULE._signed_douyin_comment_page = lambda cookie, aweme_id, cursor, count: [
+            {
+                "cid": "web-1",
+                "text": "签名评论",
+                "create_time": 1784958347,
+                "digg_count": 3,
+                "user": {"nickname": "web用户", "sec_uid": "sec-web"},
+                "reply_comment_total": 0,
+            }
+        ]
+        try:
+            with tempfile.TemporaryDirectory() as directory:
+                path, status = MODULE.archive_one(
+                    CookieClient(),
+                    sample_detail(),
+                    Path(directory),
+                    options(comments=5),
+                    "0.2.2",
+                )
+                self.assertEqual(status, "complete")
+                data = json.loads(path.read_text(encoding="utf-8"))
+                self.assertEqual(data["comments"]["source"], "douyin_web")
+                self.assertEqual(data["comments"]["fetched"], 1)
+                self.assertEqual(data["comments"]["items"][0]["comment_id"], "web-1")
+                self.assertEqual(data["comments"]["items"][0]["created_at"], "2026-07-25T13:45:47+08:00")
+        finally:
+            MODULE._signed_douyin_comment_page = original_page
+
+    def test_iesdouyin_fallback_when_signed_also_fails(self):
+        class FailingCommentsClient(FakeClient):
+            def get_comments(self, aweme_id: str, cursor: int = 0, count: int = 20) -> dict:
+                raise MODULE.ArchiveError("模拟 dy-cli 评论接口失败")
+
+        original_signed = MODULE._signed_douyin_comment_page
+        original_ies = MODULE._iesdouyin_comment_page
+        MODULE._signed_douyin_comment_page = lambda cookie, aweme_id, cursor, count: (_ for _ in ()).throw(
+            MODULE.ArchiveError("签名接口也失败")
+        )
+        MODULE._iesdouyin_comment_page = lambda aweme_id, cursor, count: [
+            {
+                "cid": "ies-fb",
+                "text": "最终降级",
+                "createTime": 1784958347,
+                "digg_count": 1,
+                "user": {"nickname": "ies", "sec_uid": "sec-ies"},
+                "reply_comment_total": 0,
+            }
+        ]
+        try:
+            with tempfile.TemporaryDirectory() as directory:
+                path, status = MODULE.archive_one(
+                    FailingCommentsClient(),
+                    sample_detail(),
+                    Path(directory),
+                    options(comments=5),
+                    "0.2.2",
+                )
+                self.assertEqual(status, "complete")
+                data = json.loads(path.read_text(encoding="utf-8"))
+                self.assertEqual(data["comments"]["source"], "iesdouyin")
+                self.assertEqual(data["comments"]["items"][0]["comment_id"], "ies-fb")
+        finally:
+            MODULE._signed_douyin_comment_page = original_signed
+            MODULE._iesdouyin_comment_page = original_ies
 
 
 if __name__ == "__main__":

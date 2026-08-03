@@ -184,6 +184,15 @@ python "$SKILL_DIR/scripts/download_with_metadata.py" 1 \
   -o /absolute/output/path \
   --archive --comments 100
 
+# 二级评论：--reply-depth 默认 1（一级评论+每条回复），--reply-depth 0 仅一级
+python "$SKILL_DIR/scripts/download_with_metadata.py" 1 \
+  -o /absolute/output/path \
+  --archive --comments 100 --reply-depth 1
+# 评论采集降级链（metadata.comments.source 标记来源）：
+#   1. douyin      dy-cli 原生签名接口
+#   2. douyin_web  内置 a_bogus 签名 + Cookie（vendor/abogus.py，零第三方依赖）
+#   3. iesdouyin   分享 API 免签名（最终兜底）
+
 # 批量归档用户作品
 python "$SKILL_DIR/scripts/download_with_metadata.py" "MS4wLjABAAAA..." \
   --user --limit 20 \
