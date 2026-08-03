@@ -22,6 +22,7 @@
     "start": 0.0,
     "end": 12.0,
     "duration": 12,
+    "audio": "audio/segments/S1.wav",
     "opening_3s": true,
     "warns": []
   },
@@ -37,6 +38,7 @@
     "end": 16.0,
     "duration": 4,
     "dialogue": "",
+    "audio": "audio/segments/S2.wav",
     "opening_3s": false,
     "warns": []
   }

@@ -23,6 +23,7 @@
     "start": 0.0,
     "end": 9.09,
     "duration": 10,
+    "audio": "audio/segments/S1.wav",
     "opening_3s": true,
     "warns": []
   },
@@ -51,6 +52,7 @@
     "start": 9.09,
     "end": 19.9,
     "duration": 11,
+    "audio": "audio/segments/S2.wav",
     "opening_3s": true,
     "warns": []
   },
@@ -66,6 +68,7 @@
     "end": 29.3,
     "duration": 10,
     "dialogue": "水泡参的营养高太多了。大连厂家源头直供，高品质鲜蒸海参，怪不得我老公喜欢吃呢。你看参刺挺拔，老四排刺",
+    "audio": "audio/segments/S3.wav",
     "opening_3s": false,
     "warns": []
   },
@@ -82,6 +85,7 @@
     "end": 39.73,
     "duration": 11,
     "dialogue": "筋白肉厚。以前这一根就得大几十，现在到手50根才300多，一根才折7块多直播间还送海参鲍鱼汁等多重好礼",
+    "audio": "audio/segments/S4.wav",
     "opening_3s": false,
     "warns": []
   },
@@ -97,6 +101,7 @@
     "end": 50.57,
     "duration": 11,
     "dialogue": "精美乐扣盒包装，送人送礼有面。趁活动啊，赶紧去直播间囤吧！大连源头厂家活动，仅258到手30只鲜蒸海参，能囤啊一定多囤一点吧，因为过了这个时间啊，参阿婆鲜蒸海参",
+    "audio": "audio/segments/S5.wav",
     "opening_3s": false,
     "warns": []
   },
@@ -121,6 +126,7 @@
     "start": 50.57,
     "end": 61.9,
     "duration": 12,
+    "audio": "audio/segments/S6.wav",
     "opening_3s": false,
     "warns": []
   },
@@ -148,6 +154,7 @@
     "start": 61.9,
     "end": 72.5,
     "duration": 11,
+    "audio": "audio/segments/S7.wav",
     "opening_3s": false,
     "warns": []
   },
@@ -173,6 +180,7 @@
     "start": 72.5,
     "end": 83.0,
     "duration": 11,
+    "audio": "audio/segments/S8.wav",
     "opening_3s": false,
     "warns": []
   }

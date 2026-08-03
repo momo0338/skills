@@ -188,18 +188,23 @@ def build_kou_prompt(
         acts.append(f"{cut}{s.get('shot_size', '')}{s.get('camera', '')},{s.get('action', '')}")
     body = "。".join(acts)
     dialogue = "".join((s.get("dialogue") or "") for s in shots)
-    # 逐图声明: @图片2是<产品desc>的<形态>
+    # 逐图声明: 有主播时产品图从 @图片2 起;无主播时从 @图片1 起(与 images 列表对齐)
+    img_offset = 2 if host else 1
     prod_lines = "".join(
-        f"@图片{i + 2}是{prod_desc}的{label}(以此图为准,不要改产品外观和包装文字)。"
+        f"@图片{i + img_offset}是{prod_desc}的{label}(以此图为准,不要改产品外观和包装文字)。"
         for i, (label, _) in enumerate(anchors)
     )
-    images = [host] + [p for _, p in anchors]
-    host_line = (
-        f"@图片1是带货主播本人({host_desc}),每一个镜头都保持与@图片1完全一致的"
-        f"长相、发型和这身穿着:{host_desc}。"
-        if host_desc
-        else "@图片1是带货主播本人,全程保持@图片1长相穿着一致。"
-    )
+    images = ([host] if host else []) + [p for _, p in anchors]
+    if host:
+        host_line = (
+            f"@图片1是带货主播本人({host_desc}),每一个镜头都保持与@图片1完全一致的"
+            f"长相、发型和这身穿着:{host_desc}。"
+            if host_desc
+            else "@图片1是带货主播本人,全程保持@图片1长相穿着一致。"
+        )
+    else:
+        # 无主播:不引用 @图片1,产品图从 @图片1 起编号,与实际上传完全对齐
+        host_line = ""
     p = (
         f"{host_line}{prod_lines}"
         f"竖屏9:16。场景:{scene}。{body}。"
@@ -355,6 +360,9 @@ def plan(shotlist, assets, out_path: str | None = None) -> list[dict]:
                 "end": end,
                 "duration": dur,
                 "dialogue": seg_dialogue,
+                # 段音频路径:audio 阶段按 audio/segments/{sid}.wav 产出,规划时即写入
+                # 供下游(generate 口播驱动/人工页面操作)直接引用,不必再推断
+                "audio": f"audio/segments/{sid}.wav",
                 "opening_3s": any(s.get("is_opening_3s") for s in shots),
                 "warns": warns,
             }
