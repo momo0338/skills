@@ -343,3 +343,24 @@ echo -n "<你的key>" > ~/.config/dy-fanpai/minimax_api_key
 ```
 
 **验证**：`dy-fanpai doctor` 中 `MINIMAX_API_KEY` 不再 WARN。
+
+## 第 4.6 步 · 自建 ComfyUI(自有 GPU 机器,替代即梦;experimental)
+
+> 部署详见 `COMPYUI_DEPLOY.md`(AMD MI300X 走附录 A 官方镜像)。本步骤是接入 dy-fanpai。
+
+```bash
+# 1) 配置(指向自有 ComfyUI 机器)
+export COMfyUI_BASE_URL="http://<机器IP>:8188"
+# 模板路径(在机器上搭好工作流后导出 JSON 到本机)
+export COMfyUI_WORKFLOW_I2V="/path/to/comfyui_i2v.json"   # Wan2.1 图生视频
+export COMfyUI_WORKFLOW_MM="/path/to/comfyui_mm.json"      # LatentSync 口型
+
+# 2) 验证
+dy-fanpai doctor   # COMfyUI_BASE_URL 应显示就位
+
+# 3) 生成时切后端(纯产品段)
+# generation.service.run 的 i2v_backend 参数: --i2v-backend comfyui
+```
+
+> ⚠ mm 段默认仍走即梦;ComfyUI LatentSync 口型实测通过前不切换口播段。
+> 模板占位符约定见 `resources/workflows/README.md`。

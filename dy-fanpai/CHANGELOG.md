@@ -366,3 +366,24 @@ WP6（收尾集成与发布）完成：把 WP1–WP5 的全部业务包通过 `p
 
 ### 验证
 - pytest 全仓 **229 passed, 1 skipped**（218 → 229 = +11 例）、ruff 全绿、pyright 0。
+
+## [0.1.0] — 2026-08-03 · ComfyUI 生成后端接入(自建 GPU 部署,替代即梦)
+
+### 新增
+- `generation/comfyui.py`：自建 ComfyUI（ROCm 容器 0.18.2 + 原生 HTTP API）后端。
+  流程：上传素材（/upload/image、/upload/audio）→ 注入工作流模板占位符 →
+  POST /prompt 提交 → GET /history 轮询 → /view 下载（robust_download）。
+  占位符：__PROMPT__/__IMAGE__/__IMAGE2__/__AUDIO__/__DURATION__/__WIDTH__/__HEIGHT__/__RESOLUTION__。
+  与 dreamina/ark/xyq/minimax 同契约（submit_i2v/mm/t2v + wait_download，默认 240×10s 轮询）。
+- `config.py`：`COMfyUI_BASE_URL` / `COMfyUI_WORKFLOW_I2V` / `COMfyUI_WORKFLOW_MM`
+  （模板路径）；doctor `key_status` 增加 COMfyUI_BASE_URL 检查。
+- `generation/service.py`：`_default_backends` 注册 `comfyui`（`--i2v-backend comfyui`）。
+- `resources/workflows/README.md`：模板 JSON 与占位符约定说明。
+- `tests/unit/test_comfyui.py`（10 例）：占位符注入/解析/Mock 上传提交轮询下载/缺模板抛错/后端注册。
+
+### 说明
+- mm 段默认仍走即梦；ComfyUI LatentSync 口型工作流需实测通过后切换（experimental）。
+- 模板 JSON 需用户在自有机器搭好后导出（Wan2.1 i2v + LatentSync 两套）。
+
+### 验证
+- pytest 全仓 **239 passed, 1 skipped**（229 → 239 = +10 例）、ruff 全绿、pyright 0。

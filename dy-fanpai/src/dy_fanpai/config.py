@@ -64,6 +64,11 @@ class Config:
     minimax_model: str = "MiniMax-H3"
     minimax_base_url: str = "https://api.minimaxi.com"
 
+    # --- 自建 ComfyUI（自有 GPU 部署,替代即梦；工作流模板路径可配）---
+    comfyui_base_url: str = ""  # 如 http://192.168.x.x:8188
+    comfyui_workflow_i2v: str = ""  # Wan2.1 图生视频模板 JSON 路径
+    comfyui_workflow_mm: str = ""  # LatentSync 口型模板 JSON 路径
+
     # --- TTS / 换声 ---
     cosyvoice_home: str = field(default_factory=lambda: os.path.expanduser("~/CosyVoice"))
     seedvc_home: str = field(default_factory=lambda: os.path.expanduser("~/seed-vc"))
@@ -111,6 +116,9 @@ class Config:
             minimax_api_key=_read("MINIMAX_API_KEY") or "",
             minimax_model=_read("MINIMAX_MODEL", "MiniMax-H3"),
             minimax_base_url=_read("MINIMAX_BASE_URL", "https://api.minimaxi.com"),
+            comfyui_base_url=_read("COMfyUI_BASE_URL", ""),
+            comfyui_workflow_i2v=_read("COMfyUI_WORKFLOW_I2V", ""),
+            comfyui_workflow_mm=_read("COMfyUI_WORKFLOW_MM", ""),
             cosyvoice_home=_read("COSYVOICE_HOME", os.path.expanduser("~/CosyVoice")),
             seedvc_home=_read("DY_FANPAI_SEEDVC_HOME", os.path.expanduser("~/seed-vc")),
             tts_drama_script=_read(
@@ -149,4 +157,9 @@ class Config:
             "XYQ_ACCESS_KEY": ok("XYQ_ACCESS_KEY", self.xyq_access_key, 20),
             "DASHSCOPE_API_KEY": ok("DASHSCOPE_API_KEY", self.dashscope_api_key, 20),
             "MINIMAX_API_KEY": ok("MINIMAX_API_KEY", self.minimax_api_key, 20),
+            "COMfyUI_BASE_URL": (
+                (self.comfyui_base_url.startswith("http"), f"就位({self.comfyui_base_url})")
+                if self.comfyui_base_url
+                else (False, "缺失(自建 ComfyUI 机器地址)")
+            ),
         }

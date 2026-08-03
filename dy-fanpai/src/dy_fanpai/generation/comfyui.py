@@ -1,0 +1,272 @@
+"""generation/comfyui.py — 自建 ComfyUI 视频生成后端（替代即梦，自有 GPU 部署）。
+
+接入方式（AMD ROCm 官方容器 ComfyUI 0.18.2 + 原生 HTTP API）：
+- 上传素材：`POST /upload/image`（图片）、`POST /upload/audio`（音频）→ 返回文件名；
+- 提交工作流：`POST /prompt`（body = 工作流 JSON + client_id）→ 返回 `prompt_id`；
+- 轮询结果：`GET /history/{prompt_id}` → outputs 里出现文件即完成；
+- 下载产物：`GET /view?filename=...&subfolder=...&type=...` → 视频文件。
+
+工作流模板（用户在两台机器上搭好后放模板路径）：
+- `comfyui_workflow_i2v`：Wan2.1 图生视频（纯产品段），占位符见 TEMPLATE_PLACEHOLDERS；
+- `comfyui_workflow_mm`：LatentSync 口型（口播段），占位符同。
+- 模板 JSON 里用占位符（如 `__PROMPT__`）标注入点，本模块提交前原地替换。
+
+业务铁律（沿用项目纪律）：
+- 人物口播(mm) 默认仍走即梦（口型验证过）；本后端 mm 段需 LatentSync 工作流实测
+  口型通过后才建议切换（experimental）。
+- 下载复用 media.download.robust_download（坏流重下）。
+
+契约（与 dreamina/ark/xyq/minimax 一致）：
+- submit_i2v/submit_mm/submit_t2v(...) -> task_id(prompt_id)
+- wait_download(task_id, dst, cfg) -> (size|fail|None, usage)
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import time
+
+import requests
+
+from ..config import Config
+from ..media.download import robust_download
+
+# 工作流模板注入占位符（模板 JSON 中这些字面量会被替换）
+PH_PROMPT = "__PROMPT__"
+PH_IMAGE = "__IMAGE__"
+PH_IMAGE2 = "__IMAGE2__"
+PH_AUDIO = "__AUDIO__"
+PH_DURATION = "__DURATION__"
+PH_WIDTH = "__WIDTH__"
+PH_HEIGHT = "__HEIGHT__"
+PH_RESOLUTION = "__RESOLUTION__"
+
+# 上传素材类型 → ComfyUI /upload 端点
+_UPLOAD_EP = {"image": "/upload/image", "audio": "/upload/audio"}
+
+# 默认模板路径（config 未设置时回退到 resources/workflows/）
+_DEFAULT_TEMPLATES = {
+    "i2v": os.path.join(os.path.dirname(__file__), "..", "..", "..", "resources", "workflows", "comfyui_i2v.json"),
+    "mm": os.path.join(os.path.dirname(__file__), "..", "..", "..", "resources", "workflows", "comfyui_mm.json"),
+}
+
+
+# ---------------------------------------------------------------------------
+# 确定性函数（离线可测）
+# ---------------------------------------------------------------------------
+def inject_placeholders(workflow: dict, values: dict[str, str]) -> dict:
+    """把工作流 JSON 中所有字符串字段里的占位符替换为实际值（确定性）。
+
+    values: {PH_*: 实际值}。递归遍历 dict/list;未出现的占位符保持原样
+    （便于发现模板缺参）。
+    """
+    out = json.loads(json.dumps(workflow))  # 深拷贝,不动原模板
+
+    def walk(node):
+        if isinstance(node, dict):
+            return {k: walk(v) for k, v in node.items()}
+        if isinstance(node, list):
+            return [walk(v) for v in node]
+        if isinstance(node, str):
+            s = node
+            for ph, val in values.items():
+                if ph in s:
+                    s = s.replace(ph, str(val))
+            return s
+        return node
+
+    res = walk(out)
+    return res if isinstance(res, dict) else out
+
+
+def parse_submit_out(out: str) -> str | None:
+    """解析 /prompt 响应：返回 prompt_id；失败返回 None。"""
+    try:
+        d = json.loads(out)
+    except Exception:  # noqa: BLE001
+        return None
+    return d.get("prompt_id")
+
+
+def parse_history_out(out: str) -> tuple[str, list[dict] | None]:
+    """解析 /history/{id} 响应：返回 (status, files)。
+
+    status: "success"（outputs 有文件）| "failed" | "pending"。
+    files: [{filename, subfolder, type}, ...];ComfyUI 视频输出常见于
+    outputs[node]["gifs"] 或 ["images"] 或 ["videos"]。
+    """
+    try:
+        d = json.loads(out)
+    except Exception:  # noqa: BLE001
+        return "pending", None
+    if not isinstance(d, dict):
+        return "pending", None
+    entry = next(iter(d.values()), None) if d else None
+    if not entry:
+        return "pending", None
+    status = entry.get("status", {})
+    if status.get("status_str") == "error" or status.get("completed") is False and status.get("status_str") == "error":
+        return "failed", None
+    outs = entry.get("outputs", {}) or {}
+    files: list[dict] = []
+    for node_out in outs.values():
+        for key in ("gifs", "images", "videos"):
+            for f in node_out.get(key, []):
+                files.append({"filename": f.get("filename"), "subfolder": f.get("subfolder", ""),
+                              "type": f.get("type", "output")})
+    if status.get("completed") is True and files:
+        return "success", files
+    if status.get("completed") is True:
+        return "failed", None
+    return "pending", None
+
+
+def _template_path(cfg: Config, kind: str) -> str:
+    """取工作流模板路径（config 优先,否则默认 resources/workflows/）。"""
+    p = getattr(cfg, f"comfyui_workflow_{kind}", "") or _DEFAULT_TEMPLATES[kind]
+    return p
+
+
+# ---------------------------------------------------------------------------
+# 素材上传（网络层）
+# ---------------------------------------------------------------------------
+def _upload(path: str, kind: str, cfg: Config) -> str:
+    """上传图片/音频到 ComfyUI,返回服务端文件名。"""
+    ep = _UPLOAD_EP[kind]
+    with open(path, "rb") as f:
+        r = requests.post(
+            f"{cfg.comfyui_base_url}{ep}",
+            files={"image" if kind == "image" else "file": (os.path.basename(path), f)},
+            data={"type": "input", "overwrite": "true"},
+            timeout=(10, 300),
+        )
+    if r.status_code != 200:
+        raise RuntimeError(f"上传{kind}失败 HTTP {r.status_code}: {r.text[:200]}")
+    return r.json().get("name") or os.path.basename(path)
+
+
+def _submit_workflow(workflow: dict, cfg: Config, timeout: int = 120) -> str:
+    """POST /prompt 提交工作流,返回 prompt_id。"""
+    r = requests.post(
+        f"{cfg.comfyui_base_url}/prompt",
+        json={"prompt": workflow, "client_id": "dy-fanpai"},
+        timeout=(10, timeout),
+    )
+    if r.status_code != 200:
+        raise RuntimeError(f"提交工作流失败 HTTP {r.status_code}: {r.text[:300]}")
+    pid = parse_submit_out(r.text)
+    if not pid:
+        raise RuntimeError(f"提交无 prompt_id: {r.text[:300]}")
+    return pid
+
+
+def submit(
+    prompt: str,
+    cfg: Config,
+    *,
+    images: list[str] | None = None,
+    audio: str | None = None,
+    first_frame: str | None = None,
+    duration: int = 5,
+    width: int = 720,
+    height: int = 1280,
+    kind: str = "i2v",
+    retries: int = 3,
+) -> tuple[str | None, str]:
+    """提交 ComfyUI 工作流（编排层，含退避重试）。返回 (prompt_id|None, err)。
+
+    流程:上传素材(图/音频)→ 注入占位符 → POST /prompt。
+    kind: "i2v"(纯产品) | "mm"(口播,需 LatentSync 工作流)。
+    """
+    tmpl_path = _template_path(cfg, kind)
+    if not os.path.exists(tmpl_path):
+        raise RuntimeError(f"缺少工作流模板: {tmpl_path}(在 ComfyUI 搭好后保存为模板 JSON)")
+    workflow = json.load(open(tmpl_path, encoding="utf-8"))
+
+    # 1) 上传素材
+    img_names, audio_name = [], None
+    for p in (images or []):
+        img_names.append(_upload(p, "image", cfg))
+    if first_frame:
+        img_names.append(_upload(first_frame, "image", cfg))
+    if audio:
+        audio_name = _upload(audio, "audio", cfg)
+
+    # 2) 注入占位符
+    values = {
+        PH_PROMPT: prompt,
+        PH_IMAGE: img_names[0] if img_names else "",
+        PH_IMAGE2: img_names[1] if len(img_names) > 1 else "",
+        PH_AUDIO: audio_name or "",
+        PH_DURATION: str(int(duration)),
+        PH_WIDTH: str(int(width)),
+        PH_HEIGHT: str(int(height)),
+        PH_RESOLUTION: f"{width}x{height}",
+    }
+    workflow = inject_placeholders(workflow, values)
+
+    # 3) 提交(退避重试;参数级 4xx 不重试)
+    for attempt in range(retries):
+        try:
+            pid = _submit_workflow(workflow, cfg, timeout=120)
+            return pid, ""
+        except RuntimeError as e:
+            msg = str(e)
+            if "HTTP 4" in msg:
+                raise
+            if attempt == retries - 1:
+                raise
+            time.sleep(10 * (attempt + 1))
+    return None, "提交失败"
+
+
+def wait_download(
+    pid: str, dst: str, cfg: Config, tries: int = 240, gap: int = 10
+) -> int | str | None:
+    """轮询 /history/{pid} → 完成时从 /view 下载。返回 (size|"FAIL: .."|None)。
+
+    默认 240 次 × 10s ≈ 40 分钟(视频生成慢,尤其 14B 模型);tries 可调。
+    """
+    for _ in range(tries):
+        try:
+            r = requests.get(f"{cfg.comfyui_base_url}/history/{pid}", timeout=(10, 30))
+        except Exception:  # noqa: BLE001
+            time.sleep(gap)
+            continue
+        if r.status_code != 200:
+            time.sleep(gap)
+            continue
+        status, files = parse_history_out(r.text)
+        if status == "success" and files:
+            f = files[0]
+            url = f"{cfg.comfyui_base_url}/view?filename={f['filename']}" \
+                  + (f"&subfolder={f['subfolder']}" if f["subfolder"] else "") \
+                  + f"&type={f['type']}"
+            return robust_download(url, dst)
+        if status == "failed":
+            return "FAIL: ComfyUI 工作流执行失败"
+        time.sleep(gap)
+    return None  # 超时未完成
+
+
+# ---------------------------------------------------------------------------
+# 后端统一入口（与 generation/service.py backends 契约一致）
+# ---------------------------------------------------------------------------
+def submit_i2v(image_path: str, prompt: str, cfg: Config, duration: int = 5) -> str | None:
+    """纯产品 image2video：Wan2.1 i2v 工作流。"""
+    pid, _ = submit(prompt, cfg, first_frame=image_path, duration=duration, kind="i2v")
+    return pid
+
+
+def submit_mm(image_paths: list[str], audio_path: str | None, prompt: str, cfg: Config,
+              duration: int = 5) -> str | None:
+    """口播（LatentSync 工作流,experimental）：参考图 + 段配音。"""
+    pid, _ = submit(prompt, cfg, images=image_paths, audio=audio_path, duration=duration, kind="mm")
+    return pid
+
+
+def submit_t2v(prompt: str, cfg: Config, duration: int = 5) -> str | None:
+    """文生视频（如模板支持;一般不用）。"""
+    pid, _ = submit(prompt, cfg, duration=duration, kind="i2v")
+    return pid
