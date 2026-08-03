@@ -1,0 +1,69 @@
+{
+ "mm_submit_cmd": [
+  "/usr/bin/dreamina",
+  "multimodal2video",
+  "--image",
+  "/mnt/e/jimeng/runs/shenapo_迁移/assets/host_anchor.jpg",
+  "--image",
+  "/mnt/e/jimeng/runs/shenapo_迁移/assets/礼盒.png",
+  "--image",
+  "/mnt/e/jimeng/runs/shenapo_迁移/assets/内包装.png",
+  "--image",
+  "/mnt/e/jimeng/runs/shenapo_迁移/assets/单根包装.png",
+  "--image",
+  "/mnt/e/jimeng/runs/shenapo_迁移/assets/g6_海参正面_916.jpg",
+  "--prompt",
+  "@图片1是带货主播本人,全程保持@图片1长相穿着一致。@图片2是高小参鲜蒸海参,深蓝金色包装的礼盒(以此图为准,不要改产品外观和包装文字)。@图片3是高小参鲜蒸海参,深蓝金色包装的内包装(以此图为准,不要改产品外观和包装文字)。@图片4是高小参鲜蒸海参,深蓝金色包装的单根(以此图为准,不要改产品外观和包装文字)。@图片5是高小参鲜蒸海参,深蓝金色包装的hero(以此图为准,不要改产品外观和包装文字)。竖屏9:16。场景:居家客厅，深棕色木质沙发配绿色靠垫、几何花纹靠背垫，深棕色玻璃茶几上放有装着黄梨、黄桃的深色果盘和蓝色海参礼袋。中景转近景固定机位，开场后轻微推进聚焦产品,主播坐在沙发上，双手拉开蓝色海参礼袋的拉链，从袋中掏出蓝色海参包装盒展示，随后打开包装盒拿出半透明塑料海参盒，再切换镜头特写盘子里的海参。台词{给我老公买各种海参，就花了一万多，还没啥反应。我可是学精了，给他买了这个，参阿婆鲜蒸海参。}@音频1,主播嘴巴跟随音频节奏自然说话,口型同步。电影质感,真实生活感。保持无字幕,不要生成BGM或背景音乐,不要生成Logo,不要生成水印。",
+  "--duration",
+  "10",
+  "--ratio",
+  "9:16",
+  "--model_version",
+  "seedance2.0_vip",
+  "--video_resolution",
+  "720p",
+  "--poll",
+  "0"
+ ],
+ "i2v_submit_cmd": [
+  "/usr/bin/dreamina",
+  "image2video",
+  "--image",
+  "/mnt/e/jimeng/runs/shenapo_迁移/assets/g3_海参剖面_916.jpg",
+  "--prompt",
+  "白手套捏着掰开的海参展示内部白筋；到白手套捏着单根海参转动展示参刺。微距特写,镜头轻微跟随动作,展示高小参鲜蒸海参,深蓝金色包装的真实生鲜质感、自然光泽(深褐带浅刺（海参）、半透明白色（内筋）、浅绿色（主播上衣）、浅蓝色（塑料盒）、白色（手套）)。真实质感,自然光。画面纯净,不要额外文字,不要Logo水印。",
+  "--duration",
+  "10",
+  "--model_version",
+  "seedance2.0_vip",
+  "--video_resolution",
+  "720p",
+  "--poll",
+  "0"
+ ],
+ "fitted_no_adjust": 10.0,
+ "fitted_adjust": 13,
+ "fitted_cap": 15,
+ "parse_submit_ok": [
+  null,
+  "?",
+  "{\"task_id\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\", \"credit_count\": 3}"
+ ],
+ "parse_submit_fail": [
+  null,
+  "?",
+  "error: no task"
+ ],
+ "parse_query_success": [
+  "success",
+  "https://cdn.example.com/v.mp4"
+ ],
+ "parse_query_fail": [
+  "fail",
+  "内容违规"
+ ],
+ "parse_query_pending": [
+  null,
+  null
+ ]
+}

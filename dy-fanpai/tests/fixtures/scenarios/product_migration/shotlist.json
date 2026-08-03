@@ -1,0 +1,73 @@
+{
+ "overall": {
+  "product": "燕小厨燕窝粥,金色包装",
+  "style": "真实带货风格",
+  "narrative_arc": "展示-讲解-促单",
+  "why_viral": "真实可信",
+  "full_transcript": ""
+ },
+ "shots": [
+  {
+   "shot_id": 1,
+   "start": 0.0,
+   "end": 8.0,
+   "is_opening_3s": true,
+   "shot_size": "中景",
+   "camera": "固定机位",
+   "subject": "产品展示",
+   "action": "主播拿起新包装礼盒展示,撕开包装袋",
+   "scene": "直播间台面,背景简洁",
+   "lighting": "室内柔和灯光",
+   "person": "有真人,主播",
+   "product_in_frame": "产品特写",
+   "product_role": "package_text",
+   "onscreen_text": "",
+   "dialogue": "这款新包装的燕窝粥,升级了密封设计。",
+   "key_colors": "金色、白色",
+   "host_on_camera": true
+  },
+  {
+   "shot_id": 2,
+   "start": 8.0,
+   "end": 12.0,
+   "is_opening_3s": false,
+   "shot_size": "中景",
+   "camera": "固定机位",
+   "subject": "产品展示",
+   "action": "打开包装盒拿出内包装",
+   "scene": "直播间台面",
+   "lighting": "室内柔和灯光",
+   "person": "有真人,主播",
+   "product_in_frame": "产品特写",
+   "product_role": "package_text",
+   "onscreen_text": "",
+   "dialogue": "里面是独立小碗装。",
+   "key_colors": "金色、白色",
+   "host_on_camera": true
+  },
+  {
+   "shot_id": 3,
+   "start": 12.0,
+   "end": 16.0,
+   "is_opening_3s": false,
+   "shot_size": "中景",
+   "camera": "固定机位",
+   "subject": "产品展示",
+   "action": "舀一勺粥展示浓稠",
+   "scene": "直播间台面",
+   "lighting": "室内柔和灯光",
+   "person": "",
+   "product_in_frame": "产品特写",
+   "product_role": "hero_real",
+   "onscreen_text": "",
+   "dialogue": "",
+   "key_colors": "米白、褐色"
+  }
+ ],
+ "video_info": {
+  "width": 1080,
+  "height": 1920,
+  "duration": 16.0
+ },
+ "cuts": []
+}

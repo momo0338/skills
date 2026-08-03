@@ -1,0 +1,23 @@
+{
+ "host_anchor": "assets/host.jpg",
+ "product_desc": "好食光螺蛳粉",
+ "products": {
+  "hero": "assets/粉.jpg",
+  "hero_alt": "assets/粉剖面.jpg",
+  "礼盒": "assets/包装.jpg"
+ },
+ "cast": [
+  {
+   "role": "主播A",
+   "desc": "长发女"
+  },
+  {
+   "role": "主播B",
+   "desc": "短发女"
+  },
+  {
+   "role": "主播C",
+   "desc": "男"
+  }
+ ]
+}

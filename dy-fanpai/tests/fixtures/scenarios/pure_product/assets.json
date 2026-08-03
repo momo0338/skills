@@ -1,0 +1,9 @@
+{
+ "host_anchor": "",
+ "product_desc": "绯色丝绒口红",
+ "products": {
+  "hero": "assets/口红.jpg",
+  "hero_alt": "assets/试色.jpg",
+  "礼盒": "assets/外壳.png"
+ }
+}

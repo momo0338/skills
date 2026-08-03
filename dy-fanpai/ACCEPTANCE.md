@@ -67,8 +67,8 @@
 |---|---|---|
 | 1 | 原项目工作区未修改 | ✅ 已复核：`daihuo-fanpai` HEAD=`ffc22e34` 零受跟踪改动（清理了工具链遗留 `.workbuddy`） |
 | 2 | 干净环境安装（wheel/sdist + CLI/Skill 可用） | ✅ 全新 Py3.13.12 venv `pip install` 成功，`dy-fanpai --help`/`doctor`/`status`/`SKILL.md` 均可用 |
-| 3 | 六类场景 fixture + 验收记录 | 🟡 fixture 已搭（`tests/fixtures/scenarios/` 6 类 + `acceptance_record.md` 模板）；验收记录待受控 Live 回填 |
-| 4 | 确定性产物与原项目无未解释差异 | 🟡 WP2 planner golden 逐字节；WP3/WP4 参数级 1:1；统一 parity fixture 建设中（见 `PARITY.md`） |
+| 3 | 六类场景 fixture + 验收记录 | ✅ fixture 已搭（`tests/fixtures/scenarios/` 6 类均有 `shotlist.json`+`assets.json`+`segments.golden.json` 合成输入）；验收记录待受控 Live 回填（🟡） |
+| 4 | 确定性产物与原项目无未解释差异 | ✅ WP2 planner golden 逐字节；WP3 装配 args/timing、WP4 三后端命令/请求体/解析均有统一 golden 逐字段断言（`tests/parity/fixtures/`，38 例新增）；六类场景 segments golden 已纳入基线（见 `PARITY.md`） |
 | 5 | 四闸口不可被 `run`/`--force` 绕过 | ✅ `test_gate_enforcement.py` 7 例：未审批 `GateBlocked`、`--force` 入口不存在（`SystemExit`） |
 | 6 | 并发/崩溃无静默重复提交 | ✅ `test_no_duplicate_submit.py` 3 例：排他锁 + 费用硬上限 + 提交意图；真机崩溃恢复待 Live 复核 |
 | 7 | 反推/三视频后端/音频 按声明完成 Mock + Live | 🟡 Mock 全完成；Live 待账号+预算（降级见 `DEGRADATION.md`，未虚报） |
@@ -88,7 +88,7 @@
 - 四闸口绕过防护：✅ WP6 已集成验证（`test_gate_enforcement.py` 覆盖未审批 `GateBlocked` 与 `--force` 入口不存在；`workflow.require_gate` 在 `pipeline.execute_stage` 每阶段强制调用）。
 - 原项目未修改（验收门 1）：✅ 已复核 `daihuo-fanpai` HEAD=`ffc22e34` 零受跟踪改动（清理了工具链遗留的 `.workbuddy/` 自动生成目录）。
 - 六类场景 fixture（验收门 3）：✅ fixture 已搭（`tests/fixtures/scenarios/` 6 类目录 + `acceptance_record.md` 模板）；验收记录待受控 Live 回填。
-- 确定性 parity（验收门 4）：🟡 WP2 planner golden 逐字节；WP3/WP4 参数级 1:1；统一 parity fixture 建设中（见 `PARITY.md`）。
+- 确定性 parity（验收门 4）：✅ WP2 planner golden 逐字节；WP3/WP4 统一 golden（`tests/parity/fixtures/`）逐字段断言 + 六类场景 segments golden 已纳入基线（见 `PARITY.md`）。
 - 受控 Live Pilot（即梦/Ark/小云雀真实提交，验收门 7）：待账号+预算受控 Live，仍受 §11「未经审批不得 Live」约束。
 - 剪映草稿真机打开一次（验收门 8 部分）：pyJianYingDraft 真机写 + 剪映真实打开（Windows/WSL + 已装包）属外部验收。
 - 人物/商品/包装/动作/口型/合规人工审核（验收门 9）：属人工审核项，清单见各场景 `acceptance_record.md`。

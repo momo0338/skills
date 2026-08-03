@@ -1,0 +1,33 @@
+[
+  {
+    "seg": "S1",
+    "type": "i2v",
+    "anchor": "assets/试色.jpg",
+    "prompt": "镜头推近口红膏体特写；旋转展示口红外壳。微距特写,镜头轻微跟随动作,展示绯色丝绒口红的真实生鲜质感、自然光泽(金色、白色)。真实质感,自然光。画面纯净,不要额外文字,不要Logo水印。",
+    "shots": [
+      1,
+      2
+    ],
+    "start": 0.0,
+    "end": 11.0,
+    "duration": 11,
+    "dialogue": "",
+    "opening_3s": true,
+    "warns": []
+  },
+  {
+    "seg": "S2",
+    "type": "i2v",
+    "anchor": "assets/试色.jpg",
+    "prompt": "涂抹在手臂试色。微距特写,镜头轻微跟随动作,展示绯色丝绒口红的真实生鲜质感、自然光泽(金色、白色)。真实质感,自然光。画面纯净,不要额外文字,不要Logo水印。",
+    "shots": [
+      3
+    ],
+    "start": 11.0,
+    "end": 15.0,
+    "duration": 4,
+    "dialogue": "",
+    "opening_3s": false,
+    "warns": []
+  }
+]

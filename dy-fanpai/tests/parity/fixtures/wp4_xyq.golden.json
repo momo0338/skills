@@ -1,0 +1,82 @@
+{
+ "i2v_args": [
+  "generate-video",
+  "--image",
+  "img.png",
+  "--prompt",
+  "产品展示无人声,无背景音乐。",
+  "--duration",
+  "5",
+  "--ratio",
+  "9:16",
+  "--resolution",
+  "720p",
+  "--model",
+  "Seedance_2.0_mini_lite"
+ ],
+ "mm_args": [
+  "generate-video",
+  "--image",
+  "a.png",
+  "--image",
+  "b.png",
+  "--audio",
+  "v.wav",
+  "--prompt",
+  "口播词",
+  "--duration",
+  "10",
+  "--ratio",
+  "9:16",
+  "--resolution",
+  "720p",
+  "--model",
+  "Seedance_2.0_mini_lite"
+ ],
+ "t2v_args": [
+  "generate-video",
+  "--prompt",
+  "纯文本无人声,无背景音乐。",
+  "--duration",
+  "5",
+  "--ratio",
+  "9:16",
+  "--resolution",
+  "720p",
+  "--model",
+  "Seedance_2.0_mini_lite"
+ ],
+ "common_guard_added": [
+  "--prompt",
+  "画面展示产品无人声,无背景音乐。",
+  "--duration",
+  "5",
+  "--ratio",
+  "9:16",
+  "--resolution",
+  "720p"
+ ],
+ "common_guard_skip": [
+  "--prompt",
+  "无人声,画面展示",
+  "--duration",
+  "5",
+  "--ratio",
+  "9:16",
+  "--resolution",
+  "720p"
+ ],
+ "common_no_guard": [
+  "--prompt",
+  "口播说话",
+  "--duration",
+  "5",
+  "--ratio",
+  "9:16",
+  "--resolution",
+  "720p"
+ ],
+ "field_json_line": "t-1",
+ "field_kv": "r-2",
+ "field_json_nested": "https://cdn/x.mp4"
+}

@@ -1,0 +1,71 @@
+{
+ "overall": {
+  "product": "绯色丝绒口红",
+  "style": "真实带货风格",
+  "narrative_arc": "展示-讲解-促单",
+  "why_viral": "真实可信",
+  "full_transcript": ""
+ },
+ "shots": [
+  {
+   "shot_id": 1,
+   "start": 0.0,
+   "end": 6.0,
+   "is_opening_3s": true,
+   "shot_size": "中景",
+   "camera": "固定机位",
+   "subject": "产品展示",
+   "action": "镜头推近口红膏体特写",
+   "scene": "影棚",
+   "lighting": "室内柔和灯光",
+   "person": "",
+   "product_in_frame": "产品特写",
+   "product_role": "hero_real",
+   "onscreen_text": "",
+   "dialogue": "",
+   "key_colors": "金色、白色"
+  },
+  {
+   "shot_id": 2,
+   "start": 6.0,
+   "end": 11.0,
+   "is_opening_3s": false,
+   "shot_size": "中景",
+   "camera": "固定机位",
+   "subject": "产品展示",
+   "action": "旋转展示口红外壳",
+   "scene": "影棚",
+   "lighting": "室内柔和灯光",
+   "person": "",
+   "product_in_frame": "产品特写",
+   "product_role": "package_text",
+   "onscreen_text": "",
+   "dialogue": "",
+   "key_colors": "金色、白色"
+  },
+  {
+   "shot_id": 3,
+   "start": 11.0,
+   "end": 15.0,
+   "is_opening_3s": false,
+   "shot_size": "中景",
+   "camera": "固定机位",
+   "subject": "产品展示",
+   "action": "涂抹在手臂试色",
+   "scene": "影棚",
+   "lighting": "室内柔和灯光",
+   "person": "",
+   "product_in_frame": "产品特写",
+   "product_role": "hero_real",
+   "onscreen_text": "",
+   "dialogue": "",
+   "key_colors": "金色、白色"
+  }
+ ],
+ "video_info": {
+  "width": 1080,
+  "height": 1920,
+  "duration": 15.0
+ },
+ "cuts": []
+}

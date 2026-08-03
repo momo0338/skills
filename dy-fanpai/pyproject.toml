@@ -61,6 +61,10 @@ select = ["E", "F", "I", "W", "UP"]
 "src/dy_fanpai/quality/qc.py" = ["E501"]
 "src/dy_fanpai/quality/judge.py" = ["E501"]
 "src/dy_fanpai/pipeline.py" = ["E501"]
+# parity 测试含 golden 比对长字符串(请求体/命令逐字段断言),与 src 业务文件同理豁免。
+"tests/parity/test_generation_parity.py" = ["E501"]
+"tests/parity/test_media_parity.py" = ["E501"]
+"tests/parity/test_scenarios_parity.py" = ["E501"]
 
 [tool.pyright]
 include = ["src/dy_fanpai"]

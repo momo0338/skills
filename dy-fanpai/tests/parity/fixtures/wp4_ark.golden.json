@@ -1,0 +1,61 @@
+{
+ "i2v_body": {
+  "model": "model-x",
+  "content": [
+   {
+    "type": "image_url",
+    "image_url": {
+     "url": "data:image/png;base64,QUJD"
+    }
+   },
+   {
+    "type": "text",
+    "text": "产品特写 --resolution 720p --duration 5 --ratio 9:16"
+   }
+  ]
+ },
+ "mm_body": {
+  "model": "model-x",
+  "content": [
+   {
+    "type": "image_url",
+    "image_url": {
+     "url": "data:image/png;base64,QUJD"
+    },
+    "role": "reference_image"
+   },
+   {
+    "type": "image_url",
+    "image_url": {
+     "url": "data:image/jpeg;base64,RUZH"
+    },
+    "role": "reference_image"
+   },
+   {
+    "type": "audio_url",
+    "role": "reference_audio",
+    "audio_url": {
+     "url": "data:audio/wav;base64,QVVE"
+    }
+   },
+   {
+    "type": "text",
+    "text": "口播 --resolution 720p --duration 10 --ratio 9:16"
+   }
+  ]
+ },
+ "t2v_body": {
+  "model": "model-x",
+  "content": [
+   {
+    "type": "text",
+    "text": "文字生成 --resolution 720p --duration 5 --ratio 9:16"
+   }
+  ]
+ },
+ "mime_png": "image/png",
+ "mime_webp": "image/webp",
+ "mime_jpg": "image/jpeg",
+ "mime_wav": "audio/wav",
+ "mime_mp3": "audio/mpeg"
+}

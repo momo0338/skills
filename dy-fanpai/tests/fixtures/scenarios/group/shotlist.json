@@ -1,0 +1,74 @@
+{
+ "overall": {
+  "product": "好食光螺蛳粉",
+  "style": "真实带货风格",
+  "narrative_arc": "展示-讲解-促单",
+  "why_viral": "真实可信",
+  "full_transcript": ""
+ },
+ "shots": [
+  {
+   "shot_id": 1,
+   "start": 0.0,
+   "end": 7.0,
+   "is_opening_3s": true,
+   "shot_size": "中景",
+   "camera": "固定机位",
+   "subject": "产品展示",
+   "action": "三个朋友围坐桌前试吃",
+   "scene": "居家餐桌",
+   "lighting": "室内柔和灯光",
+   "person": "有真人,主播A",
+   "product_in_frame": "产品特写",
+   "product_role": "package_text",
+   "onscreen_text": "",
+   "dialogue": "姐妹们快尝尝这个,真的绝了。",
+   "key_colors": "金色、白色",
+   "host_on_camera": true
+  },
+  {
+   "shot_id": 2,
+   "start": 7.0,
+   "end": 12.0,
+   "is_opening_3s": false,
+   "shot_size": "中景",
+   "camera": "固定机位",
+   "subject": "产品展示",
+   "action": "主播B夹起食物展示",
+   "scene": "居家餐桌",
+   "lighting": "室内柔和灯光",
+   "person": "有真人,主播B",
+   "product_in_frame": "产品特写",
+   "product_role": "hero_real",
+   "onscreen_text": "",
+   "dialogue": "口感好Q弹。",
+   "key_colors": "金色、白色",
+   "host_on_camera": true
+  },
+  {
+   "shot_id": 3,
+   "start": 12.0,
+   "end": 16.0,
+   "is_opening_3s": false,
+   "shot_size": "中景",
+   "camera": "固定机位",
+   "subject": "产品展示",
+   "action": "主播C点头附和,三人碰杯",
+   "scene": "居家餐桌",
+   "lighting": "室内柔和灯光",
+   "person": "有真人,主播C",
+   "product_in_frame": "产品特写",
+   "product_role": "package_text",
+   "onscreen_text": "",
+   "dialogue": "下次聚会还买这个。",
+   "key_colors": "金色、白色",
+   "host_on_camera": true
+  }
+ ],
+ "video_info": {
+  "width": 1080,
+  "height": 1920,
+  "duration": 16.0
+ },
+ "cuts": []
+}

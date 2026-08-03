@@ -1,0 +1,11 @@
+{
+ "host_anchor": "assets/host.jpg",
+ "host_desc": "短发女主持人,穿白色衬衫",
+ "product_desc": "燕小厨燕窝粥,金色包装",
+ "products": {
+  "hero": "assets/粥正面.jpg",
+  "hero_alt": "assets/粥剖面.jpg",
+  "礼盒": "assets/礼盒.png",
+  "内包装": "assets/内包装.png"
+ }
+}

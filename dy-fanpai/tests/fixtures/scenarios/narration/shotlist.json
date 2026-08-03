@@ -1,0 +1,53 @@
+{
+ "overall": {
+  "product": "经典机械腕表",
+  "style": "高级感",
+  "narrative_arc": "旁白介绍工艺",
+  "why_viral": "质感",
+  "full_transcript": "旁白:匠心工艺,精准走时。"
+ },
+ "shots": [
+  {
+   "shot_id": 1,
+   "start": 0.0,
+   "end": 8.0,
+   "is_opening_3s": true,
+   "shot_size": "中景",
+   "camera": "固定机位",
+   "subject": "产品展示",
+   "action": "产品缓缓旋转展示",
+   "scene": "影棚纯色背景",
+   "lighting": "室内柔和灯光",
+   "person": "",
+   "product_in_frame": "产品特写",
+   "product_role": "hero_real",
+   "onscreen_text": "",
+   "dialogue": "",
+   "key_colors": "金色、白色"
+  },
+  {
+   "shot_id": 2,
+   "start": 8.0,
+   "end": 14.0,
+   "is_opening_3s": false,
+   "shot_size": "中景",
+   "camera": "固定机位",
+   "subject": "产品展示",
+   "action": "镜头环绕产品特写",
+   "scene": "影棚纯色背景",
+   "lighting": "室内柔和灯光",
+   "person": "",
+   "product_in_frame": "产品特写",
+   "product_role": "hero_real",
+   "onscreen_text": "",
+   "dialogue": "",
+   "key_colors": "金色、白色"
+  }
+ ],
+ "video_info": {
+  "width": 1080,
+  "height": 1920,
+  "duration": 14.0
+ },
+ "cuts": []
+}

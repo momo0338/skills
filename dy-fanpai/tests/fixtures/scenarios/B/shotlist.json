@@ -1,0 +1,55 @@
+{
+ "overall": {
+  "product": "小熊养生壶",
+  "style": "真实带货风格",
+  "narrative_arc": "展示-讲解-促单",
+  "why_viral": "真实可信",
+  "full_transcript": ""
+ },
+ "shots": [
+  {
+   "shot_id": 1,
+   "start": 0.0,
+   "end": 9.0,
+   "is_opening_3s": true,
+   "shot_size": "中景",
+   "camera": "固定机位",
+   "subject": "产品展示",
+   "action": "镜头推进拍摄产品摆放,主播讲解",
+   "scene": "厨房台面",
+   "lighting": "室内柔和灯光",
+   "person": "有真人,主播",
+   "product_in_frame": "产品特写",
+   "product_role": "package_text",
+   "onscreen_text": "",
+   "dialogue": "这个养生壶,家里必备。",
+   "key_colors": "金色、白色",
+   "host_on_camera": true
+  },
+  {
+   "shot_id": 2,
+   "start": 9.0,
+   "end": 14.0,
+   "is_opening_3s": false,
+   "shot_size": "中景",
+   "camera": "固定机位",
+   "subject": "产品展示",
+   "action": "旋转展示壶身细节",
+   "scene": "厨房台面",
+   "lighting": "室内柔和灯光",
+   "person": "有真人,主播",
+   "product_in_frame": "产品特写",
+   "product_role": "package_text",
+   "onscreen_text": "",
+   "dialogue": "一键炖煮,特别省心。",
+   "key_colors": "金色、白色",
+   "host_on_camera": true
+  }
+ ],
+ "video_info": {
+  "width": 1080,
+  "height": 1920,
+  "duration": 14.0
+ },
+ "cuts": []
+}

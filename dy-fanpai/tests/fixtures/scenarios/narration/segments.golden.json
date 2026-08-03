@@ -1,0 +1,32 @@
+[
+  {
+    "seg": "S1",
+    "type": "i2v",
+    "anchor": "assets/表背面.jpg",
+    "prompt": "产品缓缓旋转展示。微距特写,镜头轻微跟随动作,展示经典机械腕表的真实生鲜质感、自然光泽(金色、白色)。真实质感,自然光。画面纯净,不要额外文字,不要Logo水印。",
+    "shots": [
+      1
+    ],
+    "start": 0.0,
+    "end": 8.0,
+    "duration": 8,
+    "dialogue": "",
+    "opening_3s": true,
+    "warns": []
+  },
+  {
+    "seg": "S2",
+    "type": "i2v",
+    "anchor": "assets/表背面.jpg",
+    "prompt": "镜头环绕产品特写。微距特写,镜头轻微跟随动作,展示经典机械腕表的真实生鲜质感、自然光泽(金色、白色)。真实质感,自然光。画面纯净,不要额外文字,不要Logo水印。",
+    "shots": [
+      2
+    ],
+    "start": 8.0,
+    "end": 14.0,
+    "duration": 6,
+    "dialogue": "",
+    "opening_3s": false,
+    "warns": []
+  }
+]

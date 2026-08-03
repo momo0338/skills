@@ -219,3 +219,25 @@ WP6（收尾集成与发布）完成：把 WP1–WP5 的全部业务包通过 `p
 ### 仍 🟡（需真实账号/预算/特定机器/人工）
 受控 Live Pilot（门 7）、剪映真机打开（门 8 部分）、人工审核（门 9）、全链路追溯真跑（门 10）、
 四闸口自然语言会话暂停（详细参考验证项）。任一未完成只能维持「实现完成，外部验收未完成」。
+
+## [0.1.0] — 2026-08-03 · Parity Golden 补齐（验收门 3/4 离线推进）
+
+### 新增
+- `tests/parity/fixtures/`：6 份当前算法 golden —— `wp3_ffmpeg_args` / `wp3_timing` /
+  `wp4_dreamina` / `wp4_ark` / `wp4_xyq` / `wp4_download`（装配 args、切段 timing、三后端
+  提交命令/请求体、轮询输出解析、下载代理策略）。
+- `tests/parity/test_media_parity.py`（8 例）：WP3 装配/切段 golden 逐字段断言 + 业务铁律
+  （2 秒闸、720x1280、单声道 24k、apad 只垫下限、解码标记）。
+- `tests/parity/test_generation_parity.py`（15 例）：WP4 三后端 golden 逐字段断言 + 路由/铁律
+  （mm 带音频、i2v 不带音频、AUDIO_GUARD 仅非口播段、Ark NO_PROXY、时长上调封顶 15s）。
+- `tests/parity/test_scenarios_parity.py`（24 例）：六类场景（A/产品迁移/B/群戏/旁白/纯产品）
+  合成输入 `shotlist.json`+`assets.json` → `segments.golden.json` 逐字段相等 + 路由特征断言。
+- `pyproject.toml`：parity 测试文件豁免 E501（含 golden 长字符串比对，与 src 业务文件同理）。
+
+### 变更
+- `PARITY.md`：「待补」三项全部完成，新增 golden 说明与 `build_timing` 行为记录。
+- `ACCEPTANCE.md`：验收门 3/4 离线部分推进为 ✅（fixture/统一 golden 已就位；验收记录与
+  受控 Live 仍标 🟡）。
+
+### 验证
+- pytest 全仓 **204 passed, 1 skipped**（WP6 166 → 204 = +38 例）、ruff 全绿、pyright 0。
