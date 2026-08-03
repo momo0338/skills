@@ -2,7 +2,7 @@
 
 忠实复刻原项目 gen_segments.run 的编排与铁律，收归一处并补齐 WP4 新要求
 （EXECUTION_PLAN §P4）：
-- 人物/口播走即梦；纯产品 i2v 可选即梦/Ark/小云雀（route_backend）；
+- 人物/口播走即梦；纯产品 i2v 可选即梦/Ark/小云雀/MiniMax（route_backend）；
 - 同一工作区加锁（acquire_lock）；
 - 每段提交前写提交意图（GenerationTask 文件 + provenance）；
 - max_submits 由代码硬执行（within_cap）；
@@ -33,7 +33,7 @@ from ..models import (
     RunManifest,
     Stage,
 )
-from . import ark, dreamina, xyq
+from . import ark, dreamina, minimax, xyq
 
 
 # ---------------------------------------------------------------------------
@@ -119,6 +119,11 @@ def _default_backends() -> dict:
                 seg["anchor"], seg["prompt"], cfg, duration=int(seg["duration"])),
             "wait": lambda tid, dst, cfg: xyq.wait_download(tid, dst, cfg)[0],
         },
+        "minimax": {
+            "submit": lambda seg, ad, cfg: minimax.submit_i2v(
+                seg["anchor"], seg["prompt"], cfg, duration=int(seg["duration"])),
+            "wait": lambda tid, dst, cfg: minimax.wait_download(tid, dst, cfg),
+        },
     }
 
 
@@ -143,7 +148,7 @@ def run(
     返回摘要：{submitted, downloaded, skipped, restored, failed, cap_hit}。
 
     铁律：
-    - mm 段永远走即梦；i2v 段走 i2v_backend（ark/xyq/默认即梦）；
+    - mm 段永远走即梦；i2v 段走 i2v_backend（ark/xyq/minimax/默认即梦）；
     - 已存在 clip → 跳过（断点续跑）；有 task 文件 → 优先查询下载；
     - 每段提交前检查 within_cap（max_submits 硬上限），超限即停；
     - 单段失败 caught，继续下一段，计入 failed。

@@ -59,6 +59,11 @@ class Config:
     xyq_access_key: str = field(default="", repr=False)
     xyq_video_model: str = "Seedance_2.0_mini_lite"
 
+    # --- MiniMax H3（视频生成,多模态参考含 reference_audio；口型能力待实测）---
+    minimax_api_key: str = field(default="", repr=False)
+    minimax_model: str = "MiniMax-H3"
+    minimax_base_url: str = "https://api.minimaxi.com"
+
     # --- TTS / 换声 ---
     cosyvoice_home: str = field(default_factory=lambda: os.path.expanduser("~/CosyVoice"))
     seedvc_home: str = field(default_factory=lambda: os.path.expanduser("~/seed-vc"))
@@ -103,6 +108,9 @@ class Config:
             qwen_model=_read("QWEN_MODEL", "qwen3.7-plus"),
             xyq_access_key=_read("XYQ_ACCESS_KEY") or "",
             xyq_video_model=_read("XYQ_VIDEO_MODEL", "Seedance_2.0_mini_lite"),
+            minimax_api_key=_read("MINIMAX_API_KEY") or "",
+            minimax_model=_read("MINIMAX_MODEL", "MiniMax-H3"),
+            minimax_base_url=_read("MINIMAX_BASE_URL", "https://api.minimaxi.com"),
             cosyvoice_home=_read("COSYVOICE_HOME", os.path.expanduser("~/CosyVoice")),
             seedvc_home=_read("DY_FANPAI_SEEDVC_HOME", os.path.expanduser("~/seed-vc")),
             tts_drama_script=_read(
@@ -140,4 +148,5 @@ class Config:
             "KIMI_API_KEY": ok("KIMI_API_KEY", self.kimi_api_key, 30),
             "XYQ_ACCESS_KEY": ok("XYQ_ACCESS_KEY", self.xyq_access_key, 20),
             "DASHSCOPE_API_KEY": ok("DASHSCOPE_API_KEY", self.dashscope_api_key, 20),
+            "MINIMAX_API_KEY": ok("MINIMAX_API_KEY", self.minimax_api_key, 20),
         }

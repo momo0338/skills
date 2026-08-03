@@ -344,3 +344,25 @@ WP6（收尾集成与发布）完成：把 WP1–WP5 的全部业务包通过 `p
 
 ### 验证
 - pytest 全仓 **218 passed, 1 skipped**（216 → 218 = +2 例）、ruff 全绿、pyright 0。
+
+## [0.1.0] — 2026-08-03 · MiniMax H3 生成后端接入(第四后端)
+
+### 新增
+- `generation/minimax.py`：MiniMax H3（`POST {base}/v2/video_generation` +
+  `GET /v2/query/video_generation/{task_id}`），多模态 content 数组（text/image_url/
+  audio_url），媒体 base64 data URI 直传；支持文生/图生(首帧)/多模态参考(reference_image
+  + reference_audio)三场景；`submit_i2v/submit_mm/submit_t2v` + `wait_download` 与
+  dreamina/ark/xyq 同契约；参数级错误(400/401/402/422)不重试。
+- `config.py`：`MINIMAX_API_KEY`/`MINIMAX_MODEL`(默认 MiniMax-H3)/`MINIMAX_BASE_URL`
+  (默认 https://api.minimaxi.com)；doctor `key_status` 增加该键。
+- `generation/service.py`：`_default_backends` 注册 `minimax`；`--i2v-backend minimax`
+  可路由纯产品段。
+- `tests/unit/test_minimax.py`（11 例）：请求体三场景构造、解析、Mock 提交/轮询、
+  无 key 抛错、参数级错误不重试、后端已注册。
+
+### 说明
+- mm 段默认仍走即梦（口型验证过）；MiniMax reference_audio 口型能力未实测，
+  mm 段切换需实测通过后显式放开（experimental）。
+
+### 验证
+- pytest 全仓 **229 passed, 1 skipped**（218 → 229 = +11 例）、ruff 全绿、pyright 0。

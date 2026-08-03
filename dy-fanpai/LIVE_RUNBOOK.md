@@ -319,3 +319,27 @@ export DY_FANPAI_SEEDVC_HOME=~/seed-vc
 | 烧字幕失败 | macOS ffmpeg 缺 libass | 用 `--mode final` 兜底(无烧字幕+SRT)或装带 libass 的 ffmpeg |
 | 人物段路由报错 | 人物口播只允许即梦 | `route_backend` 强制 mm→dreamina,勿把人物段给 Ark |
 | 新建工作区没 live | `new` 默认离线(桩数据) | 手动编辑 `runs/<ws>/run.json` 开启 |
+
+## 第 4.5 步 · MiniMax H3(纯产品 i2v 第四后端 + 口播实验;需 key)
+
+> 用途：`--i2v-backend minimax` 让**纯产品段**走 MiniMax H3（2K 直出、9:16 支持）。
+> ⚠ 口播段（mm）默认仍走即梦；MiniMax `reference_audio` 口型能力未实测，
+> 实测通过前不切换 mm 段（experimental）。实现见 `generation/minimax.py`。
+
+```bash
+# 1) 开通: https://platform.minimaxi.com → 账户管理 → 接口密钥 → 创建
+# 2) 配置(与 Ark 同理,二选一)
+echo 'export MINIMAX_API_KEY="<你的key>"' >> ~/.zshrc && source ~/.zshrc
+# 或
+echo -n "<你的key>" > ~/.config/dy-fanpai/minimax_api_key
+
+# 可选覆盖(默认已冻结,一般不用改)
+# export MINIMAX_MODEL=MiniMax-H3              # 默认
+# export MINIMAX_BASE_URL=https://api.minimaxi.com   # 默认(国内端;海外用 api.minimax.io)
+
+# 3) 生成时指定后端(纯产品段)
+.venv/bin/dy-fanpai approve <ws> cost
+# generation.service.run 的 i2v_backend 参数在 CLI 接线后: --i2v-backend minimax
+```
+
+**验证**：`dy-fanpai doctor` 中 `MINIMAX_API_KEY` 不再 WARN。
