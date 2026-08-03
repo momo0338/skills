@@ -35,6 +35,8 @@ def _build_parser() -> argparse.ArgumentParser:
     rn = sub.add_parser("run", help="执行流程")
     rn.add_argument("workspace")
     rn.add_argument("--stage", choices=[s.value for s in Stage], default=None)
+    rn.add_argument("--leg", choices=["seed", "kimi", "qwen"], default=None,
+                    help="反推腿（seed 默认 / kimi / qwen），仅 live reverse 阶段生效")
 
     ap = sub.add_parser("approve", help="闸口批准")
     ap.add_argument("workspace")
@@ -154,9 +156,9 @@ def _run(args) -> int:
         return 1
     try:
         if args.stage:
-            pipeline.execute_stage(Stage(args.stage), ws, run)
+            pipeline.execute_stage(Stage(args.stage), ws, run, leg=getattr(args, "leg", None))
         else:
-            pipeline.run_flow(ws, run)
+            pipeline.run_flow(ws, run, leg=getattr(args, "leg", None))
     except workflow.GateBlocked as e:
         print(f"[run] 闸口拦截，已停止：{e}", file=sys.stderr)
         return 1

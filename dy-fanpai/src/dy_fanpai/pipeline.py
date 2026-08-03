@@ -64,12 +64,46 @@ def _exec_plan(ws: Workspace, run) -> None:
     shotlist_path = ws.planning / "shotlist.json"
     assets_path = ws.planning / "assets.json"
     if not shotlist_path.exists():
+        # reverse 阶段产物在 reverse/shotlist.json;若规划前已反推,自动带过来
+        rev = ws.reverse / "shotlist.json"
+        if rev.exists():
+            import shutil
+
+            shutil.copy(rev, shotlist_path)
+            print("[run] 从 reverse/shotlist.json 带入反推产物 → planning/")
+    if not shotlist_path.exists():
         raise RuntimeError("缺少 planning/shotlist.json，无法规划（先 reverse 产出 shotlist）")
     shotlist = json.loads(shotlist_path.read_text(encoding="utf-8"))
     assets = json.loads(assets_path.read_text(encoding="utf-8")) if assets_path.exists() else {}
     segs = planner.plan(shotlist, assets, str(ws.planning / "segments.json"))
     run.stage_results["plan"] = {"segments": len(segs)}
     print(f"[run] 规划完成：{len(segs)} 段 → planning/segments.json")
+
+
+def _exec_reverse(ws: Workspace, run, *, leg: str | None = None) -> None:
+    """P1 反推：调反推腿（seed 默认 / kimi / qwen），产物写 reverse/shotlist.json。
+
+    仅 live 模式真调（需对应密钥与预算）；离线模式正确跳过、不虚报完成。
+    leg 由 CLI `run --stage reverse --leg qwen|kimi` 选择；默认 seed。
+    """
+    src = ws.inputs / run.source_video
+    src = src if src.exists() else Path(run.source_video)
+    if not src.exists():
+        raise RuntimeError(f"源视频不存在：{src}")
+    rev_dir = ws.reverse
+    rev_dir.mkdir(parents=True, exist_ok=True)
+
+    from .reverse import kimi, qwen, seed
+
+    legs = {"seed": seed, "kimi": kimi, "qwen": qwen}
+    mod = legs.get(leg or "seed")
+    if mod is None:
+        raise RuntimeError(f"未知反推腿: {leg}（可选 seed/kimi/qwen）")
+    out = rev_dir / "shotlist.json"
+    print(f"[run] 反推腿={mod.__name__.split('.')[-1]} → {out}", flush=True)
+    mod.reverse(str(src), out=str(out))
+    run.stage_results["reverse"] = {"leg": mod.__name__.split('.')[-1], "shotlist": str(out)}
+    print("[run] 反推完成 → reverse/shotlist.json")
 
 
 def _exec_deliver(ws: Workspace, run, *, bgm: str | None = None, jy_drafts: str | None = None) -> None:
@@ -114,6 +148,7 @@ def execute_stage(
     backends: dict | None = None,
     bgm: str | None = None,
     jy_drafts: str | None = None,
+    leg: str | None = None,
 ) -> Stage:
     """执行单个阶段（先闸口检查，未批准抛 GateBlocked）。返回该阶段。"""
     gate = required_gate(stage)
@@ -121,13 +156,19 @@ def execute_stage(
         workflow.require_gate(run, gate)  # 未批准 → GateBlocked
 
     executed = False
-    if stage == Stage.PLAN:
+    if stage == Stage.REVERSE:
+        if run.live:
+            _exec_reverse(ws, run, leg=leg)
+            executed = True
+        else:
+            _skip_offline(stage, live=False)
+    elif stage == Stage.PLAN:
         _exec_plan(ws, run)
         executed = True
     elif stage == Stage.DELIVER:
         _exec_deliver(ws, run, bgm=bgm, jy_drafts=jy_drafts)
         executed = True
-    elif stage in (Stage.REVERSE, Stage.GENERATE, Stage.AUDIO, Stage.ASSEMBLE):
+    elif stage in (Stage.GENERATE, Stage.AUDIO, Stage.ASSEMBLE):
         _skip_offline(stage, live=run.live)
     # PREPARE：无操作
 
@@ -146,6 +187,7 @@ def run_flow(
     backends: dict | None = None,
     bgm: str | None = None,
     jy_drafts: str | None = None,
+    leg: str | None = None,
 ) -> None:
     """从 current_stage 跑到目标 stage（默认 DELIVER）；遇未批准闸口即停。"""
     target = stage or Stage.DELIVER
@@ -153,4 +195,4 @@ def run_flow(
     start_idx = order.index(run.current_stage) if run.current_stage in order else 0
     end_idx = order.index(target)
     for st in order[start_idx:end_idx + 1]:
-        execute_stage(st, ws, run, backends=backends, bgm=bgm, jy_drafts=jy_drafts)
+        execute_stage(st, ws, run, backends=backends, bgm=bgm, jy_drafts=jy_drafts, leg=leg)

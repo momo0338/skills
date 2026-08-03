@@ -197,7 +197,9 @@ cp /路径/包装图.png     runs/mvp_a/inputs/assets/礼盒.png
 .venv/bin/dy-fanpai approve runs/mvp_a rights
 
 # 5) 跑到第一个闸口(反推→规划,遇闸口自动停)
+#    ⚠ 反推腿默认 seed(需 ARK_API_KEY);用 Qwen 则加 --leg qwen(需 DASHSCOPE_API_KEY)
 .venv/bin/dy-fanpai run runs/mvp_a
+#    或 .venv/bin/dy-fanpai run runs/mvp_a --stage reverse --leg qwen
 #    预期停在 G2 计划审核,先人审 runs/mvp_a/planning/segments.md(分段/动作/锚图/台词/前3秒/合规)
 
 # 6) 批准计划

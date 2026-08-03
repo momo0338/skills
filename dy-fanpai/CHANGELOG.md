@@ -272,3 +272,20 @@ WP6（收尾集成与发布）完成：把 WP1–WP5 的全部业务包通过 `p
 ### 变更
 - `reverse/qwen.py` / `__init__.py` / `DEGRADATION.md` 4b / `LIVE_RUNBOOK.md` 3.5 步
   同步移除 experimental 标注，改为实测记录。
+
+## [0.1.0] — 2026-08-03 · reverse 阶段接入 run 流程(反推腿一体化)
+
+### 变更
+- `pipeline.py`：新增 `_exec_reverse`（live 模式真调反推腿 seed/kimi/qwen，
+  产物写 `reverse/shotlist.json`；离线正确跳过不虚报）；`execute_stage`/`run_flow`
+  透传 `leg` 参数；plan 阶段自动消费 `reverse/shotlist.json`（无需手动复制到 planning/）。
+- `cli.py`：`run` 新增 `--leg {seed,kimi,qwen}`（默认 seed，仅 live reverse 生效）。
+- `tests/integration/test_reverse_stage.py`（4 例）：live+leg qwen 真调落盘、
+  离线跳过、非法 leg 被 argparse 拒绝、plan 自动带入 reverse 产物。
+
+### 实测
+- `dy-fanpai run --stage reverse --leg qwen`（真实百炼 key）→ 8s 视频反推 690字/18.4s
+  → `--stage plan` 自动带入 → 产出 segments.json + segments.md。CLI 一体化链路首次跑通。
+
+### 验证
+- pytest 全仓 **216 passed, 1 skipped**（212 → 216 = +4 例）、ruff 全绿、pyright 0。
