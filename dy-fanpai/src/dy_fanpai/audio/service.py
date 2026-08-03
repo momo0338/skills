@@ -85,7 +85,7 @@ def build_timing(segs: list[dict], shots: list[dict], tol: float = 0.01) -> dict
 
 def _load_segs(plan: str) -> list[dict]:
     d: Any = json.load(open(plan, encoding="utf-8"))
-    return d.get("segments", d)
+    return d.get("segments", d) if isinstance(d, dict) else d
 
 
 def _load_shots(shotlist: str) -> list[dict]:

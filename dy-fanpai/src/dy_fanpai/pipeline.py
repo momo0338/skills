@@ -140,6 +140,40 @@ def _exec_deliver(ws: Workspace, run, *, bgm: str | None = None, jy_drafts: str 
     print(f"[deliver] 剪映草稿(规格) → {p}")
 
 
+def _exec_audio(ws: Workspace, run) -> None:
+    """P3 音频：原音切段（纯本地 ffmpeg，不需外部服务）。
+
+    输入 planning/segments.json + 源视频 → 输出 audio/segments/{seg}.wav +
+    audio/timing.json。仅在 live 模式调用（离线跳过不虚报）。
+    """
+    plan_path = ws.planning / "segments.json"
+    if not plan_path.exists():
+        raise RuntimeError("缺少 planning/segments.json，无法切音频（先 plan 产出 segments）")
+    src = ws.inputs / run.source_video
+    src = src if src.exists() else Path(run.source_video)
+    if not src.exists():
+        raise RuntimeError(f"源视频不存在：{src}")
+    shotlist = ws.planning / "shotlist.json"
+    shotlist_arg = str(shotlist) if shotlist.exists() else None
+    seg_dir = ws.root / "audio" / "segments"
+    seg_dir.mkdir(parents=True, exist_ok=True)
+
+    from .audio.service import cut_original_audio
+
+    timing = cut_original_audio(
+        str(plan_path), str(src), shotlist_arg, str(seg_dir), cfg=None
+    )
+    # 规范布局:timing.json 放 audio/timing.json(cut_original_audio 写在 segments/ 内,复制过去)
+    timing_dst = ws.root / "audio" / "timing.json"
+    src_timing = seg_dir / "timing.json"
+    if src_timing.exists() and not timing_dst.exists():
+        import shutil
+
+        shutil.copy(src_timing, timing_dst)
+    run.stage_results["audio"] = {"mode": "source", "segments": len(timing)}
+    print(f"[run] 原音切段完成：{len(timing)} 段 → audio/segments/ + timing.json")
+
+
 def execute_stage(
     stage: Stage,
     ws: Workspace,
@@ -165,10 +199,16 @@ def execute_stage(
     elif stage == Stage.PLAN:
         _exec_plan(ws, run)
         executed = True
+    elif stage == Stage.AUDIO:
+        if run.live:
+            _exec_audio(ws, run)
+            executed = True
+        else:
+            _skip_offline(stage, live=False)
     elif stage == Stage.DELIVER:
         _exec_deliver(ws, run, bgm=bgm, jy_drafts=jy_drafts)
         executed = True
-    elif stage in (Stage.GENERATE, Stage.AUDIO, Stage.ASSEMBLE):
+    elif stage in (Stage.GENERATE, Stage.ASSEMBLE):
         _skip_offline(stage, live=run.live)
     # PREPARE：无操作
 

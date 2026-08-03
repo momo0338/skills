@@ -328,3 +328,19 @@ WP6（收尾集成与发布）完成：把 WP1–WP5 的全部业务包通过 `p
 ### 结论
 - 反推质量两者同档:台词转写等价、实体识别正确;差异在切句粒度与描述详略,
   恰为 merge 双反推合并的价值所在(Seed 基底+alt 细句 或 反之,人工按卷宗裁决)。
+
+## [0.1.0] — 2026-08-03 · audio 阶段接入 run 流程(原音切段一体化)
+
+### 变更
+- `pipeline.py`：新增 `_exec_audio`（live 模式原音切段，产物 `audio/segments/{seg}.wav`
+  + `audio/timing.json`；离线正确跳过）；`_load_segs` 兼容 segments.json 为 list 的形态。
+- `tests/integration/test_reverse_stage.py` +2 例：live 原音切段落盘与规范位置、
+  离线跳过。
+
+### 实测(146.7s 内裤带货视频全链路)
+- reverse(Qwen, 88镜) → plan(30段: 18口播+12纯产品, 0 完备性警告) → approve plan
+  → audio 原音切段(30 段 wav, 均 ≥2s 上传闸, timing.json 83 句镜级字幕轴)。
+- 至此 CLI 一体化已覆盖 prepare→reverse→plan→audio;generate/assemble 仍离线跳过。
+
+### 验证
+- pytest 全仓 **218 passed, 1 skipped**（216 → 218 = +2 例）、ruff 全绿、pyright 0。

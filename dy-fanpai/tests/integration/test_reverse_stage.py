@@ -111,3 +111,46 @@ def test_plan_consumes_reverse_shotlist(monkeypatch, tmp_path):
     assert isinstance(segs, list) and len(segs) >= 1
     run = RunManifest.model_validate(json.loads((ws / "run.json").read_text(encoding="utf-8")))
     assert run.current_stage == Stage.PLAN
+
+
+def test_run_audio_source_live(monkeypatch, tmp_path):
+    """live + plan 已批: 原音切段(被 mock)产出 wav 并登记,离线正确跳过。"""
+    ws, _ = _new_ws(tmp_path)
+    _enable_live(ws)
+    (ws / "planning" / "segments.json").write_text(json.dumps(
+        [{"seg": "S1", "start": 0.0, "end": 3.0, "dialogue": "你好。世界。"}]), encoding="utf-8")
+    (ws / "planning" / "shotlist.json").write_text(json.dumps(
+        {"shots": [{"shot_id": 1, "start": 0.0, "end": 3.0,
+                    "dialogue": "你好。世界。"}]}), encoding="utf-8")
+
+    from dy_fanpai.audio import service as audio_mod
+
+    def fake_cut(plan, video, shotlist, out_dir, cfg=None):
+        import os
+
+        os.makedirs(out_dir, exist_ok=True)
+        open(os.path.join(out_dir, "S1.wav"), "wb").write(b"RIFF")
+        t = {"S1": [{"text": "你好。世界。", "start": 0.0, "dur": 3.0}]}
+        json.dump(t, open(os.path.join(out_dir, "timing.json"), "w"), ensure_ascii=False)
+        return t
+
+    monkeypatch.setattr(audio_mod, "cut_original_audio", fake_cut)
+
+    assert main(["approve", str(ws), "rights"]) == 0
+    assert main(["approve", str(ws), "plan"]) == 0
+    assert main(["run", str(ws), "--stage", "audio"]) == 0
+    assert (ws / "audio" / "segments" / "S1.wav").exists()
+    assert (ws / "audio" / "timing.json").exists(), "timing.json 应复制到规范位置"
+    run = RunManifest.model_validate(json.loads((ws / "run.json").read_text(encoding="utf-8")))
+    assert run.stage_results["audio"]["mode"] == "source"
+
+
+def test_run_audio_offline_skips(tmp_path):
+    """离线(live=false)时 audio 正确跳过,不产出。"""
+    ws, _ = _new_ws(tmp_path)
+    assert main(["approve", str(ws), "rights"]) == 0
+    assert main(["approve", str(ws), "plan"]) == 0
+    rc = main(["run", str(ws), "--stage", "audio"])
+    assert rc == 0
+    segs_dir = ws / "audio" / "segments"
+    assert not segs_dir.exists() or not list(segs_dir.glob("*.wav"))
