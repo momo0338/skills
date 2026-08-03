@@ -97,13 +97,13 @@ echo -n "<你的key>" > ~/.config/dy-fanpai/kimi_api_key
 
 **验证**：`dy-fanpai doctor` 中 `KIMI_API_KEY` 不再 WARN。
 
-## 第 3.5 步 · 通义千问 Qwen(反推腿3,阿里云百炼原生视频输入;experimental)
+## 第 3.5 步 · 通义千问 Qwen(反推腿3,阿里云百炼原生视频输入;已实测冒烟)
 
 > 用途：Seed 之外的第三反推腿——百炼 `qwen3.7-plus` 等**原生支持视频输入**
 > （2 小时/2GB/64 个视频，OpenAI 兼容接口，本地视频以 base64 data URI 直传）。
-> ⚠ **未实机验收**（experimental）：代码与请求构造就绪，真实调用需 `DASHSCOPE_API_KEY`
-> 与预算；未测前不得宣称 Qwen 反推已验收。实现见 `reverse/qwen.py`（与 seed/kimi 同契约，
-> 可参与 merge 合并，alt 名称用 `Qwen`）。
+> ✅ **已实测冒烟**（2026-08-03 合成视频真实反推成功，shot 字段质量正确）；
+> 真实带货视频完整验收仍需合法素材与预算（Live 前置 U6）。实现见 `reverse/qwen.py`
+> （与 seed/kimi 同契约，可参与 merge 合并，alt 名称用 `Qwen`）。
 
 ```bash
 # 1) 开通: 阿里云百炼 https://bailian.console.aliyun.com → 模型服务 → 创建 API Key

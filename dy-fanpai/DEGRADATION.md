@@ -14,7 +14,7 @@
 | 2 | Ark 生成（i2v/mm/t2v） | 请求体构造单测；Live 需 `ARK_API_KEY`+预算 | 缺 key→`doctor` WARN；不构造真实提交 | 否 |
 | 3 | 小云雀 XYQ（pippit-tool-cli） | 请求体构造单测；Live 需凭证 | 缺 `XYQ_ACCESS_KEY`→WARN；AUDIO_GUARD 默认带 | 否 |
 | 4 | CosyVoice TTS（合成） | `synth` 接口 + `cosyvoice_status` 单测 | 缺环境→仅状态函数可用，不跑合成 | 否 |
-| 4b | Qwen 反推腿3（百炼原生视频输入） | `reverse/qwen.py` 请求构造单测（8 例） | 缺 `DASHSCOPE_API_KEY`→doctor WARN；离线不调用；未实机验收标 experimental | 否 |
+| 4b | Qwen 反推腿3（百炼原生视频输入） | `reverse/qwen.py` 请求构造单测（8 例） | 缺 `DASHSCOPE_API_KEY`→doctor WARN；离线不调用；已做合成视频实测冒烟，真实带货素材验收待 Live（🟡） | 否 |
 | 5 | Seed-VC 换声 | `convert` 接口 + `seedvc_status` 单测 | 缺 GPU 环境→仅状态函数可用 | 否 |
 | 6 | 下载体检（真实 URL） | `robust_download` 逻辑单测（重试/大小/坏流） | 真实 URL 仅受控 Live；不改逻辑 | 否 |
 | 7 | 烧字幕（ffmpeg subtitles / libass） | 确定性 `subtitle_filter` 单测 | 本机 mac ffmpeg 缺 libass→CLI 回退**无烧字幕 FINAL + SRT 侧载** | 否（CLI 兜底已验） |

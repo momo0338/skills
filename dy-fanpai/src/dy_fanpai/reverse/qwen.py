@@ -10,12 +10,13 @@
   本地视频以 `data:video/mp4;base64,...` data URI 传入（与 seed.py 的 Ark 同构）。
 - 国内端点直连，不走代理。
 
-能力定位（07-19 Seed vs K3 对决的经验外推，Qwen 需 Live 实测校准）：
-- Qwen-VL 系实体与运镜描述能力均较强，但**未实机验收**，标 experimental；
-  合并裁决沿用 merge.py 铁律（实体以 Seed 为基底，alt 补充运镜时序）。
+能力定位（2026-08-03 实测：12s 合成视频真实反推成功，返回 637 字/16.7s，
+shot 的 scene/action/colors/host_on_camera/product_role 均正确）：
+- Qwen-VL 系实体与运镜描述能力均较强；已做一次受控 Live 冒烟（合成视频），
+  真实带货视频的完整验收仍需对应素材（Live 前置 U6）。
 
-⚠ 未实机验收（Live 前置 U6）：本模块代码与请求构造就绪，真实调用需
-`DASHSCOPE_API_KEY` 与预算；未测前不得宣称 Qwen 反推已验收（DEGRADATION 纪律）。
+⚠ 验收状态：已做一次受控 Live 冒烟（2026-08-03 合成视频实测通过）；真实带货视频
+完整验收仍需合法素材与预算（Live 前置 U6），未完成前按 DEGRADATION 4b 记录。
 
 依赖：ffmpeg/ffprobe（detect_cuts/video_info/make_upload_clip 复用 seed）、
 requests（qwen_call 用）。

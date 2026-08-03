@@ -259,3 +259,16 @@ WP6（收尾集成与发布）完成：把 WP1–WP5 的全部业务包通过 `p
 - pytest 全仓 **212 passed, 1 skipped**（204 → 212 = +8 例）、ruff 全绿、pyright 0。
 - 依据：阿里云百炼官方文档 2026-08 核实 qwen3.7-plus 原生支持文本/图像/视频输入
   （2 小时/2GB/64 个视频，结构化 JSON 输出）。
+
+## [0.1.0] — 2026-08-03 · Qwen 反推实测冒烟通过
+
+### 实测记录
+- 2026-08-03 用 12s 合成视频（testsrc2 + sine 音频，720x1280）真实调用百炼
+  `qwen3.7-plus` 反推：返回 637 字 / 16.7s，输出 1 镜 shotlist。
+- 质量核对：`scene`（电视测试卡）、`action`（线条移动/色块闪烁/时间码）、
+  `key_colors`、`host_on_camera=false`、`product_role=none`、`dialogue=""` 均正确。
+- 状态：从 experimental 转为「已实测冒烟」；真实带货视频完整验收待合法素材（U6）。
+
+### 变更
+- `reverse/qwen.py` / `__init__.py` / `DEGRADATION.md` 4b / `LIVE_RUNBOOK.md` 3.5 步
+  同步移除 experimental 标注，改为实测记录。
