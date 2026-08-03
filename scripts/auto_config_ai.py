@@ -152,6 +152,13 @@ SKILL_DEPS = {
             "brew": "brew install ffmpeg",
         },
     },
+    "dy-doudian": {
+        "bins": ["dy-doudian", "dy-doudian-mcp"],
+        "pip": ["mcp", "httpx", "python-dotenv"],
+        "install_cmds": {
+            "pip": "cd dy-doudian && pip install -e .",
+        },
+    },
 }
 
 # ============================================================================

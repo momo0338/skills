@@ -10,3 +10,4 @@ dy-cli/outputs/
 .venv/
 .ruff_cache/
 .workbuddy/
+.cortexkit/
