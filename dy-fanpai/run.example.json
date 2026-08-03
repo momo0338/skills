@@ -1,0 +1,41 @@
+{
+  "_meta": {
+    "schema_version": "1",
+    "purpose": "run.json v1 冻结草案 —— WP0 产出，WP1 冻结门回填权威枚举",
+    "authority": "阶段命名/状态值/闸口以 EXECUTION_PLAN.md v2.2 为唯一权威",
+    "rules": [
+      "密钥绝不进本文件，仅存 task_id / submit_id / cost 计数",
+      "live=false 时所有 Provider 返回确定性桩数据，可离线跑通",
+      "状态文件建议位置：<workspace>/run.json"
+    ]
+  },
+  "run_id": "RUN-<timestamp>",
+  "created_at": "<ISO8601>",
+  "live": false,
+  "max_submits": 0,
+  "source_video": "<path>",
+  "assets": {
+    "product_images": [],
+    "host_image": null,
+    "cast": null,
+    "facts": null,
+    "qianchuan": null
+  },
+  "stages": {
+    "reverse":  { "status": "pending", "seed": null, "k3": null },
+    "merge":    { "status": "pending", "dossier": null },
+    "plan":     { "status": "pending", "segments": null },
+    "localize": { "status": "pending" },
+    "audio":    { "status": "pending", "cut": null, "tts": null, "vc": null },
+    "generate": { "status": "pending", "clips": {} },
+    "deliver":  { "status": "pending", "draft": null, "final": null }
+  },
+  "providers": {
+    "reverse": "ark",
+    "judge": "ark",
+    "i2v": "jimeng",
+    "tts": "cosyvoice",
+    "vc": "seedvc"
+  },
+  "cost_ledger": []
+}

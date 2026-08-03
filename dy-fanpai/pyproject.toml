@@ -1,0 +1,75 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "dy-fanpai"
+version = "0.1.0"
+description = "抖音带货视频翻拍（dy-fanpai）：中性母版、字幕成品与剪映草稿交付"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.12"
+authors = [{ name = "momo0338", email = "zhugaoxiao@gmail.com" }]
+dependencies = [
+    "pydantic>=2",
+    "requests",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "responses",
+    "ruff",
+    "pyright",
+]
+# 剪映草稿依赖 pyJianYingDraft，单独环境安装，不进入 core（见 EXECUTION_PLAN §0.8）
+jianying = ["pyjianyingdraft"]
+
+[project.scripts]
+dy-fanpai = "dy_fanpai.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/dy_fanpai"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "UP"]
+
+# SCHEMA / prompt 常量是发给模型的提示词,内容须逐字节一致(WP2 parity 硬约束),
+# 不可为迁就行宽改内容,故对这些承载长字符串的文件豁免 E501。
+# WP3/WP4 的音频/媒体/生成模块同样含业务铁律长注释与长字符串,一并豁免。
+[tool.ruff.lint.per-file-ignores]
+"src/dy_fanpai/reverse/seed.py" = ["E501"]
+"src/dy_fanpai/reverse/kimi.py" = ["E501"]
+"src/dy_fanpai/planning/planner.py" = ["E501"]
+"src/dy_fanpai/planning/localization.py" = ["E501"]
+"src/dy_fanpai/audio/service.py" = ["E501"]
+"src/dy_fanpai/audio/voice.py" = ["E501"]
+"src/dy_fanpai/media/ffmpeg.py" = ["E501"]
+"src/dy_fanpai/media/download.py" = ["E501"]
+"src/dy_fanpai/generation/dreamina.py" = ["E501"]
+"src/dy_fanpai/generation/ark.py" = ["E501"]
+"src/dy_fanpai/generation/xyq.py" = ["E501"]
+"src/dy_fanpai/generation/service.py" = ["E501"]
+"src/dy_fanpai/delivery/final.py" = ["E501"]
+"src/dy_fanpai/delivery/jianying.py" = ["E501"]
+"src/dy_fanpai/delivery/cleanup.py" = ["E501"]
+"src/dy_fanpai/quality/qc.py" = ["E501"]
+"src/dy_fanpai/quality/judge.py" = ["E501"]
+"src/dy_fanpai/pipeline.py" = ["E501"]
+
+[tool.pyright]
+include = ["src/dy_fanpai"]
+exclude = ["**/__pycache__", ".venv"]
+pythonVersion = "3.12"
+venvPath = "."
+venv = ".venv"
+typeCheckingMode = "basic"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

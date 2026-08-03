@@ -1,0 +1,41 @@
+# dy-fanpai 项目忽略规则
+# 参考 EXECUTION_PLAN.md §3 目录结构与 §0.8 配置契约
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# 虚拟环境与缓存
+.venv/
+.ruff_cache/
+.pytest_cache/
+.mypy_cache/
+
+# 运行产物(工作区视频任务)
+runs/
+*.mp4
+*.m4a
+*.webm
+*.mkv
+*.wav
+*.srt
+*.mov
+
+# 密钥与配置(不提交真实密钥)
+.env
+.env.*
+*.pem
+*.key
+
+# 运行锁
+.dy-fanpai.lock
+
+# OS
+.DS_Store
+
+# 私有资源(音色、千川方法论等,不得进入仓库)
+resources/private/
+private/

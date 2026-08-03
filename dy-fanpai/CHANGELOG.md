@@ -1,0 +1,221 @@
+# CHANGELOG · dy-fanpai
+
+本文件记录公共接口冻结与变更（执行方案 §11 WP1 / §12.2）。
+
+## [0.1.0] — 2026-08-03 · WP1 冻结
+
+WP1（骨架与核心）完成，以下公共接口冻结，后续修改须走变更流程：
+
+### 新增
+- 包结构 `src/dy_fanpai/`（顶层 models/config/workspace/workflow/cli + 子包 reverse/planning/audio/generation/media/quality/delivery）。
+- `pyproject.toml`：Python ≥3.12，core=pydantic≥2+requests，dev=pytest/responses/ruff/pyright，CLI=argparse，jianying 可选独立环境。
+- `models.py` 冻结：7 阶段 `Stage`、11 状态 `RunStatus`、4 闸口 `Gate`、Provider 枚举、`RunManifest` v1、`GenerationTask`、Segment/Shot。
+- `config.py` 冻结：env→`~/.config/dy-fanpai/`→默认 三级读取；全部密钥/二进制路径集中（含新增 `DY_FANPAI_DREAMINA_BIN`/`DY_FANPAI_TTS_DRAMA`/`DY_FANPAI_ARK_GEN_MODEL`）。
+- `workspace.py` 冻结：工作区布局、run.json 读写、fcntl 排他锁、产物登记。
+- `workflow.py` 冻结：状态机、四闸口（GateBlocked）、`max_submits` 硬上限、费用账本。
+- `cli.py` 骨架：8 命令组（doctor/new/status/run/approve/retry/deliver/clean），new/status/doctor 可用，其余接口冻结、业务待 WP2–WP5。
+- `DESIGN.md`：权威声明 + 全部冻结项 + WP0 §9 十个冲突点裁决。
+- `LICENSE`：MIT，保留 wangcanyu 并叠加 momo0338。
+
+### 裁决（详见 DESIGN.md §12）
+- 2 秒闸：`pad = max(2.0, 实际音频时长)`，不垫到计划段时长。
+- 时长：统一 `SEGMENT_MAX_DURATION=15` / `SEGMENT_TARGET_DURATION=12`。
+- `detect_cuts` 默认阈值冻结为 0.15。
+- Ark 生成模型收归 `DY_FANPAI_ARK_GEN_MODEL`。
+- 内置音色不随仓库分发；路径转换仅 Windows/WSL 草稿模式触发。
+- config 双重标准消除；多处无重试统一补重试/降级。
+
+## [0.1.0] — 2026-08-03 · WP2 反推与规划
+
+WP2（业务包第 1 个）完成：忠实复刻原 `daihuo-fanpai` 的反推与规划算法，确定性逻辑
+与网络调用解耦，离线可单测。
+
+### 新增
+- `reverse/seed.py`：反推腿 1（Ark Seed 2.1 Pro）。`detect_cuts`(默认 0.15) / `video_info`
+  / `make_upload_clip` / `build_prompt` / `ark_reverse` / `extract_json` / `reverse`；
+  国内 Ark endpoint 强制 `NO_PROXY`、thinking 关、流式。
+- `reverse/kimi.py`：反推腿 2（Kimi K3）。同 ffmpeg 硬切 + 第 8 条实体纪律；连接抖动重试 3 次。
+- `reverse/merge.py`：双反推合并证据准备。`build_merged`（纯函数,离线可测）产出
+  Seed 实体基底 + `__alt_*` 候选运镜时序；含静音闸 / 性别信号 / 分歧信号灯 / 抽帧点。
+- `planning/planner.py`：规划器。`split_long_shots`(≤15) / `group_shots`(≤12, ≤3 切) /
+  `seg_role` / `merged_form_map` / `pick_product_anchors` / `build_*_prompt` /
+  `completeness_check` / `plan` → segments.json + .md。逐字节复刻原算法（golden 校验）。
+- `planning/localization.py`：B 模式本地化。`apply_edits_dict`（离线,同步口播段 `台词{...}`）
+  / `rewrite`（喂千川弹药包,需 Ark key）。
+- 测试：`tests/fixtures/original/`（sample_shotlist+sample_assets + 当前算法 golden）；
+  `tests/parity/test_planner_parity.py`（planner 精确 parity + 结构化断言，9 例）；
+  `tests/unit/test_merge.py` / `test_seed.py` / `test_localization.py`（离线单测，共 18 例）。
+
+### 校验
+- planner 对 golden **逐字节相等**；reverse.merge 静音闸/性别信号/抽帧离线断言通过。
+- ruff 全绿、pytest 35 例全绿、pyright 0 错误。
+- `config.py`：`_read` 返回类型收为 `str`（消除 `str|None` 赋值告警）；`pyproject.toml`
+  为 prompt/SCHEMA 长字符串文件豁免 E501、为 pyright 配置 venv。
+
+### 注意（parity 实测发现,非新冻结）
+- planner 输出每段 `shots` 为镜引用列表（字符串/整数混合,如 `['1a']`/`['1b',2]`）,非 dict。
+- i2v 段不含 `images`/`anchor_labels` 键；mm 段含且锚标数 ≤ 图数。
+- 段 `duration` 是目标生成时长,不要求等于 `end-start`（实际镜跨度）。
+
+## [0.1.0] — 2026-08-03 · WP3 音频与媒体
+
+WP3（业务包第 2 个，与 WP4 并行）完成：忠实复刻原 `daihuo-fanpai` 的音频切段、TTS/换声适配器、ffmpeg 装配与下载体检，确定性逻辑与 ffmpeg/网络 IO 解耦，离线单测 + T3 合成媒体真跑。
+
+### 新增
+- `audio/service.py`：原音切段主入口 `cut_original_audio`；复刻 `cut_audio.py`。`pad_for_upload`（2 秒闸 `max(2.0,span)`，只垫到上传下限）、`segment_cut_args`（`-ss/-to` + `-vn -ac 1 -ar 24000 -af apad=whole_dur`）、`shot_in_segment`、`build_timing`（镜级字幕轴，相对段起点偏移）。
+- `audio/voice.py`：复刻 `tts_segments.py` + `vc_segments.py`。`apply_pron_fix`（参→身 + CAN_WORDS 17 词控制符保护/还原，可关 haishen）、`parse_speakers`（A：/B：/甲： 标签切分）、`resolve_target`（wav/内置名/默认，缺失抛 ValueError）、`seedvc_status`、`cosyvoice_status`；重 IO `synth`（CosyVoice + tts-drama 子进程）、`convert`（Seed-VC GPU 子进程）。
+- `media/ffmpeg.py`：复刻 `assemble.py`。`dur`（ffprobe）、`normalize_args`（720x1280 + setsar + yuv420p + libx264 crf20）、`pad_audio_args`/`silence_args`（段配音 pad 到视频时长 / 无配音填静音）、`concat_args`/`mux_args`、`decode_ok`（只认 `Invalid NAL`/`Invalid data` 坏流标记）、`assemble`（归一化→pad→concat→mux）。
+- `media/download.py`：复刻 `gen_segments.py` 下载体检。`MIN_BYTES=10240`；`proxy_for_attempt`（显式代理常走 / 前两试直连 / 之后回退 None）、`robust_download`（重试 + 大小校验 + 可选解码体检复用 `decode_ok`）。
+- 测试：`tests/unit/test_audio_service.py`（8）、`test_voice.py`（16）、`test_ffmpeg.py`（11）、`test_download.py`（4）；`tests/integration/test_media_t3.py`（4）：合成小视频真跑 `dur`/`decode_ok`/`normalize_args`/`assemble`/`cut_original_audio`，含 2 秒闸与静音段分支。
+- `__init__.py`：`audio`/`media` 导出新子模块；`pyproject.toml` 为 8 个新文件豁免 E501。
+
+### 校验
+- WP3 验收（§11「合成媒体离线全通过」）：T3 用合成小视频真实调用 ffmpeg/ffprobe（无网络、无付费 API）跑通切段/归一化/装配/解码体检；2 秒闸实测生效（1.0s 跨度→2.0s 产物）；静音段不崩溃。
+- ruff 全绿、pytest 全仓 **113 例**全绿、pyright 0 错误。
+
+### 注意（复刻铁律，非新冻结）
+- 段配音 pad 到【视频时长】对齐口型，绝不垫到规划段时长（与 WP1 2 秒闸裁决一致，只作用于上传下限）。
+- 解码体检只认坏流标记，大小正常但字节流损坏（07-25 大鹅4 S2 实翻车）仍判坏。
+
+## [0.1.0] — 2026-08-03 · WP4 视频生成
+
+WP4（业务包第 3 个，与 WP3 并行）完成：忠实复刻原 `daihuo-fanpai` 的即梦/Dreamina、Ark、小云雀三后端提交/轮询/下载编排，确定性请求构造与网络 IO 解耦，全部 Mock 先行、未经审批不 Live。
+
+### 新增
+- `generation/dreamina.py`：复刻 `gen_segments.py`。`wav_dur`、`fitted_duration`（wav 长则抬段时长，cap 15s，tol 0.25）、`fit_duration_to_audio`、`build_submit_cmd`（mm 走 `multimodal2video` 带图+音频，i2v 走 `image2video`）、`parse_submit_out`（11 段 UUID 解析）、`is_fatal`、`submit`（重试 3× 退避）、`parse_query_out`、`wait_download`（轮询 40× gap15）。`MULTIMODAL_MODEL="seedance2.0_vip"`、`RATIO="9:16"`、`RESOLUTION="720p"`。
+- `generation/ark.py`：复刻 `ark_gen.py`。`submit_i2v/mm/t2v`（data-uri 内联图/音频，role `reference_image`/`reference_audio`），`wait_download`；国内 endpoint 强制 `NO_PROXY`，`# pyright: ignore[reportArgumentType]`；`Model doubao-seedance-2-0-260128`。
+- `generation/xyq.py`：复刻 `xyq_gen.py`。`AUDIO_GUARD="无人声,无背景音乐。"`（i2v 默认带 guard），`submit_i2v/mm/t2v` 经 `pippit-tool-cli generate-video`，`wait_download`（60× gap10）；tid=`thread_id/run_id`。
+- `generation/service.py`：生成编排。 `route_backend`（mm→即梦恒，i2v→alt 或即梦）、`submits_so_far`、`within_cap`（用 `manifest.max_submits` 硬上限）、`load_task`/`save_task`、`acquire_lock`/`release_lock`（最佳努力排他）、`run`（DI 友好：`backends=` 注入 Mock；支持 `only`/`dry`/断点续跑/从 task 恢复/单段失败隔离/`cap_hit` 早停/锁冲突）。
+- 测试：`tests/unit/test_dreamina.py`（13）、`test_ark.py`（4）、`test_xyq.py`（9）、`test_generation_service.py`（10）：覆盖 2 秒闸无关的请求构造、UUID 解析、i2v 后端路由、成本硬上限、检查点续跑、task 恢复、单段失败隔离——全部 Mock，无付费调用。
+- `__init__.py`：`generation` 导出 ark/dreamina/service/xyq。
+
+### 校验
+- WP4 验收（§11「先完成全部 Mock；未经审批不得 Live」）：`generation/service.py.run()` 全程 `backends=` Mock 注入，10 例编排测试零真实 API；成本硬上限 `manifest.max_submits` 生效；未设置任何 Live 提交。
+- ruff 全绿、pytest 全仓 113 例全绿、pyright 0 错误。
+
+### 未验的 Live / 实机项（标记「实现完成，外部验收未完成」）
+- 即梦/Dreamina、Ark、小云雀的真实提交/轮询/下载需对应账号与预算，未跑受控 Live。
+- CosyVoice（TTS）、Seed-VC（换声）需合法环境与音色，未跑受控 Live；`synth`/`convert` 仅离线接口与状态函数单测。
+- 剪映草稿（WP5/质量交付）本包未涉及。
+
+## [0.1.0] — 2026-08-03 · WP5 质检与交付
+
+WP5（业务包第 4 个、收尾交付）完成：忠实复刻原 `export_subs.py` 字幕基础并补齐 FULL→FINAL
+母版、剪映草稿、技术 QC、双视频结构评委、dry-run 清理。确定性逻辑与 ffmpeg/ffprobe IO 解耦；
+字幕/SRT/评委/FINAL拷贝 离线可单测，质检/混BGM/FINAL 由 T3 合成媒体真跑。
+
+### 新增
+- `delivery/final.py`：复刻 `export_subs.py` 1:1（字幕铁律：FULL 永不带字幕/BGM，FINAL 才叠加）。
+  `fmt_ts`（HH:MM:SS,mmm 逐字节一致）/ `sentences`（剥 A：/B： 说话人标签）/ `build_srt_entries`
+  （段内按字数占比摊句、段间时钟归零累加）/ `render_srt`/`write_srt`/`export_srt`/`export_onscreen`
+  （屏上贴字清单 .md，跳过「无」/「none」）/ `subtitle_filter`（确定性 force_style，路径 `:` 转义 `\:`）/
+  `burn_subtitles`（ffmpeg subtitles filter，需 libass）/ `mux_bgm`（BGM 压低混原声）/ `build_final`
+  （FULL 只读 → FINAL，无 srt/bgm 直接拷贝，铁律不修改 FULL）。
+- `delivery/jianying.py`：5 轨剪映草稿规格（视频+原声+字幕+贴纸+BGM）+ 离线 JSON 引擎。
+  `_ts_to_sec`/`parse_srt`/`build_draft_spec`/`draft_json`/`write_draft`（engine="json" 默认拒绝覆盖、
+  需 force；engine="pyjianying" 抛 RuntimeError 标明外部验收）。
+- `delivery/cleanup.py`：dry-run 清理 + 受保护安全网。`PROTECTED_PREFIXES`/`PROTECTED_NAMES`
+  （run.json/FULL.mp4/FINAL.mp4）/`PROTECTED_ROOT_SUFFIXES`/`TEMP_*`；`plan_cleanup(run_dir, dry_run=True)`
+  默认只报告候选、不删；`dry_run=False` 仅删临时，受保护项永不动。
+- `quality/qc.py`：技术 QC。`probe`（ffprobe 流/分辨率/时长）/ `qc_video`（流/分辨率/解码/
+  时长体检，聚合 ok+issues）/ `mouth_evidence`（生成段时长覆盖配音时长，容差 0.05）/
+  `qc_report`（多文件聚合）。
+- `quality/judge.py`：双视频结构评委（确定性）。`judge_pair`（双方解码 + 分辨率命中 + 时长比
+  0.5~2.0 = structural_pass；模型级语义评委不在此实现，属外部验收）/ `judge_summary`。
+- `cli.py`：`deliver`/`clean` 接线（WP1 冻结接口落地）。`deliver [--mode final|jianying|both]
+  [--bgm <path>]`：从 `planning/segments.json` 造 SRT，FINAL 烧字幕失败（libass 缺失）时
+  try/except 回退无烧字幕 FINAL 并登记产物；`clean [--yes]`：默认 dry-run 报告。
+- 测试：`tests/unit/test_delivery_final.py`（10）/ `test_delivery_jianying.py`（7）/
+  `test_delivery_cleanup.py`（4）/ `test_quality.py`（12：qc 7 + judge 5）/ `tests/integration/
+  test_delivery_t3.py`（5：真 ffmpeg 跑 qc_video/mux_bgm/build_final 拷贝/非烧字幕；burn_subtitles
+  因本机无 libass 自动 skip）。
+- `__init__.py`：`delivery` 导出 `cleanup`/`final`/`jianying`；`quality` 导出 `judge`/`qc`；
+  `pyproject.toml` 为 5 个新文件豁免 E501。
+
+### 校验
+- WP5 验收（§11「技术状态与人工状态分离；剪映真实打开一次」）：
+  - 技术状态（qc/judge/字幕/SRT/FINAL拷贝/混BGM）离线 + T3 合成媒体全跑通；
+  - 人工状态（烧字幕观感、剪映真机打开）属外部验收，CLI 已做 libass 缺失兜底（回退无烧字幕 FINAL）。
+- ruff 全绿、pytest 全仓 **152 passed, 1 skipped**（skip = 本机缺 libass 的烧字幕用例）、
+  pyright 0 错误。
+
+### 未验的 Live / 实机项（标记「实现完成，外部验收未完成」）
+- 烧字幕（ffmpeg subtitles filter）：本机 macOS ffmpeg 8.1.2 构建缺 libass，FINAL 回退「无烧字幕
+  + SRT 侧载」；真机烧字幕需带 libass 的 ffmpeg。
+- 剪映草稿真机写入（pyJianYingDraft）：需 Windows/WSL + 已装包 + 剪映版本/草稿目录；本包仅产出
+  可被照抄的 JSON 规格（engine="json"），真机打开验证为外部验收。
+- 双视频模型级语义评委（Ark 等）：本包只交付确定性结构评委（解码/分辨率/时长比），语义比对属外部验收。
+
+## [0.1.0] — 2026-08-03 · WP6 集成与发布
+
+WP6（收尾集成与发布）完成：把 WP1–WP5 的全部业务包通过 `pipeline.py` 串成可被 CLI 驱动
+的单次运行/分阶段执行流，四闸口在 run 路径上强制执行且不可被 `--force` 绕过，无重复提交
+由排他锁 + 费用硬上限 + 提交意图保证；`SKILL.md` 已是完整技能说明；干净环境安装（验收门 2）
+已验证。这是唯一可宣布「替代原项目」的工作包。
+
+### 新增
+- `src/dy_fanpai/pipeline.py`：`STAGE_GATE` 映射（reverse/plan→RIGHTS、audio→PLAN、
+  generate/assemble→COST、deliver→QC、prepare→无闸）+ `_STAGE_ORDER` + `required_gate` +
+  `_skip_offline` + `_exec_plan` / `_exec_deliver` + `execute_stage`（先 `workflow.require_gate`
+  再离线安全执行，完成标记 `mark_stage_done` 并 `ws.save`）+ `run_flow`（按当前阶段→目标阶段
+  顺序推进）。确定性执行顺序与 IO 解耦，DI 友好（`backends=` 注入 Mock）。
+- `cli.py` 重写 `run`/`approve`/`retry`/`deliver`：`_approve` 调 `workflow.approve_gate`；
+  `_run` 调 `pipeline.execute_stage` 或 `run_flow`，捕获 `workflow.GateBlocked` → 返回 1；
+  `_retry` 非 live 直接离线提示返回 0，live 则 `require_gate(COST)` 后 `G.run(lock_path=...)`；
+  `_deliver` 委托 `pipeline.execute_stage(DELIVER, ...)`。三命令不再 `_not_implemented`，
+  且无 `--force` 绕过闸口的入口（argparse 不提供该 flag，硬解析失败即 `SystemExit`）。
+- `SKILL.md`：完整技能说明（8 条命令 + 四闸口纪律 + 「不得用 --force 绕过」+ 外部资源降级
+  说明），满足 WP6「完整 Skill」要求。
+- 测试（WP6 新增 14 例）：
+  - `tests/unit/test_gate_enforcement.py`（7，验收门 5）：`require_gate` 未审批抛 `GateBlocked`、
+    `approve` 记录并解锁、`approve` CLI 记录、`run deliver` 无 QC→rc1 不产 FINAL、`run deliver`
+    有 QC→rc0 产 FINAL/SRT/draft 并登记产物、全链路无 RIGHTS→rc1、`--force` 触发 `SystemExit`。
+  - `tests/unit/test_no_duplicate_submit.py`（3，验收门 6）：`acquire_lock` 互斥、`within_cap`
+    硬上限、`ThreadPoolExecutor(2)` 并发跑 `G.run` 无静默重复提交（thread2 返回 `locked`，
+    thread1 仅交 2 个唯一 tid）。
+  - `tests/integration/test_pipeline_e2e.py`（4）：`new` 建工作区、`run --stage plan` 离线产
+    segments.json、`run deliver` 离线+QC 产 FINAL、`run deliver` 无 QC 被拦。
+
+### 校验
+- WP6 验收（§11「完整 CLI + Skill」「五类测试」「干净环境安装」）：
+  - 四闸口在 run 路径强制执行：**不可绕过**（验收门 5，test_gate_enforcement 覆盖；`--force`
+    入口不存在）。
+  - 并发/崩溃无静默重复提交（验收门 6，test_no_duplicate_submit 覆盖：排他锁 + 费用硬上限 +
+    提交意图）。
+  - 干净环境安装（验收门 2）：在全新 Python 3.13.12 venv（`/tmp/wp6clean`）从源码 `pip install`
+    成功，`dy-fanpai --help` / `doctor` / `status` 均可用（doctor 对缺失 ARK_API_KEY 等给 WARN，
+    rc=0）。
+- ruff 全绿、pytest 全仓 **166 passed, 1 skipped**（skip = 本机缺 libass 的烧字幕用例；
+  WP5 152 → WP6 166 = +14 例）、pyright 0 错误。
+- `pyproject.toml`：为 `src/dy_fanpai/pipeline.py` 与 3 个新测试文件豁免 E501。
+
+### 未验的 Live / 实机项（标记「实现完成，外部验收未完成」）
+- 受控 Live Pilot：真实 API 提交（即梦/Ark/小云雀）需账号与预算，未跑受控 Live（仍受
+  §11「未经审批不得 Live」约束）。
+- 剪映草稿真机打开一次：pyJianYingDraft 真机写 + 剪映真实打开（Windows/WSL + 已装包）属外部验收。
+- 六类场景 fixture / 验收记录（验收门 3）：需补 6 类输入 fixture 与对应验收记录。
+- 四闸口在全新会话自然语言触发暂停（验收门 4）：需端到端自然语言会话验证，未跑。
+- 人物/商品/口型/合规人工审核（验收门 9）：属人工审核项。
+- 费用/任务 ID/版本可追溯（验收门 10）：run.json 已含账本与 task 字段，全链路串联真跑后验收。
+- 原项目未修改确认（验收门 1）：`daihuo-fanpai/` 始终只读未触碰，待最终发布审计复核。
+
+## 验收收尾 · 文档补全（WP6 之后，未改冻结接口）
+
+在「实现完成」定论下，补齐可离线推进的验收门证据文档（无新代码、不改冻结接口）：
+
+### 新增文档
+- `DEGRADATION.md`：验收门 11 降级矩阵，15 项外部缺口逐条声明降级路径，证明「未虚报完整」。
+- `PARITY.md`：验收门 4 确定性产物比对现状（WP2 planner golden 逐字节；WP3/WP4 参数级 1:1；
+  统一 parity fixture 建设中）。
+- `tests/fixtures/scenarios/`：验收门 3 六类场景（A / 产品迁移 / B / 群戏 / 旁白 / 纯产品）
+  fixture 输入说明 + `acceptance_record.md` 模板；验收记录待受控 Live 回填。
+
+### 复核
+- 验收门 1：原项目 `daihuo-fanpai` 复核纯净——清理工具链遗留的 `.workbuddy/` 未跟踪目录，
+  `git status` 干净，HEAD 仍为基线 `ffc22e34`。
+- `ACCEPTANCE.md`：修正 §13 十二门映射（曾误将「四闸口自然语言暂停」标为门 4，已更正为
+  「确定性产物无差异」），刷新门 1/3/4/7/8/9/10/11 状态。
+
+### 仍 🟡（需真实账号/预算/特定机器/人工）
+受控 Live Pilot（门 7）、剪映真机打开（门 8 部分）、人工审核（门 9）、全链路追溯真跑（门 10）、
+四闸口自然语言会话暂停（详细参考验证项）。任一未完成只能维持「实现完成，外部验收未完成」。

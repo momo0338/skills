@@ -1,6 +1,6 @@
 # Momo Skills Core Library (AI Agent 技能库)
 
-> 包含 **14 个通用与专项 AI Agent 技能**，覆盖网页正文提取、智能视频看懂抽帧、媒体音视频下载、万站 CLI 操作、抖音专项 CLI、网络代理管理、企业情报深度调研及微信公众号采集等场景。
+> 包含 **17 个通用与专项 AI Agent 技能**，覆盖网页正文提取、智能视频看懂抽帧、媒体音视频下载、万站 CLI 操作、抖音专项 CLI、抖音带货翻拍、网络代理管理、企业情报深度调研及微信公众号采集等场景。
 
 ---
 
@@ -22,6 +22,9 @@
 | **[zhihu-search](./zhihu-search)** | `zhihu-search/` | 知乎内容搜索工具 | Python `zhihu-search.py`, 知乎 API |
 | **[qibook-company-profile](./qibook-company-profile)** | `qibook-company-profile/` | 企书企业/人员组合查询工具 | Python `combined_query.py`, 企书 API |
 | **[qibook-company-wiki-deepresearch](./qibook-company-wiki-deepresearch)** | `qibook-company-wiki-deepresearch/` | 企书企业百科深度调研与结构化报告生成工具 | Python `skill_runner.py`, 企书 API |
+| **[analyze-viral-commerce-video](./analyze-viral-commerce-video)** | `analyze-viral-commerce-video/` | 带货视频证据化结构拆解（本地视频/链接/截图输入，抽帧+转写+宣称证据矩阵，输出结构化拆解报告） | Python `PIL`, `ffmpeg`, `whisper`(可选) |
+| **[videodl](./videodl)** | `videodl/` | 多平台视频下载 CLI（URL 直下，支持指定平台过滤与保存目录） | Python `videodl` |
+| **[dy-fanpai](./dy-fanpai)** | `dy-fanpai/` | 抖音带货视频翻拍（参考视频反推、规划人审、即梦/Ark/小云雀生成、音频/装配/质检、字幕与剪映草稿交付，四闸口+费用硬上限） | Python `dy-fanpai`, `ffmpeg`, `ffprobe` |
 
 ---
 
@@ -80,3 +83,37 @@ npm install -g defuddle @jackwener/opencli
 
 - **GitHub 仓库**：[https://github.com/momo0338/skills.git](https://github.com/momo0338/skills.git)
 - **默认分支**：`main`
+
+---
+
+## 🧰 开发与维护
+
+### 新增技能时（必须同步三处，否则检查失败）
+
+新增一个技能 = 在仓库根目录新建 `<skill-name>/SKILL.md`，然后：
+
+1. **磁盘**：`<skill-name>/` 目录（含 `SKILL.md`）
+2. **README**：在「技能目录与概览」表格追加一行，并把开头 `包含 **N 个**` 改为新数量
+3. **注册表**：在 `scripts/auto_config_ai.py` 的 `SKILL_DEPS` 中声明依赖与安装命令
+
+### 防漂移检查（三重保障）
+
+`scripts/check_skill_sync.py` 验证磁盘技能目录、README 表格、`SKILL_DEPS` 注册表三方一致：
+
+```bash
+# 1. 本地手动检查
+python3 scripts/check_skill_sync.py
+
+# 2. 完整依赖自检（含 sync 检查，作为 test_deps 的第 1b 节）
+python3 scripts/test_deps.py
+```
+
+三重保障：
+- **本地 pre-commit 钩子**：安装后每次 `git commit` 自动拦截漂移提交（`scripts/git-pre-commit`）
+- **GitHub Actions**：`.github/workflows/skill-sync.yml` 在 push/PR 时自动检查
+
+安装/更新本地钩子：
+
+```bash
+cp scripts/git-pre-commit .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit
+```

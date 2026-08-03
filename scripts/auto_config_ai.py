@@ -129,6 +129,29 @@ SKILL_DEPS = {
             "pip": 'pip install "claude-real-video[fast]"',
         },
     },
+    "analyze-viral-commerce-video": {
+        "bins": ["ffmpeg"],
+        "pip": ["pillow", "openai-whisper"],
+        "install_cmds": {
+            "pip": "pip install pillow openai-whisper",
+            "brew": "brew install ffmpeg",
+        },
+    },
+    "videodl": {
+        "bins": ["videodl"],
+        "pip": ["videodl"],
+        "install_cmds": {
+            "pip": "pip install videodl",
+        },
+    },
+    "dy-fanpai": {
+        "bins": ["dy-fanpai", "ffmpeg", "ffprobe"],
+        "pip": ["pydantic", "requests"],
+        "install_cmds": {
+            "pip": "cd dy-fanpai && pip install -e .",
+            "brew": "brew install ffmpeg",
+        },
+    },
 }
 
 # ============================================================================
