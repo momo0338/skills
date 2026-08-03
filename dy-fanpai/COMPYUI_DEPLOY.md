@@ -151,3 +151,72 @@ dy-fanpai 侧(`generation/comfyui.py`,我写好等你)将:
 | 即梦页面手动 | 30~60 分钟操作 | 积分(已有账号) |
 
 **自有机器的最大价值:口播口型(LatentSync)与纯产品 i2v(Wan2.1)全部自控、无限量。**
+
+---
+
+## 附录 A · AMD Instinct(MI300X,192GB)专属部署路径(用户实机)
+
+> 你的配置:AMD 8 核 + 200GB RAM + **192GB 显存**(判定为 Instinct MI300X)+ Ubuntu。
+> 这是 AMD 官方优先支持的顶级配置——**直接走官方预构建镜像,不要手动搭**。
+
+### 为什么这条路径最省事
+- AMD 官方已发布 **`rocm/comfyui` 预构建镜像**(ComfyUI 0.18.2 + ROCm 7.2 + PyTorch ROCm 版,开箱即用);
+- AMD 官方教程演示的正是 **Wan2.2 图生视频 + HTTP API 模式**——与我们需求完全一致;
+- 192GB 显存:Wan2.1-14B FP16 全精度无压力,无需量化。
+
+### 部署步骤(5 条命令)
+
+```bash
+# 1) 确认 ROCm 可见 GPU
+rocm-smi                        # 期望列出 MI300X 及 192GB 显存
+
+# 2) 拉官方镜像(AMD 预构建,ComfyUI + ROCm PyTorch 全装好)
+docker pull rocm/comfyui:comfyui-0.18.2.amd0_rocm7.2.0_ubuntu24.04
+
+# 3) 启动容器(暴露 8188 端口 = ComfyUI API/UI)
+docker run -it --rm \
+  --device=/dev/kfd --device=/dev/dri --group-add video \
+  --cap-add=SYS_PTRACE --security-opt seccomp=unconfined \
+  --ipc=host --shm-size=16g \
+  -p 8188:8188 \
+  rocm/comfyui:comfyui-0.18.2.amd0_rocm7.2.0_ubuntu24.04
+
+# 4) 容器内启动 ComfyUI 服务(监听所有网卡)
+python $COMFYUI_PATH/main.py --port 8188 --listen --gpu-only
+
+# 5) 本机浏览器访问 http://<机器IP>:8188 看到画布 = 部署成功
+```
+
+### 装 Wan2.1 + LatentSync 节点(容器内)
+
+```bash
+cd $COMFYUI_PATH/custom_nodes
+git clone https://github.com/kijai/ComfyUI-WanVideoWrapper.git
+git clone https://github.com/bytedance/LatentSync.git ComfyUI-LatentSync
+pip install -r ComfyUI-WanVideoWrapper/requirements.txt
+pip install -r ComfyUI-LatentSync/requirements.txt
+# 重启 ComfyUI 服务
+```
+
+### 模型下载(192GB 显存 → 直接上满配)
+
+```bash
+export HF_ENDPOINT=https://hf-mirror.com   # 国内加速
+cd $COMFYUI_PATH/models
+# Wan2.1-14B-720P i2v FP16(约 60GB,显存完全放得下)
+# LatentSync-1.6 权重(口型)
+# 均从 HuggingFace 对应仓库下载
+```
+
+### AMD 特有的 3 个注意点
+
+| 注意 | 说明 |
+|---|---|
+| **先用 FP16** | AMD 消费级对 FP8 无硬件加速,MI300 用 FP16/BF16 最优;确认无 NaN 再切 BF16 |
+| **--gpu-only 启动** | 强制所有算子走 GPU,避免 CPU 回退拖慢 |
+| **容器内跑 API** | 教程默认就是无头 API 模式(`/prompt` + `/history` 轮询),正好对接 dy-fanpai |
+
+### 完成后对接 dy-fanpai
+1. 手动跑通 i2v 工作流(一张产品图 + prompt → 视频)与口型工作流(参考图 + S3.wav → 口型视频);
+2. 告诉我:机器 IP、确认两套工作流可用;
+3. 我启用 `generation/comfyui.py`(配置 `COMfyUI_BASE_URL=http://<IP>:8188`),跑全链路。
