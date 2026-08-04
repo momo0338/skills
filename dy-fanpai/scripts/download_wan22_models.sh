@@ -16,7 +16,7 @@
 set -euo pipefail
 
 WORK_DIR="$(pwd)/Wan2.2"
-COMFY_DIR="/workspace/ComfyUI"
+COMFY_DIR="/mnt/workspace/comfy/ComfyUI"  # 用户实机路径(默认);可用 --comfy-dir 覆盖
 DO_LATENTSYNC=0
 MODEL_REPO="Comfy-Org/Wan_2.2_ComfyUI_Repackaged"
 

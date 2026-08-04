@@ -17,7 +17,7 @@
 set -euo pipefail
 
 WORK_DIR="$(pwd)/MiniMax-H3"
-COMFY_DIR="/workspace/ComfyUI"
+COMFY_DIR="/mnt/workspace/comfy/ComfyUI"  # 用户实机路径
 ONLY="both"
 MODEL_REPO="Comfy-Org/MiniMax-H3"
 
