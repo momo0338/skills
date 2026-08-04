@@ -1,6 +1,6 @@
 {
- "last_node_id": 13,
- "last_link_id": 15,
+ "last_node_id": 14,
+ "last_link_id": 18,
  "nodes": [
   {
    "id": 1,
@@ -299,6 +299,9 @@
    "inputs": [
     {
      "name": "text"
+    },
+    {
+     "name": "clip"
     }
    ],
    "outputs": []
@@ -312,6 +315,9 @@
    "inputs": [
     {
      "name": "text"
+    },
+    {
+     "name": "clip"
     }
    ],
    "outputs": []
@@ -375,9 +381,6 @@
     1.0,
     "euler",
     "simple",
-    null,
-    null,
-    null,
     1.0
    ],
    "inputs": [
@@ -454,6 +457,22 @@
     }
    ],
    "outputs": []
+  },
+  {
+   "id": 14,
+   "type": "CreateVideo",
+   "widgets_values": [
+    16.0
+   ],
+   "inputs": [
+    {
+     "name": "images"
+    },
+    {
+     "name": "fps"
+    }
+   ],
+   "outputs": []
   }
  ],
  "links": [
@@ -494,7 +513,7 @@
    6,
    0,
    7,
-   0,
+   1,
    "CLIP"
   ],
   [
@@ -502,7 +521,7 @@
    6,
    0,
    8,
-   0,
+   1,
    "CLIP"
   ],
   [
@@ -532,7 +551,7 @@
   [
    10,
    9,
-   0,
+   2,
    11,
    8,
    "LATENT"
@@ -578,8 +597,16 @@
    "VAE"
   ],
   [
-   16,
+   17,
    12,
+   0,
+   14,
+   0,
+   "IMAGE"
+  ],
+  [
+   18,
+   14,
    0,
    13,
    0,

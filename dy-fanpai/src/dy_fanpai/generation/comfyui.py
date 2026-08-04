@@ -92,11 +92,11 @@ def graph_to_api_prompt(workflow: dict) -> dict:
                 return str(node_inputs[slot_idx]["name"])
             return str(slot_idx)
 
-        # 1) link 连接:slot 索引 → input name
+        # 1) link 连接:slot 索引 → input name(引用节点 id 必须为字符串!)
         linked_names = set()
         for to_slot, link_ref in link_map.get(nid, {}).items():
             nm = input_name(to_slot)
-            inputs[nm] = link_ref
+            inputs[nm] = [str(link_ref[0]), link_ref[1]]  # ComfyUI 用 str 节点 id
             linked_names.add(nm)
 
         # 2) widgets 填充未连接 input(按 node_inputs 顺序跳过 linked)
