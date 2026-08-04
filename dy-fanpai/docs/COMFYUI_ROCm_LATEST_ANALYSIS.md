@@ -200,7 +200,7 @@ python main.py --listen 0.0.0.0 --port 8188 \
 | `scripts/run_comfyui.sh` | 无 `--highvram`、无 `--enable-triton-backend` | 补上(文2/文1 实测) |
 | `scripts/install_comfyui.sh` | 全新 venv + rocm7.2 whl(裸机 OK) | 若机器已预装 ROCm,先查 `torch.version.hip`,改用 `--system-site-packages` + 删 torch 行 |
 | `scripts/install_comfyui.sh` | 未装 triton 指定版本 | 补 `pip install triton==3.7.1` |
-| `COMPYUI_DEPLOY.md` 附录A | Docker 镜像 0.18.2 | 若走 Docker,记得容器内装最新节点/升级 ComfyUI,否则缺 int8 convrot 等新特性 |
+| `COMFYUI_DEPLOY.md` 附录A | Docker 镜像 0.18.2 | 若走 Docker,记得容器内装最新节点/升级 ComfyUI,否则缺 int8 convrot 等新特性 |
 
 ---
 

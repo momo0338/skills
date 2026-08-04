@@ -324,7 +324,7 @@ generation/tasks/S2.json
 ### 工作区布局
 
 ```text
-runs/demo/
+~/dy_fp/runs/demo/
 ├── run.json
 ├── inputs/
 │   ├── source.mp4
@@ -516,16 +516,16 @@ max_submits
 
 ```bash
 dy-fanpai doctor
-dy-fanpai new --video target.mp4 --workspace runs/demo
-dy-fanpai status runs/demo
-dy-fanpai run runs/demo
-dy-fanpai approve runs/demo rights
-dy-fanpai approve runs/demo plan
-dy-fanpai approve runs/demo generation --segments S1 --provider dreamina --max-submits 1
-dy-fanpai approve runs/demo qc
-dy-fanpai retry runs/demo [--segments S1,S2]
-dy-fanpai deliver runs/demo --mode final|jianying|both
-dy-fanpai clean runs/demo --dry-run
+dy-fanpai new --video target.mp4 --workspace ~/dy_fp/runs/demo
+dy-fanpai status ~/dy_fp/runs/demo
+dy-fanpai run ~/dy_fp/runs/demo
+dy-fanpai approve ~/dy_fp/runs/demo rights
+dy-fanpai approve ~/dy_fp/runs/demo plan
+dy-fanpai approve ~/dy_fp/runs/demo generation --segments S1 --provider dreamina --max-submits 1
+dy-fanpai approve ~/dy_fp/runs/demo qc
+dy-fanpai retry ~/dy_fp/runs/demo [--segments S1,S2]
+dy-fanpai deliver ~/dy_fp/runs/demo --mode final|jianying|both
+dy-fanpai clean ~/dy_fp/runs/demo --dry-run
 ```
 
 这里按“命令组”计为八类：doctor、new、status、run、approve、retry、deliver、clean。
@@ -533,8 +533,8 @@ dy-fanpai clean runs/demo --dry-run
 高级调试不再为每个阶段增加顶层命令，统一使用：
 
 ```bash
-dy-fanpai run runs/demo --stage reverse
-dy-fanpai run runs/demo --stage planning
+dy-fanpai run ~/dy_fp/runs/demo --stage reverse
+dy-fanpai run ~/dy_fp/runs/demo --stage planning
 ```
 
 ---

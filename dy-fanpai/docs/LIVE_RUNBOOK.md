@@ -4,7 +4,7 @@
 > 配套：`LIVE_PREREQUISITES.md`（前置清单）、`EXECUTION_PLAN.md` §0.6（预算规则）。
 > 用法：从「第 0 步」开始逐节照做；每节有可复制命令 + 验证方式 + 常见问题。
 > 纪律：Live 默认关闭；一次只批一个 Provider、一段、一次提交；`max_submits` 代码硬执行；
-> 未批准只能 Mock/dry-run；真实素材放 `runs/<scene>/inputs/`，不入 Git。
+> 未批准只能 Mock/dry-run；真实素材放 `~/dy_fp/runs/<scene>/inputs/`，不入 Git。
 
 ---
 
@@ -150,16 +150,16 @@ echo -n "<你的key>" > ~/.config/dy-fanpai/xyq_access_key
 ```bash
 # 1) 建工作区(用 A 类真实视频)
 cd /Users/zhugx/src/skills/dy-fanpai
-.venv/bin/dy-fanpai new --video /绝对/路径/参考视频.mp4 --workspace runs/mvp_a
+.venv/bin/dy-fanpai new --video /绝对/路径/参考视频.mp4 --workspace ~/dy_fp/runs/mvp_a
 
 # 2) 放素材(工作区内,路径记到 assets.json)
 #    参考: tests/fixtures/scenarios/A/assets.json 的键结构
-mkdir -p runs/mvp_a/inputs/assets
-cp /路径/主播锚图.jpg runs/mvp_a/inputs/assets/host.jpg
-cp /路径/产品正面.jpg   runs/mvp_a/inputs/assets/hero.jpg
-cp /路径/包装图.png     runs/mvp_a/inputs/assets/礼盒.png
+mkdir -p ~/dy_fp/runs/mvp_a/inputs/assets
+cp /路径/主播锚图.jpg ~/dy_fp/runs/mvp_a/inputs/assets/host.jpg
+cp /路径/产品正面.jpg   ~/dy_fp/runs/mvp_a/inputs/assets/hero.jpg
+cp /路径/包装图.png     ~/dy_fp/runs/mvp_a/inputs/assets/礼盒.png
 # 3) 写产品档案(参照 fixture 结构)
-#    runs/mvp_a/inputs/assets.json:
+#    ~/dy_fp/runs/mvp_a/inputs/assets.json:
 #    { "host_anchor": "inputs/assets/host.jpg",
 #      "host_desc": "主播外形一句话(钉死跨段一致)",
 #      "product_desc": "产品名,包装特征",
@@ -172,7 +172,7 @@ cp /路径/包装图.png     runs/mvp_a/inputs/assets/礼盒.png
 - 参考视频：有权使用（自产或授权），且确认会上传到哪些 Provider（即梦/Ark/Kimi/小云雀）。
 - 主播锚图：肖像授权；声音：使用授权（若走 TTS/换声）。
 - 产品图/价格/活动/赠品：真实可核，**禁止编造**（方案 §S07）。
-- 记录方式：`dy-fanpai approve runs/mvp_a rights` 或手动确认 `rights-and-consent` 字段。
+- 记录方式：`dy-fanpai approve ~/dy_fp/runs/mvp_a rights` 或手动确认 `rights-and-consent` 字段。
 
 ---
 
@@ -187,43 +187,43 @@ cp /路径/包装图.png     runs/mvp_a/inputs/assets/礼盒.png
 .venv/bin/dy-fanpai doctor
 
 # 2) 建工作区(离线安全;live 默认 false → Provider 返回桩数据,可先离线跑通全流程)
-.venv/bin/dy-fanpai new --video /绝对/路径/参考视频.mp4 --workspace runs/mvp_a
+.venv/bin/dy-fanpai new --video /绝对/路径/参考视频.mp4 --workspace ~/dy_fp/runs/mvp_a
 
-# 3) 首次提交前:开启 Live 并设硬上限(编辑 runs/mvp_a/run.json)
+# 3) 首次提交前:开启 Live 并设硬上限(编辑 ~/dy_fp/runs/mvp_a/run.json)
 #    把 "live": false → true; "max_submits": 0 → 1  (只允许一次真实提交)
 #    ⚠ 这是人工动作,每次扩大段数/重试都必须重新修改并重新批准 cost 闸口
 
 # 4) 权利闸(人工确认) → 状态推进
-.venv/bin/dy-fanpai approve runs/mvp_a rights
+.venv/bin/dy-fanpai approve ~/dy_fp/runs/mvp_a rights
 
 # 5) 跑到第一个闸口(反推→规划,遇闸口自动停)
 #    ⚠ 反推腿默认 seed(需 ARK_API_KEY);用 Qwen 则加 --leg qwen(需 DASHSCOPE_API_KEY)
-.venv/bin/dy-fanpai run runs/mvp_a
-#    或 .venv/bin/dy-fanpai run runs/mvp_a --stage reverse --leg qwen
-#    预期停在 G2 计划审核,先人审 runs/mvp_a/planning/segments.md(分段/动作/锚图/台词/前3秒/合规)
+.venv/bin/dy-fanpai run ~/dy_fp/runs/mvp_a
+#    或 .venv/bin/dy-fanpai run ~/dy_fp/runs/mvp_a --stage reverse --leg qwen
+#    预期停在 G2 计划审核,先人审 ~/dy_fp/runs/mvp_a/planning/segments.md(分段/动作/锚图/台词/前3秒/合规)
 
 # 6) 批准计划
-.venv/bin/dy-fanpai approve runs/mvp_a plan
+.venv/bin/dy-fanpai approve ~/dy_fp/runs/mvp_a plan
 
 # 7) 继续跑到费用闸(音频→生成审批)
-.venv/bin/dy-fanpai run runs/mvp_a
+.venv/bin/dy-fanpai run ~/dy_fp/runs/mvp_a
 #    预期停在 G3 费用审批,核对 run.json 中: live=true / max_submits=1 / 段 ID / 后端
 
 # 8) 批准生成费用(只批 S1 一段,即梦,1 次提交)
-.venv/bin/dy-fanpai approve runs/mvp_a cost
+.venv/bin/dy-fanpai approve ~/dy_fp/runs/mvp_a cost
 #    ⚠ 人物口播段由 route_backend 强制走 dreamina(口型驱动);纯产品 i2v 才可选 ark/xyq
 
 # 9) 生成 + 装配 + 质检(继续 run 直到 G4)
-.venv/bin/dy-fanpai run runs/mvp_a
+.venv/bin/dy-fanpai run ~/dy_fp/runs/mvp_a
 #    完成后检查: generation/clips/S1.mp4 可解码; output/FULL.mp4 无字幕无BGM
 
 # 10) 双视频评委(Ark,如已配 key)+ 人工审片
-.venv/bin/dy-fanpai run runs/mvp_a
+.venv/bin/dy-fanpai run ~/dy_fp/runs/mvp_a
 #    人工核对: 人物/商品/包装/动作/口型/合规 六项,分开记录(不能以技术通过代替)
 
 # 11) 批准最终 QC + 交付
-.venv/bin/dy-fanpai approve runs/mvp_a qc
-.venv/bin/dy-fanpai deliver runs/mvp_a --mode final    # final 先出(剪映草稿见第 7 步)
+.venv/bin/dy-fanpai approve ~/dy_fp/runs/mvp_a qc
+.venv/bin/dy-fanpai deliver ~/dy_fp/runs/mvp_a --mode final    # final 先出(剪映草稿见第 7 步)
 ```
 
 **每轮 Live 必须记录**（写回 `run.json` 或验收记录）：task ID、usage、产物哈希、验收结果（§12.7）。
@@ -238,7 +238,7 @@ cp /路径/包装图.png     runs/mvp_a/inputs/assets/礼盒.png
 
 ```bash
 # A. 本机产出可照抄规格(离线可用)
-.venv/bin/dy-fanpai deliver runs/mvp_a --mode jianying
+.venv/bin/dy-fanpai deliver ~/dy_fp/runs/mvp_a --mode jianying
 #    产物: delivery/jianying/draft_info.json(视频/原声/字幕/贴纸/BGM 五轨)
 
 # B. 真机验收(在 Windows/WSL 验收机上)
@@ -266,7 +266,7 @@ git clone https://github.com/Plachtaa/seed-vc.git ~/seed-vc
 cd ~/seed-vc && python -m venv .venv && .venv/bin/pip install -r requirements.txt
 export DY_FANPAI_SEEDVC_HOME=~/seed-vc
 
-# 合法目标音色:必须有权使用(自录或授权),放 runs/<scene>/inputs/,不入 Git
+# 合法目标音色:必须有权使用(自录或授权),放 ~/dy_fp/runs/<scene>/inputs/,不入 Git
 ```
 
 **验证**：`dy-fanpai doctor` 中 CosyVoice/Seed-VC 状态函数返回就绪。
@@ -318,7 +318,7 @@ export DY_FANPAI_SEEDVC_HOME=~/seed-vc
 | `MaxSubmitsExceeded` | 费用硬上限生效(代码层) | 修改 run.json `max_submits` 并重新 `approve cost` |
 | 烧字幕失败 | macOS ffmpeg 缺 libass | 用 `--mode final` 兜底(无烧字幕+SRT)或装带 libass 的 ffmpeg |
 | 人物段路由报错 | 人物口播只允许即梦 | `route_backend` 强制 mm→dreamina,勿把人物段给 Ark |
-| 新建工作区没 live | `new` 默认离线(桩数据) | 手动编辑 `runs/<ws>/run.json` 开启 |
+| 新建工作区没 live | `new` 默认离线(桩数据) | 手动编辑 `~/dy_fp/runs/<ws>/run.json` 开启 |
 
 ## 第 4.5 步 · MiniMax H3(纯产品 i2v 第四后端 + 口播实验;需 key)
 
@@ -346,7 +346,7 @@ echo -n "<你的key>" > ~/.config/dy-fanpai/minimax_api_key
 
 ## 第 4.6 步 · 自建 ComfyUI(自有 GPU 机器,替代即梦;experimental)
 
-> 部署详见 `COMPYUI_DEPLOY.md`(AMD MI300X 走附录 A 官方镜像)。本步骤是接入 dy-fanpai。
+> 部署详见 `COMFYUI_DEPLOY.md`(AMD MI300X 走附录 A 官方镜像)。本步骤是接入 dy-fanpai。
 
 ```bash
 # 1) 配置(指向自有 ComfyUI 机器)

@@ -33,19 +33,23 @@ XYQ_ACCESS_KEY、ARK_SEED_MODEL、COSYVOICE_HOME、DY_FANPAI_SEEDVC_HOME、
 DY_FANPAI_JY_DRAFTS、DY_FANPAI_JY_PYTHON、DY_FANPAI_DOWNLOAD_PROXY 等）。
 密钥绝不进仓库；测试用假值。
 
-## CLI
+## 工作区（运行产物）
+
+每个任务一个工作区，**放仓库外**（如 `~/dy_fp/runs/<id>`），绝不在代码仓内产生过程产物：
 
 ```bash
 dy-fanpai doctor
-dy-fanpai new --video target.mp4 --workspace runs/demo
-dy-fanpai status runs/demo
-dy-fanpai run runs/demo --stage reverse
-dy-fanpai approve runs/demo plan
-dy-fanpai approve runs/demo generation --segments S1 --provider dreamina --max-submits 1
-dy-fanpai retry runs/demo
-dy-fanpai deliver runs/demo --mode final|jianying|both
-dy-fanpai clean runs/demo --dry-run
+dy-fanpai new --video target.mp4 --workspace ~/dy_fp/runs/demo
+dy-fanpai status ~/dy_fp/runs/demo
+dy-fanpai run ~/dy_fp/runs/demo --stage reverse
+dy-fanpai approve ~/dy_fp/runs/demo plan
+dy-fanpai approve ~/dy_fp/runs/demo generation --segments S1 --provider dreamina --max-submits 1
+dy-fanpai retry ~/dy_fp/runs/demo
+dy-fanpai deliver ~/dy_fp/runs/demo --mode final|jianying|both
+dy-fanpai clean ~/dy_fp/runs/demo --dry-run
 ```
+
+`runs/`（及全部视频/音频产物）已在 `.gitignore` 忽略；即使误建在仓库内也不会被提交。
 
 ## 测试
 

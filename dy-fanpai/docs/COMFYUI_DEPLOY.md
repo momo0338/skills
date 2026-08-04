@@ -1,4 +1,4 @@
-# COMPYUI_DEPLOY · 自建 ComfyUI 视频生成部署操作单(替代即梦)
+# COMFYUI_DEPLOY · 自建 ComfyUI 视频生成部署操作单(替代即梦)
 
 > 版本:1.0  日期:2026-08-03
 > 目的:在自有机器部署 ComfyUI + Wan2.1(纯产品 i2v)+ LatentSync(口播口型),
