@@ -1,6 +1,6 @@
 """六类场景 segments golden 的 parity 测试（验收门 3 + 门 4）。
 
-PARITY.md 待办 3：把六类场景的 `segments.golden.json` 纳入 parity 基线。
+docs/PARITY.md 待办 3：把六类场景的 `segments.golden.json` 纳入 parity 基线。
 每类场景有合成输入（shotlist.json + assets.json）与冻结的 golden 输出，
 测试断言：
 - planner 输出与 golden 逐字段一致（确定性复现）；

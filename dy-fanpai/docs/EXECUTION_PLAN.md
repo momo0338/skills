@@ -4,7 +4,7 @@
 日期：2026-08-03  
 状态：唯一权威执行方案  
 
-> 本文件可以单独派发给执行 Agent。`DY_FANPAI_PREFLIGHT_CHECKLIST.md` 和 `DY_FANPAI_DETAILED_REFERENCE.md` 仅供人工查阅，不是执行前置；若内容冲突，以本文件为准。
+> 本文件可以单独派发给执行 Agent。`archive/DY_FANPAI_DETAILED_REFERENCE.md` 仅供人工查阅，不是执行前置；若内容冲突，以本文件为准。
 
 原项目（只读）：`/Users/zhugx/src/daihuo-fanpai`  
 原项目基线：`ffc22e34cb35477b04967163c3932002ed4f3fed`  
@@ -216,15 +216,17 @@ CLI：dy-fanpai
 
 ```text
 dy-fanpai/
-├── EXECUTION_PLAN.md
-├── pyproject.toml
 ├── README.md
 ├── SKILL.md
-├── DESIGN.md
-├── ACCEPTANCE.md
-├── CHANGELOG.md
+├── pyproject.toml
 ├── LICENSE
 ├── .gitignore
+├── docs/
+│   ├── EXECUTION_PLAN.md
+│   ├── DESIGN.md
+│   ├── ACCEPTANCE.md
+│   ├── CHANGELOG.md
+│   └── ...
 ├── src/
 │   └── dy_fanpai/
 │       ├── __init__.py

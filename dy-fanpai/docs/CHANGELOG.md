@@ -150,7 +150,7 @@ WP5（业务包第 4 个、收尾交付）完成：忠实复刻原 `export_subs.
 
 WP6（收尾集成与发布）完成：把 WP1–WP5 的全部业务包通过 `pipeline.py` 串成可被 CLI 驱动
 的单次运行/分阶段执行流，四闸口在 run 路径上强制执行且不可被 `--force` 绕过，无重复提交
-由排他锁 + 费用硬上限 + 提交意图保证；`SKILL.md` 已是完整技能说明；干净环境安装（验收门 2）
+由排他锁 + 费用硬上限 + 提交意图保证；`../SKILL.md` 已是完整技能说明；干净环境安装（验收门 2）
 已验证。这是唯一可宣布「替代原项目」的工作包。
 
 ### 新增
@@ -164,7 +164,7 @@ WP6（收尾集成与发布）完成：把 WP1–WP5 的全部业务包通过 `p
   `_retry` 非 live 直接离线提示返回 0，live 则 `require_gate(COST)` 后 `G.run(lock_path=...)`；
   `_deliver` 委托 `pipeline.execute_stage(DELIVER, ...)`。三命令不再 `_not_implemented`，
   且无 `--force` 绕过闸口的入口（argparse 不提供该 flag，硬解析失败即 `SystemExit`）。
-- `SKILL.md`：完整技能说明（8 条命令 + 四闸口纪律 + 「不得用 --force 绕过」+ 外部资源降级
+- `../SKILL.md`：完整技能说明（8 条命令 + 四闸口纪律 + 「不得用 --force 绕过」+ 外部资源降级
   说明），满足 WP6「完整 Skill」要求。
 - 测试（WP6 新增 14 例）：
   - `tests/unit/test_gate_enforcement.py`（7，验收门 5）：`require_gate` 未审批抛 `GateBlocked`、
@@ -378,7 +378,7 @@ WP6（收尾集成与发布）完成：把 WP1–WP5 的全部业务包通过 `p
 - `config.py`：`COMfyUI_BASE_URL` / `COMfyUI_WORKFLOW_I2V` / `COMfyUI_WORKFLOW_MM`
   （模板路径）；doctor `key_status` 增加 COMfyUI_BASE_URL 检查。
 - `generation/service.py`：`_default_backends` 注册 `comfyui`（`--i2v-backend comfyui`）。
-- `resources/workflows/README.md`：模板 JSON 与占位符约定说明。
+- `../resources/workflows/README.md`：模板 JSON 与占位符约定说明。
 - `tests/unit/test_comfyui.py`（10 例）：占位符注入/解析/Mock 上传提交轮询下载/缺模板抛错/后端注册。
 
 ### 说明

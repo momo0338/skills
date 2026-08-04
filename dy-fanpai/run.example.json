@@ -2,7 +2,7 @@
   "_meta": {
     "schema_version": "1",
     "purpose": "run.json v1 冻结草案 —— WP0 产出，WP1 冻结门回填权威枚举",
-    "authority": "阶段命名/状态值/闸口以 EXECUTION_PLAN.md v2.2 为唯一权威",
+    "authority": "阶段命名/状态值/闸口以 docs/EXECUTION_PLAN.md v2.2 为唯一权威",
     "rules": [
       "密钥绝不进本文件，仅存 task_id / submit_id / cost 计数",
       "live=false 时所有 Provider 返回确定性桩数据，可离线跑通",

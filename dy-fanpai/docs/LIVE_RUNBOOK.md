@@ -280,7 +280,7 @@ export DY_FANPAI_SEEDVC_HOME=~/seed-vc
 
 ```text
 1. 全新会话输入:「抖音翻拍,复刻这条带货视频: <视频路径>,用我的产品重做」
-2. 期望: 自动识别 SKILL.md 触发 → 收集素材 → 跑到 G1 权利闸停止
+2. 期望: 自动识别 ../SKILL.md 触发 → 收集素材 → 跑到 G1 权利闸停止
 3. 人工批准 → 继续 → G2 计划闸停止(审 segments.md)→ 批准 → G3 费用闸(核对段数/后端/上限)
 4. 批准生成 → G4 人工 QC → 交付
 5. 全程: 不自动装重型依赖、不自动用真实密钥测试、不自动扩大段数/费用
@@ -363,4 +363,4 @@ dy-fanpai doctor   # COMfyUI_BASE_URL 应显示就位
 ```
 
 > ⚠ mm 段默认仍走即梦;ComfyUI LatentSync 口型实测通过前不切换口播段。
-> 模板占位符约定见 `resources/workflows/README.md`。
+> 模板占位符约定见 `../resources/workflows/README.md`。

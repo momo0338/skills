@@ -35,19 +35,21 @@ mkdir -p "$WORK_DIR"
 
 # -----------------------------------------------------------------------------
 # Part 1: Wan2.2 14B I2V(纯产品段主力;fp16 最高质量,192GB 显存满配)
-#         6 个文件 ≈ 59.7GB(全部必需,缺一不可)
+#         6 个文件 ≈ 65.2GB(全部必需,缺一不可)
+# 注意:文本编码器必须用 umt5_xxl_fp16!fp8 版在 AMD ROCm 上会崩
+#       (HSA_STATUS_ERROR_INVALID_ISA / invalid kernel file,FP8 量化 kernel 不支持)
 # -----------------------------------------------------------------------------
 I2V_FILES=(
   "split_files/diffusion_models/wan2.2_i2v_high_noise_14B_fp16.safetensors"
   "split_files/diffusion_models/wan2.2_i2v_low_noise_14B_fp16.safetensors"
   "split_files/vae/wan_2.1_vae.safetensors"
-  "split_files/text_encoders/umt5_xxl_fp8_e4m3fn_scaled.safetensors"
+  "split_files/text_encoders/umt5_xxl_fp16.safetensors"
   "split_files/loras/wan2.2_i2v_lightx2v_4steps_lora_v1_high_noise.safetensors"
   "split_files/loras/wan2.2_i2v_lightx2v_4steps_lora_v1_low_noise.safetensors"
 )
 
 echo ""
-echo "==> [Part 1] 下载 Wan2.2 14B I2V(6 文件 ≈ 59.7GB)"
+echo "==> [Part 1] 下载 Wan2.2 14B I2V(6 文件 ≈ 65.2GB,umt5 用 FP16 版)"
 for f in "${I2V_FILES[@]}"; do
   echo "    -> $f"
   modelscope download --model "$MODEL_REPO" --local_dir "$WORK_DIR" "$f"
@@ -111,7 +113,7 @@ if [ -d "$COMFY_DIR" ]; then
   echo "✅ 已就位。I2V 工作流加载:"
   echo "   - UNETLoader high: wan2.2_i2v_high_noise_14B_fp16.safetensors"
   echo "   - UNETLoader low : wan2.2_i2v_low_noise_14B_fp16.safetensors"
-  echo "   - CLIPLoader     : umt5_xxl_fp8_e4m3fn_scaled.safetensors (type=wan)"
+  echo "   - CLIPLoader     : umt5_xxl_fp16.safetensors (type=wan) ← FP16,ROCm 兼容"
   echo "   - VAELoader      : wan_2.1_vae.safetensors"
   echo "   - LoRA(4步)      : wan2.2_i2v_lightx2v_4steps_lora_v1_*"
 else

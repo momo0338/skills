@@ -1,6 +1,6 @@
 # WP0 基线清点 · 原项目 → dy-fanpai 映射
 
-> 配套：`EXECUTION_PLAN.md` v2.2（唯一执行权威）、`DY_FANPAI_DETAILED_REFERENCE.md` v1.2、`DY_FANPAI_PREFLIGHT_CHECKLIST.md` v1.1
+> 配套：`EXECUTION_PLAN.md` v2.2（唯一执行权威）、`archive/DY_FANPAI_DETAILED_REFERENCE.md` v1.2
 > 原项目：`/Users/zhugx/src/daihuo-fanpai` · HEAD `ffc22e34cb35477b04967163c3932002ed4f3fed` · tracked 干净 · `.workbuddy/` 未触碰（只读）
 > 本文件是 WP0 交付物之一，进入 WP1 冻结门后会据此产出 `DESIGN.md` 与 `pyproject.toml`。
 

@@ -1,6 +1,6 @@
 """media/audio 对当前算法 golden 的 parity 测试（WP3，验收门 4 统一 golden）。
 
-PARITY.md 待办 1/2：为 WP3（切段 timing / 装配 args）建「当前算法 golden」，
+docs/PARITY.md 待办 1/2：为 WP3（切段 timing / 装配 args）建「当前算法 golden」，
 用 assert 级结构化断言固化行为，防回归。golden 由**当前**代码生成并冻结
 （见 tests/parity/fixtures/wp3_*.golden.json），测试同时做两类断言：
 - 逐字段等于 golden（确定性复现）；

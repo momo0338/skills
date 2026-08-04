@@ -69,7 +69,7 @@
 | L3-3 | CosyVoice（TTS 合成） | 门 7（TTS 路径） | 未安装 | 安装 `~/CosyVoice` + 合法目标音色（U5） |
 | L3-4 | Seed-VC（换声） | 门 7（换声路径） | 未安装 | GPU 环境 + `~/seed-vc` + 合法音色（U5） |
 | L3-5 | 带 libass 的 ffmpeg（烧字幕） | 门 8（烧字幕成品） | 本机 macOS 缺 libass | Homebrew 装 `ffmpeg`（含 libass）或指定带 libass 的机器；现有兜底=无烧字幕 FINAL+SRT 侧载 |
-| L3-6 | Skill 实机宿主（WorkBuddy 等） | 「四闸口自然语言暂停」验证 | 待定 | 选定至少 1 个宿主，按其官方机制安装/注册 `SKILL.md`，全新会话验证 |
+| L3-6 | Skill 实机宿主（WorkBuddy 等） | 「四闸口自然语言暂停」验证 | 待定 | 选定至少 1 个宿主，按其官方机制安装/注册 `../SKILL.md`，全新会话验证 |
 
 ---
 

@@ -5,10 +5,10 @@
 
 ## 设计权威
 
-- `EXECUTION_PLAN.md` — **唯一执行权威**（v2.2）
-- `DESIGN.md` — 冻结的公共接口与冲突裁决（WP1）
-- `WP0_BASELINE.md` — 原项目行为基线（parity 证据）
-- `DY_FANPAI_DETAILED_REFERENCE.md` — 仅供人工查阅
+- `docs/EXECUTION_PLAN.md` — **唯一执行权威**（v2.2）
+- `docs/DESIGN.md` — 冻结的公共接口与冲突裁决（WP1）
+- `docs/WP0_BASELINE.md` — 原项目行为基线（parity 证据）
+- `docs/archive/DY_FANPAI_DETAILED_REFERENCE.md` — 仅供人工查阅
 
 ## 安装（开发）
 
@@ -28,7 +28,7 @@ uv pip install -e ".[jianying]"
 ## 配置
 
 密钥读取优先级：进程环境变量 → `~/.config/dy-fanpai/<name>` → 默认值。
-必须支持的变量见 `EXECUTION_PLAN.md §0.8`（ARK_API_KEY、KIMI_API_KEY、
+必须支持的变量见 `docs/EXECUTION_PLAN.md §0.8`（ARK_API_KEY、KIMI_API_KEY、
 XYQ_ACCESS_KEY、ARK_SEED_MODEL、COSYVOICE_HOME、DY_FANPAI_SEEDVC_HOME、
 DY_FANPAI_JY_DRAFTS、DY_FANPAI_JY_PYTHON、DY_FANPAI_DOWNLOAD_PROXY 等）。
 密钥绝不进仓库；测试用假值。

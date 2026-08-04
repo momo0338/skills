@@ -1,12 +1,12 @@
 # DESIGN.md · dy-fanpai 设计冻结
 
-> 配套：`EXECUTION_PLAN.md` v2.2（唯一执行权威）、`DY_FANPAI_DETAILED_REFERENCE.md` v1.2（仅供人工查阅）、`WP0_BASELINE.md`（原项目基线）。
+> 配套：`EXECUTION_PLAN.md` v2.2（唯一执行权威）、`archive/DY_FANPAI_DETAILED_REFERENCE.md` v1.2（仅供人工查阅）、`WP0_BASELINE.md`（原项目基线）。
 > 本文件由 **WP1** 产出，记录被冻结的公共接口与对 WP0 §9 冲突点的裁决。任何修改走 `EXECUTION_PLAN.md` §12.2 变更流程。
 
 ## 1. 权威与优先级
 
 1. `EXECUTION_PLAN.md` 是唯一执行权威；发生冲突以它为准。
-2. `DY_FANPAI_DETAILED_REFERENCE.md` 仅供查询，不覆盖执行方案。
+2. `archive/DY_FANPAI_DETAILED_REFERENCE.md` 仅供查询，不覆盖执行方案。
 3. `WP0_BASELINE.md` 是事实基线（原项目行为），用于 parity 证据；若与执行方案冲突，以执行方案为新架构依据，但原业务规则（如群戏人数硬约束）必须保留为 parity 项。
 4. 事实优先级（执行方案 §0.7）：原项目固定提交代码/样例 > 原项目 DESIGN/SKILL/README > 执行方案 > Agent 推测。
 

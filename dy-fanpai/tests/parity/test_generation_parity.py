@@ -1,6 +1,6 @@
 """generation 对当前算法 golden 的 parity 测试（WP4，验收门 4 统一 golden）。
 
-PARITY.md 待办 1/2：为 WP4（提交命令 / 轮询输出解析）建「当前算法 golden」。
+docs/PARITY.md 待办 1/2：为 WP4（提交命令 / 轮询输出解析）建「当前算法 golden」。
 覆盖即梦(Dreamina)、Ark、小云雀(XYQ)、下载代理四类确定性输出：
 - 与 golden 逐字段一致（防参数漂移）；
 - 业务铁律断言：mm 走 multimodal2video、i2v 走 image2video、人物口播带音频、

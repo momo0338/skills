@@ -56,7 +56,7 @@
 | CLI `run`/`approve`/`retry`/`deliver` 接线（原 `_not_implemented` 落地） | `cli.py` `_run`/`_approve`/`_retry`/`_deliver` | ✅ 7 例（gate 5 拦截 + 解锁 + 全链路） | ✅ 真跑 `run deliver` 离线产 FINAL/SRT/draft | — | ✅ 接线可用；闸口约束见验收门 5 |
 | 四闸口不可被 `run`/`--force` 绕过（验收门 5） | `workflow.py` `require_gate` / `GateBlocked` | ✅ 7 例（`test_gate_enforcement.py`：未审批抛 `GateBlocked`、`--force` 触发 `SystemExit`） | — | — | ✅ 已验，入口不存在 `--force` |
 | 并发/崩溃无静默重复提交（验收门 6） | `workspace.acquire_lock` / `generation/service.run` `within_cap` + 提交意图 | ✅ 3 例（`test_no_duplicate_submit.py`：`acquire_lock` 互斥/`within_cap` 硬上限/`ThreadPoolExecutor(2)` 并发无重复） | — | 🟡 真机崩溃恢复待 Live 复核 | ✅ 实现+单测已验 |
-| 完整 Skill 文档 | `SKILL.md`（8 命令 + 四闸口纪律 + 降级说明） | — | ✅ 内容审阅完整 | — | ✅ 完整 |
+| 完整 Skill 文档 | `../SKILL.md`（8 命令 + 四闸口纪律 + 降级说明） | — | ✅ 内容审阅完整 | — | ✅ 完整 |
 | 干净环境安装（验收门 2） | `pyproject.toml`（hatchling wheel/sdist）+ CLI | — | ✅ 全新 Py3.13.12 venv `pip install` 成功，`--help`/`doctor`/`status` 可用 | — | ✅ 已验 |
 
 **WP6 验收结论（§11）：** 完整 CLI + Skill ✅（8 命令全部接线，Skill 文档完整）；五类测试 ✅（gate 5 / gate 6 / e2e / 既有单测 / 集成）；干净环境安装 ✅（验收门 2，全新 venv 安装 + CLI/Skill 可用）；三绿维持（ruff 全绿 / pytest 166 passed, 1 skipped / pyright 0）。受控 Live Pilot、剪映真机打开、六类场景 fixture、全新会话自然语言暂停、人工审核、费用/任务 ID 可追溯、原项目未修改复核标记 🟡。
@@ -66,7 +66,7 @@
 | # | 验收门 | 本包状态 |
 |---|---|---|
 | 1 | 原项目工作区未修改 | ✅ 已复核：`daihuo-fanpai` HEAD=`ffc22e34` 零受跟踪改动（清理了工具链遗留 `.workbuddy`） |
-| 2 | 干净环境安装（wheel/sdist + CLI/Skill 可用） | ✅ 全新 Py3.13.12 venv `pip install` 成功，`dy-fanpai --help`/`doctor`/`status`/`SKILL.md` 均可用 |
+| 2 | 干净环境安装（wheel/sdist + CLI/Skill 可用） | ✅ 全新 Py3.13.12 venv `pip install` 成功，`dy-fanpai --help`/`doctor`/`status`/`../SKILL.md` 均可用 |
 | 3 | 六类场景 fixture + 验收记录 | ✅ fixture 已搭（`tests/fixtures/scenarios/` 6 类均有 `shotlist.json`+`assets.json`+`segments.golden.json` 合成输入）；验收记录待受控 Live 回填（🟡） |
 | 4 | 确定性产物与原项目无未解释差异 | ✅ WP2 planner golden 逐字节；WP3 装配 args/timing、WP4 三后端命令/请求体/解析均有统一 golden 逐字段断言（`tests/parity/fixtures/`，38 例新增）；六类场景 segments golden 已纳入基线（见 `PARITY.md`） |
 | 5 | 四闸口不可被 `run`/`--force` 绕过 | ✅ `test_gate_enforcement.py` 7 例：未审批 `GateBlocked`、`--force` 入口不存在（`SystemExit`） |
