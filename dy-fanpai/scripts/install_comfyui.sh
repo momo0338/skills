@@ -1,55 +1,78 @@
 #!/usr/bin/env bash
 # =============================================================================
-# install_comfyui.sh — MI300X(192GB) 上安装 ComfyUI + ROCm 环境
+# install_comfyui.sh — ComfyUI 安装统一入口(自动检测 GPU 厂商并分派)
 #
-# 来源:用户实测方法(2026-08-04 整理)
-# 平台:Ubuntu + AMD Instinct MI300X + ROCm 7.2
+# 根据 GPU 厂商自动选择安装包与安装路线:
+#   NVIDIA → install_comfyui_cuda.sh(装 CUDA 版 torch + xformers/flash-attn)
+#   AMD    → install_comfyui_rocm.sh(装 ROCm 版 torch,继承全局/裸机双路线)
+#   未知   → 打印提示并终止,需手动 COMFY_GPU 指定
 #
 # 用法:
-#   bash install_comfyui.sh [--workspace /path/to/workdir]
-# 默认工作目录:/workspace
+#   bash install_comfyui.sh [--workspace /path/to/workdir] [--gpu auto|nvidia|amd|cpu]
+#   或等价环境变量:
+#   COMFY_WORK=/path COMFY_GPU=nvidia bash install_comfyui.sh
+#
+# 检测口径(与 run_comfyui.sh 完全一致,见 scripts/detect_gpu.sh):
+#   1) 系统 python 已装 torch → 按 torch.version.cuda / torch.version.hip 判断
+#   2) nvidia-smi(英伟达) / rocm-smi|rocminfo(AMD)
+#   3) lspci 硬件枚举兜底
 # =============================================================================
 set -euo pipefail
 
-WORK="${1:-/workspace}"
-COMFY_DIR="$WORK/ComfyUI"
-MIRROR_PREFIX="https://ghfast.top/"   # GitHub 加速镜像(国内拉取慢时可去掉)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=detect_gpu.sh
+source "$SCRIPT_DIR/detect_gpu.sh"
 
-echo "==> 工作目录: $WORK"
-mkdir -p "$WORK"
-cd "$WORK"
+WORK="${COMFY_WORK:-/mnt/workspace/comfy}"
+GPU_ARG="auto"
 
-# -----------------------------------------------------------------------------
-# 1. 克隆 ComfyUI(优先走加速镜像;失败则直连)
-# -----------------------------------------------------------------------------
-if [ ! -d "$COMFY_DIR/.git" ]; then
-  echo "==> 克隆 ComfyUI"
-  git clone "${MIRROR_PREFIX}https://github.com/comfyanonymous/ComfyUI.git" \
-    || git clone https://github.com/comfyanonymous/ComfyUI.git
-else
-  echo "==> ComfyUI 已存在,跳过克隆"
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --workspace) WORK="${2:?--workspace 需要路径}"; shift 2 ;;
+    --workspace=*) WORK="${1#*=}"; shift ;;
+    --gpu) GPU_ARG="${2:?--gpu 需要 auto|nvidia|amd|cpu}"; shift 2 ;;
+    --gpu=*) GPU_ARG="${1#*=}"; shift ;;
+    -h|--help)
+      grep -E "^# +(用法|bash|或|COMFY)" "$0" | sed 's/^# *//'; exit 0 ;;
+    *) echo "未知参数: $1 (--workspace / --gpu / -h)"; exit 1 ;;
+  esac
+done
+
+# --gpu 优先级高于 COMFY_GPU,再高于自动探测
+if [ "$GPU_ARG" != "auto" ]; then
+  COMFY_GPU="$GPU_ARG"
 fi
-cd "$COMFY_DIR"
+export COMFY_GPU
 
-# -----------------------------------------------------------------------------
-# 2. 虚拟环境 + PyTorch(ROCm 7.2 版)
-# -----------------------------------------------------------------------------
-if [ ! -d ".venv" ]; then
-  echo "==> 创建 venv"
-  python3 -m venv .venv
-fi
-# shellcheck disable=SC1091
-source .venv/bin/activate
-python -V
+echo "================================================================"
+echo "==> ComfyUI 安装器 · GPU 环境检测"
+echo "================================================================"
+GPU_TYPE="$(detect_gpu)"
+describe_gpu "$GPU_TYPE"
 
-echo "==> 安装 PyTorch (ROCm 7.2 构建)"
-# 注意:MI300X 用 ROCm 版 PyTorch;cu130 那行是 NVIDIA 卡用的,勿在此环境执行
-pip install --upgrade pip
-pip install torch torchvision torchaudio \
-  --index-url https://download.pytorch.org/whl/rocm7.2
-
-echo "==> 安装 ComfyUI 依赖"
-pip install -r requirements.txt
-
-echo "✅ 安装完成: $COMFY_DIR"
-echo "   下一步: bash run_comfyui.sh"
+case "$GPU_TYPE" in
+  nvidia)
+    echo "==> 分派到 NVIDIA/CUDA 安装脚本"
+    bash "$SCRIPT_DIR/install_comfyui_cuda.sh" --workspace "$WORK"
+    ;;
+  amd)
+    echo "==> 分派到 AMD/ROCm 安装脚本"
+    bash "$SCRIPT_DIR/install_comfyui_rocm.sh" --workspace "$WORK"
+    ;;
+  cpu)
+    echo "⚠️  已按 CPU 模式处理,但 ComfyUI 推理强依赖 GPU,不推荐。"
+    echo "   若确实要装,请手动指定: COMFY_GPU=nvidia|amd bash $0 --workspace $WORK"
+    exit 1
+    ;;
+  unknown)
+    echo ""
+    echo "❌ 无法自动识别 GPU 厂商。可能原因:"
+    echo "   - 无 NVIDIA/AMD GPU(纯 CPU 机器 / 云函数 / 容器未透传 GPU)"
+    echo "   - 缺少 lspci 且未装驱动工具(nvidia-smi / rocm-smi / rocminfo)"
+    echo ""
+    echo "   请手动指定后重试:"
+    echo "     NVIDIA 机器: COMFY_GPU=nvidia bash $0 --workspace $WORK"
+    echo "     AMD 机器:    COMFY_GPU=amd    bash $0 --workspace $WORK"
+    exit 1
+    ;;
+esac

@@ -225,9 +225,10 @@ cd $COMFYUI_PATH/models
 
 ## 附录 B · MI300X venv 直装路径(用户实测,备选 Docker)
 
-> 用户实机验证的安装/启动方法,已整理为脚本:
-> - 安装:`scripts/install_comfyui.sh`(克隆 + venv + ROCm7.2 PyTorch + requirements)
-> - 启动:`scripts/run_comfyui.sh`(AMD 加速/防崩溃环境变量 + 启动参数)
+> 用户实机验证的安装/启动方法,已整理为脚本(2026-08-04 起支持 GPU 厂商自动检测):
+> - 安装:`scripts/install_comfyui.sh`(自动检测 NVIDIA/AMD → 分派 CUDA 或 ROCm 安装路线;
+>   也可 `COMFY_GPU=nvidia|amd` 手动指定;ROCm 路线 = 克隆 + venv + ROCm PyTorch + requirements)
+> - 启动:`scripts/run_comfyui.sh`(按 venv 内实际 torch 类型自动选用 CUDA/ROCm 参数)
 
 ### 启动核心(摘录)
 ```bash
@@ -250,3 +251,25 @@ python main.py --listen 0.0.0.0 --port 8188 \
 
 > ⚠ `HSA_OVERRIDE_GFX_VERSION=11.0.0` 是 RX 7900 系需要的;MI300X(gfx942)通常
 > 不需要 override,若启动报架构错误再设,否则可留空。
+
+### 附录 B 排障(08-04 实机踩坑实录)
+
+**现象 1:加载文本编码器时 HIP 崩溃 `HSA_STATUS_ERROR_INVALID_ISA` / `invalid kernel file`**
+- 根因:模型权重是 FP8(如 `umt5_xxl_fp8`),AMD ROCm 对 FP8 量化 kernel 支持不完整。
+- 解法:改用 **FP16 版文本编码器** `umt5_xxl_fp16.safetensors`
+  (`modelscope download --model Comfy-Org/Wan_2.1_ComfyUI_repackaged split_files/text_encoders/umt5_xxl_fp16.safetensors`),
+  放 `models/text_encoders/`,工作流 CLIPLoader 选 `umt5_xxl_fp16`,重启。
+
+**现象 2:`hipErrorLaunchFailure`(CUDA error: unspecified launch failure)**
+- 崩溃点在 `load_sd → copy_`,且日志注明"错误可能异步报告"——真正失败的内核可能更早
+  (fp16 VAE / triton / 上次硬崩溃残留的坏 GPU 状态),不一定是崩溃栈里那个调用。
+- 处置顺序:
+  1. **先复位 GPU**:`pkill -9 python` 清理残留 → 重启 DSW 容器/内核(硬崩溃后设备常卡死,
+     不重启会一直报 launch failure);
+  2. 确认 `models/text_encoders/` 里是 fp16 版(现象 1 的坑);
+  3. 最小参数复测定位:`AMD_SERIALIZE_KERNEL=3 COMFY_FP16_VAE=0 COMFY_ATTN=sdpa bash run_comfyui.sh`
+     (串行化内核,错误会指到真实崩溃点;关掉 fp16 VAE / flash_attn / triton backend);
+  4. 通过后逐个恢复:先 `pip install -U triton`(≥3.7.1,3.6.0 已知 Illegal opcode 崩溃),
+     再开 flash_attn,最后开 fp16-vae。
+- `run_comfyui.sh` 已内置:triton 版本闸门(≥3.7.1 才加 `--enable-triton-backend`)、
+  `COMFY_FP16_VAE=0` 关 fp16 VAE、`COMFY_ATTN=sdpa` 强制 sdpa。
