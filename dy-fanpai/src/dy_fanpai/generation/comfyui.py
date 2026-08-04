@@ -43,8 +43,27 @@ PH_HEIGHT = "__HEIGHT__"
 PH_RESOLUTION = "__RESOLUTION__"
 PH_FRAMES = "__FRAMES__"
 
-# Wan2.2 视频帧率(帧数 = 秒数 × 16fps;官方模板默认)
+# 视频帧率:Wan2.2 = 16fps(帧数 = 秒数 × 16);MiniMax H3 = 24fps,
+# 且帧数必须对齐 17k+5 网格(k 整数,如 5s→124 帧;官方训练范围 ~124-362)。
 FPS = 16
+FPS_H3 = 24
+_H3_GRID = 17
+_H3_GRID_OFFSET = 5
+_H3_MIN_FRAMES = 124  # 官方训练范围 ~124-362(≈5s 起)
+
+
+def frames_for(duration: int, kind: str = "i2v") -> int:
+    """按后端计算视频帧数。
+
+    - h3_i2v:24fps,向上对齐 17k+5 网格(与官方模板 ComfyMathExpression 同公式),
+      且不低于 124 帧(模型训练下限,~5s)。
+    - 其它:16fps(Wan 默认)。
+    """
+    if kind == "h3_i2v":
+        raw = max(5, round(duration * FPS_H3))
+        return max(_H3_MIN_FRAMES, raw + (_H3_GRID_OFFSET - raw % _H3_GRID) % _H3_GRID)
+    return duration * FPS
+
 
 # 上传素材类型 → ComfyUI /upload 端点
 _UPLOAD_EP = {"image": "/upload/image", "audio": "/upload/audio"}
@@ -52,6 +71,7 @@ _UPLOAD_EP = {"image": "/upload/image", "audio": "/upload/audio"}
 # 默认模板路径（config 未设置时回退到 resources/workflows/）
 _DEFAULT_TEMPLATES = {
     "i2v": os.path.join(os.path.dirname(__file__), "..", "..", "..", "resources", "workflows", "comfyui_i2v.json"),
+    "h3_i2v": os.path.join(os.path.dirname(__file__), "..", "..", "..", "resources", "workflows", "comfyui_h3_i2v.json"),
     "mm": os.path.join(os.path.dirname(__file__), "..", "..", "..", "resources", "workflows", "comfyui_mm.json"),
 }
 
@@ -255,7 +275,7 @@ def submit(
     if audio:
         audio_name = _upload(audio, "audio", cfg)
 
-    # 2) 注入占位符(帧数 = 时长 × 16fps)
+    # 2) 注入占位符(帧数按后端:Wan 16fps / H3 24fps+17k+5 网格)
     values = {
         PH_PROMPT: prompt,
         PH_IMAGE: img_names[0] if img_names else "",
@@ -265,7 +285,7 @@ def submit(
         PH_WIDTH: str(int(width)),
         PH_HEIGHT: str(int(height)),
         PH_RESOLUTION: f"{width}x{height}",
-        PH_FRAMES: str(int(duration) * FPS),
+        PH_FRAMES: str(frames_for(int(duration), kind)),
     }
     workflow = inject_placeholders(workflow, values)
     # 图格式 → API 扁平格式(ComfyUI /prompt 只接受扁平 prompt)
@@ -321,6 +341,19 @@ def wait_download(
 def submit_i2v(image_path: str, prompt: str, cfg: Config, duration: int = 5) -> str | None:
     """纯产品 image2video：Wan2.1 i2v 工作流。"""
     pid, _ = submit(prompt, cfg, first_frame=image_path, duration=duration, kind="i2v")
+    return pid
+
+
+def submit_h3_i2v(
+    image_path: str, prompt: str, cfg: Config, duration: int = 5,
+    width: int = 768, height: int = 1344,
+) -> str | None:
+    """纯产品 image2video：MiniMax H3(FL2VA) i2v 工作流(24fps + 原生立体声)。
+
+    H3 原生画布短边 768,9:16 上限 768x1344;默认 768x1344。
+    """
+    pid, _ = submit(prompt, cfg, first_frame=image_path, duration=duration,
+                    width=width, height=height, kind="h3_i2v")
     return pid
 
 

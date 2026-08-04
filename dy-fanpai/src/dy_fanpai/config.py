@@ -88,6 +88,7 @@ class Config:
     # --- 自建 ComfyUI（自有 GPU 部署,替代即梦；工作流模板路径可配）---
     comfyui_base_url: str = ""  # 如 http://192.168.x.x:8188
     comfyui_workflow_i2v: str = ""  # Wan2.1 图生视频模板 JSON 路径
+    comfyui_workflow_h3_i2v: str = ""  # MiniMax H3(FL2VA) 图生视频模板 JSON 路径
     comfyui_workflow_mm: str = ""  # LatentSync 口型模板 JSON 路径
 
     # --- TTS / 换声 ---
@@ -142,6 +143,7 @@ class Config:
             minimax_base_url=_read("MINIMAX_BASE_URL", "https://api.minimaxi.com"),
             comfyui_base_url=_read("COMfyUI_BASE_URL", ""),
             comfyui_workflow_i2v=_read("COMfyUI_WORKFLOW_I2V", ""),
+            comfyui_workflow_h3_i2v=_read("COMfyUI_WORKFLOW_H3_I2V", ""),
             comfyui_workflow_mm=_read("COMfyUI_WORKFLOW_MM", ""),
             cosyvoice_home=_read("COSYVOICE_HOME", os.path.expanduser("~/CosyVoice")),
             seedvc_home=_read("DY_FANPAI_SEEDVC_HOME", os.path.expanduser("~/seed-vc")),
