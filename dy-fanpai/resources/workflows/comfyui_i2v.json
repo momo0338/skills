@@ -277,7 +277,7 @@
    "id": 6,
    "type": "CLIPLoader",
    "widgets_values": [
-    "umt5_xxl_fp8_e4m3fn_scaled.safetensors",
+    "umt5_xxl_fp16.safetensors",
     "wan"
    ],
    "inputs": [
