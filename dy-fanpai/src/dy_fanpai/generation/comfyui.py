@@ -41,6 +41,10 @@ PH_DURATION = "__DURATION__"
 PH_WIDTH = "__WIDTH__"
 PH_HEIGHT = "__HEIGHT__"
 PH_RESOLUTION = "__RESOLUTION__"
+PH_FRAMES = "__FRAMES__"
+
+# Wan2.2 视频帧率(帧数 = 秒数 × 16fps;官方模板默认)
+FPS = 16
 
 # 上传素材类型 → ComfyUI /upload 端点
 _UPLOAD_EP = {"image": "/upload/image", "audio": "/upload/audio"}
@@ -193,7 +197,7 @@ def submit(
     if audio:
         audio_name = _upload(audio, "audio", cfg)
 
-    # 2) 注入占位符
+    # 2) 注入占位符(帧数 = 时长 × 16fps)
     values = {
         PH_PROMPT: prompt,
         PH_IMAGE: img_names[0] if img_names else "",
@@ -203,6 +207,7 @@ def submit(
         PH_WIDTH: str(int(width)),
         PH_HEIGHT: str(int(height)),
         PH_RESOLUTION: f"{width}x{height}",
+        PH_FRAMES: str(int(duration) * FPS),
     }
     workflow = inject_placeholders(workflow, values)
 

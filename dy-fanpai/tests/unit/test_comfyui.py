@@ -198,3 +198,36 @@ def test_service_backend_registered():
 
     backends = S._default_backends()
     assert "comfyui" in backends
+
+
+def test_frames_placeholder_injected(monkeypatch, tmp_path):
+    """__FRAMES__ 应按时长×16fps 注入(5s → 80帧)。"""
+    from dy_fanpai.generation.comfyui import PH_FRAMES, submit_i2v
+
+    tmpl = tmp_path / "i2v.json"
+    tmpl.write_text(json.dumps({
+        "1": {"type": "X", "widgets_values": [PH_FRAMES]}}), encoding="utf-8")
+    img = tmp_path / "a.png"
+    img.write_bytes(b"\x89PNG")
+
+    seen = {}
+
+    class FakeResp:
+        status_code = 200
+        text = '{"prompt_id": "p1"}'
+
+        def json(self):
+            return {"name": "a.png"}
+
+    def fake_post(url, **kw):
+        if "/upload/" in url:
+            return FakeResp()
+        seen["body"] = kw["json"]
+        return FakeResp()
+
+    monkeypatch.setattr(comfyui.requests, "post", fake_post)
+    cfg = Config(comfyui_base_url="http://c:8188", comfyui_workflow_i2v=str(tmpl))
+    pid = submit_i2v(str(img), "x", cfg, duration=5)
+    assert pid == "p1"
+    assert seen["body"]["prompt"]["1"]["widgets_values"][0] == str(5 * comfyui.FPS), \
+        "5s 段应注入 80 帧"
