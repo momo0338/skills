@@ -22,20 +22,39 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --work-dir)  WORK_DIR="$2";  shift 2 ;;
     --comfy-dir) COMFY_DIR="$2"; shift 2 ;;
+    --only)      ONLY="$2";      shift 2 ;;   # i2v | t2v | both(默认 both)
     *) echo "未知参数: $1"; exit 1 ;;
   esac
 done
+ONLY="${ONLY:-both}"
 
-# 方案 A:14B I2V fp16(纯产品段主力,192GB 显存满配)
-# 共 4 个文件 ≈ 59.7GB
-FILES=(
-  "split_files/diffusion_models/wan2.2_i2v_high_noise_14B_fp16.safetensors"
-  "split_files/diffusion_models/wan2.2_i2v_low_noise_14B_fp16.safetensors"
+# 公共文件:CLIP + VAE(两套工作流共用,只下一份)
+COMMON_FILES=(
   "split_files/vae/wan_2.1_vae.safetensors"
   "split_files/text_encoders/umt5_xxl_fp8_e4m3fn_scaled.safetensors"
 )
 
-echo "==> 下载目录: $WORK_DIR"
+# I2V 图生视频(方案 A,纯产品段主力,192GB 满配 fp16;各 26.6GB)
+I2V_FILES=(
+  "split_files/diffusion_models/wan2.2_i2v_high_noise_14B_fp16.safetensors"
+  "split_files/diffusion_models/wan2.2_i2v_low_noise_14B_fp16.safetensors"
+)
+
+# T2V 文生视频(fp8;各 13.3GB,CLIP/VAE 与 I2V 共用)
+T2V_FILES=(
+  "split_files/diffusion_models/wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors"
+  "split_files/diffusion_models/wan2.2_t2v_low_noise_14B_fp8_scaled.safetensors"
+)
+
+FILES=("${COMMON_FILES[@]}")
+case "$ONLY" in
+  i2v)  FILES+=("${I2V_FILES[@]}") ;;
+  t2v)  FILES+=("${T2V_FILES[@]}") ;;
+  both) FILES+=("${I2V_FILES[@]}" "${T2V_FILES[@]}") ;;
+  *) echo "错误: --only 取值 i2v|t2v|both"; exit 1 ;;
+esac
+
+echo "==> 下载目录: $WORK_DIR | 模式: $ONLY"
 mkdir -p "$WORK_DIR"
 
 # 下载每个文件(可断点续传;modelscope 按文件粒度,重复跑跳过已存在)
@@ -45,7 +64,7 @@ for f in "${FILES[@]}"; do
 done
 
 echo ""
-echo "✅ 下载完成,共 ${#FILES[@]} 个文件 ≈ 59.7GB"
+echo "✅ 下载完成,共 ${#FILES[@]} 个文件"
 ls -lhR "$WORK_DIR/split_files" 2>/dev/null | head -30 || true
 
 # -----------------------------------------------------------------------------
@@ -58,11 +77,14 @@ if [ -n "$COMFY_DIR" ]; then
   cp "$WORK_DIR"/split_files/diffusion_models/*.safetensors "$COMFY_DIR"/models/diffusion_models/
   cp "$WORK_DIR"/split_files/vae/*.safetensors               "$COMFY_DIR"/models/vae/
   cp "$WORK_DIR"/split_files/text_encoders/*.safetensors     "$COMFY_DIR"/models/text_encoders/
-  echo "✅ 已拷贝。ComfyUI 工作流加载时选择:"
-  echo "   - Load Diffusion Model 1: wan2.2_i2v_high_noise_14B_fp16.safetensors"
-  echo "   - Load Diffusion Model 2: wan2.2_i2v_low_noise_14B_fp16.safetensors"
-  echo "   - Load CLIP:              umt5_xxl_fp8_e4m3fn_scaled.safetensors"
-  echo "   - Load VAE:               wan_2.1_vae.safetensors"
+  echo "✅ 已拷贝。工作流加载时按类型选择:"
+  echo "   I2V 工作流(图生视频):"
+  echo "     Load Diffusion Model 1: wan2.2_i2v_high_noise_14B_fp16.safetensors"
+  echo "     Load Diffusion Model 2: wan2.2_i2v_low_noise_14B_fp16.safetensors"
+  echo "   T2V 工作流(文生视频):"
+  echo "     Load Diffusion Model 1: wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors"
+  echo "     Load Diffusion Model 2: wan2.2_t2v_low_noise_14B_fp8_scaled.safetensors"
+  echo "   共用: Load CLIP = umt5_xxl_fp8_e4m3fn_scaled.safetensors | Load VAE = wan_2.1_vae.safetensors"
 else
   echo ""
   echo "提示:未指定 --comfy-dir,模型在 $WORK_DIR;"
