@@ -220,3 +220,33 @@ cd $COMFYUI_PATH/models
 1. 手动跑通 i2v 工作流(一张产品图 + prompt → 视频)与口型工作流(参考图 + S3.wav → 口型视频);
 2. 告诉我:机器 IP、确认两套工作流可用;
 3. 我启用 `generation/comfyui.py`(配置 `COMfyUI_BASE_URL=http://<IP>:8188`),跑全链路。
+
+---
+
+## 附录 B · MI300X venv 直装路径(用户实测,备选 Docker)
+
+> 用户实机验证的安装/启动方法,已整理为脚本:
+> - 安装:`scripts/install_comfyui.sh`(克隆 + venv + ROCm7.2 PyTorch + requirements)
+> - 启动:`scripts/run_comfyui.sh`(AMD 加速/防崩溃环境变量 + 启动参数)
+
+### 启动核心(摘录)
+```bash
+# AMD 专属加速与防崩溃(核心!)
+export FLASH_ATTENTION_TRITON_AMD_ENABLE="TRUE"
+export TORCH_ROCM_AOTRITON_ENABLE_EXPERIMENTAL=1
+export HSA_OVERRIDE_GFX_VERSION=11.0.0
+export PYTORCH_HIP_ALLOC_CONF="garbage_collection_threshold:0.8,expandable_segments:True"
+
+python main.py --listen 0.0.0.0 --port 8188 \
+  --disable-xformers --use-flash-attention --fp16-vae
+```
+
+### 与附录 A(Docker 镜像)的区别
+| | 附录 A Docker | 附录 B venv 直装 |
+|---|---|---|
+| 环境 | rocm/comfyui 官方镜像,开箱即用 | 手动装,可控性高 |
+| 启动 | `--gpu-only` | `--disable-xformers --use-flash-attention --fp16-vae` |
+| 适用 | 快速起服务 | 需要定制环境/装自定义节点 |
+
+> ⚠ `HSA_OVERRIDE_GFX_VERSION=11.0.0` 是 RX 7900 系需要的;MI300X(gfx942)通常
+> 不需要 override,若启动报架构错误再设,否则可留空。
