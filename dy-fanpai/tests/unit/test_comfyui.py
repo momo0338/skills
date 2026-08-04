@@ -86,8 +86,15 @@ def test_submit_uploads_and_posts(monkeypatch, tmp_path):
     wav.write_bytes(b"RIFF")
     tmpl = tmp_path / "i2v.json"
     tmpl.write_text(json.dumps({
-        "1": {"type": "LoadImage", "inputs": {"image": PH_IMAGE}},
-        "2": {"type": "LoadAudio", "inputs": {"audio": PH_AUDIO}},
+        "nodes": [
+            {"id": 1, "type": "LoadImage",
+             "widgets_values": [PH_IMAGE, "image"],
+             "inputs": [{"name": "image"}, {"name": "upload"}]},
+            {"id": 2, "type": "LoadAudio",
+             "widgets_values": [PH_AUDIO],
+             "inputs": [{"name": "audio"}]},
+        ],
+        "links": [],
     }), encoding="utf-8")
 
     calls = {"uploads": [], "posted": None}
@@ -206,7 +213,11 @@ def test_frames_placeholder_injected(monkeypatch, tmp_path):
 
     tmpl = tmp_path / "i2v.json"
     tmpl.write_text(json.dumps({
-        "1": {"type": "X", "widgets_values": [PH_FRAMES]}}), encoding="utf-8")
+        "nodes": [{"id": 1, "type": "X",
+                   "widgets_values": [PH_FRAMES],
+                   "inputs": [{"name": "0"}]}],
+        "links": [],
+    }), encoding="utf-8")
     img = tmp_path / "a.png"
     img.write_bytes(b"\x89PNG")
 
@@ -229,5 +240,6 @@ def test_frames_placeholder_injected(monkeypatch, tmp_path):
     cfg = Config(comfyui_base_url="http://c:8188", comfyui_workflow_i2v=str(tmpl))
     pid = submit_i2v(str(img), "x", cfg, duration=5)
     assert pid == "p1"
-    assert seen["body"]["prompt"]["1"]["widgets_values"][0] == str(5 * comfyui.FPS), \
+    # 转换后是扁平 prompt:{"1": {"class_type": "X", "inputs": {"0": "80"}}}
+    assert seen["body"]["prompt"]["1"]["inputs"]["0"] == str(5 * comfyui.FPS), \
         "5s 段应注入 80 帧"

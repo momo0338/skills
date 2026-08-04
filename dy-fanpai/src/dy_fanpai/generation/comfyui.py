@@ -59,6 +59,64 @@ _DEFAULT_TEMPLATES = {
 # ---------------------------------------------------------------------------
 # 确定性函数（离线可测）
 # ---------------------------------------------------------------------------
+def graph_to_api_prompt(workflow: dict) -> dict:
+    """把「画布图格式」(nodes/links) 工作流转为 ComfyUI /prompt API 扁平格式。
+
+    ComfyUI 网页保存的是 graph 格式;HTTP API 需要:
+        {"<node_id>": {"class_type": "<type>", "inputs": {...}}, ...}
+    连接由 links 的 [id, from, from_slot, to, to_slot, type] 表示,
+    在目标节点 inputs 中写成 {"<input_name>": ["<from_node_id>", <from_slot>]}。
+    关键:link 的 to_slot 是**输入槽索引**,须映射到该节点 input 的 name
+    (模板 nodes[i].inputs[to_slot].name;无 inputs 定义时退化为 str(to_slot))。
+    widgets_values 只含「非 link」输入的值,按 node_inputs 顺序跳过 linked 后填充。
+    """
+    nodes = {n["id"]: n for n in workflow.get("nodes", [])}
+    links = workflow.get("links", [])
+
+    # 目标节点 -> {to_slot: [from_id, from_slot]}
+    link_map: dict[int, dict[int, list]] = {}
+    for lnk in links:
+        _, frm, frm_slot, to, to_slot, _ = lnk
+        link_map.setdefault(to, {})[to_slot] = [frm, frm_slot]
+
+    prompt: dict = {}
+    for nid, n in nodes.items():
+        nid_str = str(nid)
+        cls = n["type"]
+        widgets = n.get("widgets_values", [])
+        node_inputs = n.get("inputs", [])
+        inputs: dict = {}
+
+        def input_name(slot_idx: int) -> str:
+            if slot_idx < len(node_inputs) and node_inputs[slot_idx].get("name"):
+                return str(node_inputs[slot_idx]["name"])
+            return str(slot_idx)
+
+        # 1) link 连接:slot 索引 → input name
+        linked_names = set()
+        for to_slot, link_ref in link_map.get(nid, {}).items():
+            nm = input_name(to_slot)
+            inputs[nm] = link_ref
+            linked_names.add(nm)
+
+        # 2) widgets 填充未连接 input(按 node_inputs 顺序跳过 linked)
+        if node_inputs:
+            wi = 0
+            for inp in node_inputs:
+                nm = inp.get("name", str(wi))
+                if nm not in linked_names and wi < len(widgets):
+                    inputs[nm] = widgets[wi]
+                    wi += 1
+        else:
+            # 旧模板:无 inputs 定义,所有 widgets 按 0..n 命名(仅当未被 link 占用)
+            for wi, v in enumerate(widgets):
+                nm = str(wi)
+                if nm not in linked_names:
+                    inputs[nm] = v
+        prompt[nid_str] = {"class_type": cls, "inputs": inputs}
+    return prompt
+
+
 def inject_placeholders(workflow: dict, values: dict[str, str]) -> dict:
     """把工作流 JSON 中所有字符串字段里的占位符替换为实际值（确定性）。
 
@@ -210,6 +268,8 @@ def submit(
         PH_FRAMES: str(int(duration) * FPS),
     }
     workflow = inject_placeholders(workflow, values)
+    # 图格式 → API 扁平格式(ComfyUI /prompt 只接受扁平 prompt)
+    workflow = graph_to_api_prompt(workflow)
 
     # 3) 提交(退避重试;参数级 4xx 不重试)
     for attempt in range(retries):
