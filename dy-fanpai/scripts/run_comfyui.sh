@@ -134,12 +134,15 @@ elif [ "$GPU_TYPE" = "nvidia" ]; then
   export PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True"
 
   # 注意力后端: xformers > flash-attn > split-cross-attention(sdpa)
+  # 注意: 新版 ComfyUI 不再接受 --xformers 参数(08-04 实机启动报 unrecognized arguments),
+  #       xformers 在 venv 内已装时由 ComfyUI 自动启用,无需手动传参;
+  #       仅 --disable-xformers(关)保留。故检测到 xformers 时 ATTN_ARGS 留空即可。
   if [[ "${COMFY_ATTN:-auto}" == "sdpa" ]]; then
     ATTN_ARGS="--use-split-cross-attention"
     echo "==> 强制 sdpa 注意力(--use-split-cross-attention,COMFY_ATTN=sdpa)"
   elif python -c "import xformers" >/dev/null 2>&1; then
-    echo "==> 检测到 xformers,使用 --xformers"
-    ATTN_ARGS="--xformers"
+    echo "==> 检测到 xformers,自动启用(新版 ComfyUI 无需 --xformers 参数)"
+    ATTN_ARGS=""
   elif python -c "import flash_attn" >/dev/null 2>&1; then
     echo "==> 未找到 xformers,检测到 flash_attn,使用 --use-flash-attention"
     ATTN_ARGS="--use-flash-attention"
@@ -185,7 +188,7 @@ echo "==> 启动 ComfyUI: 端口 $COMFY_PORT"
 # --disable-auto-launch:  无浏览器环境,禁止自动拉起浏览器
 # $VRAM_ARGS:             AMD 默认 --highvram 系;NVIDIA 默认无,COMFY_HIGHVRAM=1 开启
 # $EXTRA_ARGS:            AMD 加 --disable-xformers;NVIDIA 无
-# $ATTN_ARGS:             按平台自动选择 xformers/flash-attention/sdpa
+# $ATTN_ARGS:             NVIDIA 侧 xformers 自动启用(留空);flash-attention/sdpa 按需显式传参
 # $TRITON_ARGS:           ROCm 且 triton>=3.7.1 才启用 --enable-triton-backend
 # $VAE_ARGS:              COMFY_FP16_VAE=0 关闭 --fp16-vae
 # --listen 0.0.0.0:       允许远程访问(供 dy-fanpai 调用)
