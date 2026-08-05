@@ -125,7 +125,7 @@ dy-fanpai 侧(`generation/comfyui.py`,我写好等你)将:
 # 1) 手动跑通一段:网页上载入 i2v 工作流,传一张产品图 + prompt,生成成功
 # 2) 口型工作流:传参考图 + S3.wav,生成成功,肉眼确认口型对得上
 # 3) 告诉我:机器 IP/端口、两套工作流 JSON(或 API 参数格式)、模型档位
-# 4) 我启用 generation/comfyui.py,配置 COMfyUI_BASE_URL,跑 dy-fanpai 全链路
+# 4) 我启用 generation/comfyui.py,配置 COMFYUI_BASE_URL,跑 dy-fanpai 全链路
 ```
 
 ---
@@ -219,7 +219,7 @@ cd $COMFYUI_PATH/models
 ### 完成后对接 dy-fanpai
 1. 手动跑通 i2v 工作流(一张产品图 + prompt → 视频)与口型工作流(参考图 + S3.wav → 口型视频);
 2. 告诉我:机器 IP、确认两套工作流可用;
-3. 我启用 `generation/comfyui.py`(配置 `COMfyUI_BASE_URL=http://<IP>:8188`),跑全链路。
+3. 我启用 `generation/comfyui.py`(配置 `COMFYUI_BASE_URL=http://<IP>:8188`),跑全链路。
 
 ---
 

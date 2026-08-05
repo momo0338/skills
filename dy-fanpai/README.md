@@ -12,7 +12,7 @@
 
 ## 安装（开发）
 
-要求 Python 3.12（推荐用 uv）：
+要求 Python ≥3.12（推荐用 uv；当前开发环境为 3.13）：
 
 ```bash
 uv venv --python 3.12.13
@@ -41,9 +41,12 @@ DY_FANPAI_JY_DRAFTS、DY_FANPAI_JY_PYTHON、DY_FANPAI_DOWNLOAD_PROXY 等）。
 dy-fanpai doctor
 dy-fanpai new --video target.mp4 --workspace ~/dy_fp/runs/demo
 dy-fanpai status ~/dy_fp/runs/demo
-dy-fanpai run ~/dy_fp/runs/demo --stage reverse
+dy-fanpai run ~/dy_fp/runs/demo --stage reverse --leg qwen     # 反推腿: seed|kimi|qwen
 dy-fanpai approve ~/dy_fp/runs/demo plan
+dy-fanpai run ~/dy_fp/runs/demo --stage audio --tts-backend voicebox   # 配音: voxcpm|voicebox
 dy-fanpai approve ~/dy_fp/runs/demo generation --segments S1 --provider dreamina --max-submits 1
+dy-fanpai run ~/dy_fp/runs/demo --stage generate --i2v-backend comfyui  # 生成: dreamina|ark|xyq|minimax|comfyui|comfyui_h3
+dy-fanpai tts --backend voxcpm --only S1    # 独立配音(不依赖 run 流水线)
 dy-fanpai retry ~/dy_fp/runs/demo
 dy-fanpai deliver ~/dy_fp/runs/demo --mode final|jianying|both
 dy-fanpai clean ~/dy_fp/runs/demo --dry-run
@@ -61,5 +64,11 @@ pyright
 
 ## 状态
 
-当前处于 **WP1（骨架与核心）完成、接口冻结** 阶段。业务实现由 WP2–WP5
-在各自子包内完成，WP6 集成与发布后方可宣布替代原项目。
+**WP0–WP6 已全部完成**（见 docs/CHANGELOG.md）：七阶段流水线 + 四闸口集成就绪，
+可插拔后端矩阵——反推 3 腿（seed/kimi/qwen）、生成 6 后端（dreamina 默认 /
+ark / xyq / minimax / comfyui / comfyui_h3）、TTS 配音 2 后端（voxcpm 在线 /
+voicebox 本地 Qwen3-TTS）。
+
+仍未宣布「替代原项目」：Live 全链路验收与发布审计未完成（即梦 CLI 登录、
+剪映实机验收、私有千川包等外部依赖未验收）。缺合法素材/音色/剪映实机时，
+对应功能标记「实现完成，外部验收未完成」，不得宣称全部完成。

@@ -2,8 +2,8 @@
 
 在自有 ComfyUI 机器上搭好工作流后,导出 JSON 保存到本目录,并在 config 指定路径:
 
-- `comfyui_i2v.json` — Wan2.1 图生视频(纯产品段)。config 键 `COMfyUI_WORKFLOW_I2V`。
-- `comfyui_mm.json` — LatentSync 口型(口播段)。config 键 `COMfyUI_WORKFLOW_MM`。
+- `comfyui_i2v.json` — Wan2.1 图生视频(纯产品段)。config 键 `COMFYUI_WORKFLOW_I2V`。
+- `comfyui_mm.json` — LatentSync 口型(口播段)。config 键 `COMFYUI_WORKFLOW_MM`。
 
 ## 占位符约定(模板内用这些字面量,提交时被替换)
 

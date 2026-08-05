@@ -2,6 +2,14 @@
 
 本文件记录公共接口冻结与变更（执行方案 §11 WP1 / §12.2）。
 
+## [0.1.0] — 2026-08-05 · 环境变量命名统一(COMFYUI_*)
+
+### 变更
+- ComfyUI 相关环境变量由混合大小写 `COMfyUI_*` 统一为全大写 `COMFYUI_*`：
+  `COMFYUI_BASE_URL` / `COMFYUI_WORKFLOW_I2V` / `COMFYUI_WORKFLOW_H3_I2V` /
+  `COMFYUI_WORKFLOW_MM`（config.py 读取键、doctor 展示键同步更新）。
+- 旧名 `COMfyUI_*` 不再识别；已配置旧名的用户环境需同步改名（项目内无历史配置残留）。
+
 ## [0.1.0] — 2026-08-03 · WP1 冻结
 
 WP1（骨架与核心）完成，以下公共接口冻结，后续修改须走变更流程：
