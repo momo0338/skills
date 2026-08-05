@@ -42,6 +42,20 @@ PH_WIDTH = "__WIDTH__"
 PH_HEIGHT = "__HEIGHT__"
 PH_RESOLUTION = "__RESOLUTION__"
 PH_FRAMES = "__FRAMES__"
+PH_ASPECT = "__ASPECT__"  # H3 ResolutionSelector 的 aspect_ratio 枚举串
+PH_SEED = "__SEED__"  # H3 随机种子
+
+# H3 模板 ResolutionSelector 支持的 8 档比例（与 scripts/h3_video_*.js 一致）
+_ASPECT_OPTIONS: list[tuple[str, float]] = [
+    ("1:1 (Square)", 1),
+    ("2:3 (Portrait Photo)", 2 / 3),
+    ("3:2 (Photo)", 3 / 2),
+    ("3:4 (Portrait Standard)", 3 / 4),
+    ("4:3 (Standard)", 4 / 3),
+    ("9:16 (Portrait Widescreen)", 9 / 16),
+    ("16:9 (Widescreen)", 16 / 9),
+    ("21:9 (Ultrawide)", 21 / 9),
+]
 
 # 视频帧率:Wan2.2 = 16fps(帧数 = 秒数 × 16);MiniMax H3 = 24fps,
 # 且帧数必须对齐 17k+5 网格(k 整数,如 5s→124 帧;官方训练范围 ~124-362)。
@@ -65,6 +79,39 @@ def frames_for(duration: int, kind: str = "i2v") -> int:
     return duration * FPS
 
 
+def aspect_ratio_for(width: int, height: int) -> str:
+    """H3 ResolutionSelector 的 aspect_ratio 枚举串（取最接近的档位）。
+
+    与 scripts/h3_video_*.js 的 pickAspectRatio 同逻辑:720x1280 → "9:16"。
+    """
+    ratio = (width or 16) / (height or 9)
+    return min(_ASPECT_OPTIONS, key=lambda o: abs(o[1] - ratio))[0]
+
+
+def prune_r2v_single(workflow: dict) -> dict:
+    """R2V 单参考图时:移除第二个 LoadImage 与 ref_images.ref_image_1 引用。
+
+    模板默认双图(LoadImage __IMAGE__/__IMAGE2__ + ref_image_0/1);只有一张
+    参考图时删掉第二个 LoadImage 节点及其在所有 inputs 中的引用,避免提交
+    空文件名导致 ComfyUI 报错。返回新 dict,不动原模板。
+    """
+    out = json.loads(json.dumps(workflow))  # 深拷贝
+    rm_id: str | None = None
+    for nid, node in out.items():
+        ins = node.get("inputs", {})
+        if node.get("class_type") == "LoadImage" and ins.get("image") == PH_IMAGE2:
+            rm_id = nid
+            break
+    if rm_id is None:
+        return out
+    del out[rm_id]
+    for node in out.values():
+        ins = node.get("inputs", {})
+        for k in [k for k, v in ins.items() if isinstance(v, list) and v and str(v[0]) == rm_id]:
+            del ins[k]
+    return out
+
+
 # 上传素材类型 → ComfyUI /upload 端点
 _UPLOAD_EP = {"image": "/upload/image", "audio": "/upload/audio"}
 
@@ -72,6 +119,8 @@ _UPLOAD_EP = {"image": "/upload/image", "audio": "/upload/audio"}
 _DEFAULT_TEMPLATES = {
     "i2v": os.path.join(os.path.dirname(__file__), "..", "..", "..", "resources", "workflows", "comfyui_i2v.json"),
     "h3_i2v": os.path.join(os.path.dirname(__file__), "..", "..", "..", "resources", "workflows", "comfyui_h3_i2v.json"),
+    "h3_t2v": os.path.join(os.path.dirname(__file__), "..", "..", "..", "resources", "workflows", "comfyui_h3_t2v.json"),
+    "h3_r2v": os.path.join(os.path.dirname(__file__), "..", "..", "..", "resources", "workflows", "comfyui_h3_r2v.json"),
     "mm": os.path.join(os.path.dirname(__file__), "..", "..", "..", "resources", "workflows", "comfyui_mm.json"),
 }
 
@@ -204,6 +253,13 @@ def parse_history_out(out: str) -> tuple[str, list[dict] | None]:
     return "pending", None
 
 
+def _rand_seed() -> int:
+    """H3 随机种子(0..2^31,与 JS 脚本 Math.random()*2**31 一致)。"""
+    import random
+
+    return random.randrange(0, 2**31)
+
+
 def _template_path(cfg: Config, kind: str) -> str:
     """取工作流模板路径（config 优先,否则默认 resources/workflows/）。"""
     p = getattr(cfg, f"comfyui_workflow_{kind}", "") or _DEFAULT_TEMPLATES[kind]
@@ -255,11 +311,15 @@ def submit(
     height: int = 1280,
     kind: str = "i2v",
     retries: int = 3,
+    seed: int | None = None,
 ) -> tuple[str | None, str]:
     """提交 ComfyUI 工作流（编排层，含退避重试）。返回 (prompt_id|None, err)。
 
     流程:上传素材(图/音频)→ 注入占位符 → POST /prompt。
-    kind: "i2v"(纯产品) | "mm"(口播,需 LatentSync 工作流)。
+    kind: "i2v"(纯产品) | "mm"(口播,需 LatentSync 工作流)
+          | "h3_t2v"(H3 文生) | "h3_r2v"(H3 参考图生,1~2 张参考图)。
+    模板兼容两种格式:graph(nodes/links,走 graph_to_api_prompt)与
+    扁平(顶层即 {node_id: {class_type, inputs}},直接提交)。
     """
     tmpl_path = _template_path(cfg, kind)
     if not os.path.exists(tmpl_path):
@@ -275,7 +335,8 @@ def submit(
     if audio:
         audio_name = _upload(audio, "audio", cfg)
 
-    # 2) 注入占位符(帧数按后端:Wan 16fps / H3 24fps+17k+5 网格)
+    # 2) 注入占位符(帧数按后端:Wan 16fps / H3 24fps+17k+5 网格;
+    #    H3 模板用 aspect_ratio 枚举 + 随机种子)
     values = {
         PH_PROMPT: prompt,
         PH_IMAGE: img_names[0] if img_names else "",
@@ -286,10 +347,17 @@ def submit(
         PH_HEIGHT: str(int(height)),
         PH_RESOLUTION: f"{width}x{height}",
         PH_FRAMES: str(frames_for(int(duration), kind)),
+        PH_ASPECT: aspect_ratio_for(int(width), int(height)),
+        PH_SEED: str(seed if seed is not None else _rand_seed()),
     }
+    if kind == "h3_r2v" and len(img_names) < 2:
+        # 单参考图:先裁剪模板(移除第二个 LoadImage 与 ref_image_1 引用),
+        # 再注入,避免 __IMAGE2__ 已被替换成空串而匹配不到
+        workflow = prune_r2v_single(workflow)
     workflow = inject_placeholders(workflow, values)
-    # 图格式 → API 扁平格式(ComfyUI /prompt 只接受扁平 prompt)
-    workflow = graph_to_api_prompt(workflow)
+    # 图格式 → API 扁平格式(扁平模板已可直接提交)
+    if "nodes" in workflow:
+        workflow = graph_to_api_prompt(workflow)
 
     # 3) 提交(退避重试;参数级 4xx 不重试)
     for attempt in range(retries):
@@ -361,6 +429,33 @@ def submit_mm(image_paths: list[str], audio_path: str | None, prompt: str, cfg: 
               duration: int = 5) -> str | None:
     """口播（LatentSync 工作流,experimental）：参考图 + 段配音。"""
     pid, _ = submit(prompt, cfg, images=image_paths, audio=audio_path, duration=duration, kind="mm")
+    return pid
+
+
+def submit_h3_t2v(
+    prompt: str, cfg: Config, duration: int = 5,
+    width: int = 768, height: int = 1344, seed: int | None = None,
+) -> str | None:
+    """文生视频：MiniMax H3(FL2VA) t2v 工作流(24fps + 原生立体声,无图输入)。
+
+    默认 768x1344(9:16, H3 画布短边 768 上限)。
+    """
+    pid, _ = submit(prompt, cfg, duration=duration, width=width, height=height,
+                    kind="h3_t2v", seed=seed)
+    return pid
+
+
+def submit_h3_r2v(
+    image_paths: list[str], prompt: str, cfg: Config, duration: int = 5,
+    width: int = 768, height: int = 1344, seed: int | None = None,
+) -> str | None:
+    """参考生视频：MiniMax H3(ref2va) r2v 工作流(1~2 张参考图,24fps)。
+
+    参考图驱动(动作/姿态/风格迁移);单图时自动移除第二个 LoadImage 与
+    ref_image_1 引用。默认 768x1344。
+    """
+    pid, _ = submit(prompt, cfg, images=image_paths, duration=duration,
+                    width=width, height=height, kind="h3_r2v", seed=seed)
     return pid
 
 

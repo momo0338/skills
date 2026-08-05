@@ -134,6 +134,16 @@ def _default_backends() -> dict:
                 seg["anchor"], seg["prompt"], cfg, duration=int(seg["duration"])),
             "wait": lambda tid, dst, cfg: comfyui.wait_download(tid, dst, cfg),
         },
+        "comfyui_h3_t2v": {
+            "submit": lambda seg, ad, cfg: comfyui.submit_h3_t2v(
+                seg["prompt"], cfg, duration=int(seg["duration"])),
+            "wait": lambda tid, dst, cfg: comfyui.wait_download(tid, dst, cfg),
+        },
+        "comfyui_h3_r2v": {
+            "submit": lambda seg, ad, cfg: comfyui.submit_h3_r2v(
+                [seg["anchor"]], seg["prompt"], cfg, duration=int(seg["duration"])),
+            "wait": lambda tid, dst, cfg: comfyui.wait_download(tid, dst, cfg),
+        },
     }
 
 

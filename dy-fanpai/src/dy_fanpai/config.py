@@ -89,6 +89,8 @@ class Config:
     comfyui_base_url: str = ""  # 如 http://192.168.x.x:8188
     comfyui_workflow_i2v: str = ""  # Wan2.1 图生视频模板 JSON 路径
     comfyui_workflow_h3_i2v: str = ""  # MiniMax H3(FL2VA) 图生视频模板 JSON 路径
+    comfyui_workflow_h3_t2v: str = ""  # MiniMax H3 文生视频模板 JSON 路径
+    comfyui_workflow_h3_r2v: str = ""  # MiniMax H3 参考生视频模板 JSON 路径
     comfyui_workflow_mm: str = ""  # LatentSync 口型模板 JSON 路径
 
     # --- TTS / 换声 ---
@@ -162,6 +164,8 @@ class Config:
             comfyui_base_url=_read("COMFYUI_BASE_URL", ""),
             comfyui_workflow_i2v=_read("COMFYUI_WORKFLOW_I2V", ""),
             comfyui_workflow_h3_i2v=_read("COMFYUI_WORKFLOW_H3_I2V", ""),
+            comfyui_workflow_h3_t2v=_read("COMFYUI_WORKFLOW_H3_T2V", ""),
+            comfyui_workflow_h3_r2v=_read("COMFYUI_WORKFLOW_H3_R2V", ""),
             comfyui_workflow_mm=_read("COMFYUI_WORKFLOW_MM", ""),
             cosyvoice_home=_read("COSYVOICE_HOME", os.path.expanduser("~/CosyVoice")),
             seedvc_home=_read("DY_FANPAI_SEEDVC_HOME", os.path.expanduser("~/seed-vc")),
