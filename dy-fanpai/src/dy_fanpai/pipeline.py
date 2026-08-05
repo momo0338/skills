@@ -140,11 +140,16 @@ def _exec_deliver(ws: Workspace, run, *, bgm: str | None = None, jy_drafts: str 
     print(f"[deliver] 剪映草稿(规格) → {p}")
 
 
-def _exec_audio(ws: Workspace, run) -> None:
-    """P3 音频：原音切段（纯本地 ffmpeg，不需外部服务）。
+def _exec_audio(ws: Workspace, run, *, tts_backend: str | None = None) -> None:
+    """P3 音频：原音切段 + 可选 TTS 配音（纯本地 ffmpeg / 配音后端）。
 
     输入 planning/segments.json + 源视频 → 输出 audio/segments/{seg}.wav +
-    audio/timing.json。仅在 live 模式调用（离线跳过不虚报）。
+    audio/timing.json。
+
+    - tts_backend 为空/None → 原音切段（忠实复刻 cut_original_audio）；
+    - tts_backend 指定（voxcpm / voicebox / 注册表扩展）→ 原音切段
+      后调用 tts_backend.synthesize 生成配音（产物同名 wav 覆盖，供 gen 的
+      reference_audio 用）。仅在 live 模式调用（离线跳过不虚报）。
     """
     plan_path = ws.planning / "segments.json"
     if not plan_path.exists():
@@ -170,8 +175,22 @@ def _exec_audio(ws: Workspace, run) -> None:
         import shutil
 
         shutil.copy(src_timing, timing_dst)
-    run.stage_results["audio"] = {"mode": "source", "segments": len(timing)}
-    print(f"[run] 原音切段完成：{len(timing)} 段 → audio/segments/ + timing.json")
+
+    mode = "source"
+    if tts_backend:
+        cfg = Config.load()
+        from .audio import tts_backend as tb
+
+        mode = f"tts:{tts_backend}"
+        timing = tb.synthesize(str(plan_path), str(seg_dir), tts_backend, cfg)
+        # 配音 timing 同步到 audio/timing.json（原音切段的 timing 被配音时序替代）
+        if timing:
+            timing_dst.write_text(
+                json.dumps(timing, ensure_ascii=False, indent=1), encoding="utf-8"
+            )
+
+    run.stage_results["audio"] = {"mode": mode, "segments": len(timing)}
+    print(f"[run] 音频完成（{mode}）：{len(timing)} 段 → audio/segments/ + timing.json")
 
 
 def execute_stage(
@@ -183,6 +202,7 @@ def execute_stage(
     bgm: str | None = None,
     jy_drafts: str | None = None,
     leg: str | None = None,
+    tts_backend: str | None = None,
 ) -> Stage:
     """执行单个阶段（先闸口检查，未批准抛 GateBlocked）。返回该阶段。"""
     gate = required_gate(stage)
@@ -201,7 +221,7 @@ def execute_stage(
         executed = True
     elif stage == Stage.AUDIO:
         if run.live:
-            _exec_audio(ws, run)
+            _exec_audio(ws, run, tts_backend=tts_backend)
             executed = True
         else:
             _skip_offline(stage, live=False)
@@ -228,6 +248,7 @@ def run_flow(
     bgm: str | None = None,
     jy_drafts: str | None = None,
     leg: str | None = None,
+    tts_backend: str | None = None,
 ) -> None:
     """从 current_stage 跑到目标 stage（默认 DELIVER）；遇未批准闸口即停。"""
     target = stage or Stage.DELIVER
@@ -235,4 +256,5 @@ def run_flow(
     start_idx = order.index(run.current_stage) if run.current_stage in order else 0
     end_idx = order.index(target)
     for st in order[start_idx:end_idx + 1]:
-        execute_stage(st, ws, run, backends=backends, bgm=bgm, jy_drafts=jy_drafts, leg=leg)
+        execute_stage(st, ws, run, backends=backends, bgm=bgm, jy_drafts=jy_drafts,
+                      leg=leg, tts_backend=tts_backend)

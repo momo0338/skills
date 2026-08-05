@@ -8,6 +8,7 @@ retry / deliver / clean。WP1 仅实现骨架与可立即落地的 new/status/do
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
@@ -37,6 +38,15 @@ def _build_parser() -> argparse.ArgumentParser:
     rn.add_argument("--stage", choices=[s.value for s in Stage], default=None)
     rn.add_argument("--leg", choices=["seed", "kimi", "qwen"], default=None,
                     help="反推腿（seed 默认 / kimi / qwen），仅 live reverse 阶段生效")
+    rn.add_argument("--tts-backend", default=None,
+                    help="audio 阶段配音后端（voxcpm / voicebox / 注册表扩展；"
+                         "默认取配置 DY_FANPAI_TTS_BACKEND，空=只原音切段）")
+
+    tt = sub.add_parser("tts", help="仅执行 TTS 配音（不走完整流水线）")
+    tt.add_argument("workspace")
+    tt.add_argument("--backend", default=None,
+                    help="配音后端（voxcpm / voicebox），默认取配置")
+    tt.add_argument("--only", default=None, help="逗号分隔的段号，如 S1,S2（默认全部）")
 
     ap = sub.add_parser("approve", help="闸口批准")
     ap.add_argument("workspace")
@@ -63,6 +73,13 @@ def _doctor() -> int:
         cfg = Config.load()
         for name, (ok, msg) in cfg.key_status().items():
             print(f"[{'OK' if ok else 'WARN'}] {name}: {msg}")
+        # TTS 后端体检（注册表自动发现，不依赖任何后端可联网）
+        from .audio import tts_backend as tb
+
+        print("[tts] 可用后端: " + (", ".join(tb.list_backends()) or "(无)"))
+        if cfg.tts_backend:
+            ok, msg = tb.backend_available(cfg.tts_backend, cfg)
+            print(f"[{'OK' if ok else 'WARN'}] TTS后端[{cfg.tts_backend}]: {msg}")
     except ConfigError as e:
         print(f"[BAD] 配置: {e}")
     return 0
@@ -156,15 +173,55 @@ def _run(args) -> int:
         return 1
     try:
         if args.stage:
-            pipeline.execute_stage(Stage(args.stage), ws, run, leg=getattr(args, "leg", None))
+            pipeline.execute_stage(
+                Stage(args.stage), ws, run, leg=getattr(args, "leg", None),
+                tts_backend=getattr(args, "tts_backend", None),
+            )
         else:
-            pipeline.run_flow(ws, run, leg=getattr(args, "leg", None))
+            pipeline.run_flow(
+                ws, run, leg=getattr(args, "leg", None),
+                tts_backend=getattr(args, "tts_backend", None),
+            )
     except workflow.GateBlocked as e:
         print(f"[run] 闸口拦截，已停止：{e}", file=sys.stderr)
         return 1
     except RuntimeError as e:
         print(f"[run] 失败：{e}", file=sys.stderr)
         return 1
+    return 0
+
+
+def _tts(args) -> int:
+    """独立 TTS 配音：读 segments.json → 逐段合成配音（不跑流水线、不碰闸口）。"""
+    from .audio import tts_backend as tb
+
+    try:
+        ws = Workspace(Path(args.workspace))
+        ws.load()
+    except WorkspaceError as e:
+        print(f"[tts] 失败: {e}", file=sys.stderr)
+        return 1
+    cfg = Config.load()
+    backend = args.backend or cfg.tts_backend
+    if not backend:
+        print("[tts] 未指定后端：用 --backend 或设置 DY_FANPAI_TTS_BACKEND", file=sys.stderr)
+        return 1
+    plan = ws.planning / "segments.json"
+    if not plan.exists():
+        print("[tts] 缺少 planning/segments.json", file=sys.stderr)
+        return 1
+    out_dir = ws.root / "audio" / "segments"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    only = set(args.only.split(",")) if args.only else None
+    try:
+        timing = tb.synthesize(str(plan), str(out_dir), backend, cfg, only=only)
+    except RuntimeError as e:
+        print(f"[tts] 失败：{e}", file=sys.stderr)
+        return 1
+    (ws.root / "audio" / "timing.json").write_text(
+        json.dumps(timing, ensure_ascii=False, indent=1), encoding="utf-8"
+    )
+    print(f"[tts] 完成 {len(timing)} 段（{backend}）→ {out_dir}")
     return 0
 
 
@@ -213,6 +270,8 @@ def main(argv: list[str] | None = None) -> int:
         return _status(args)
     if args.cmd == "run":
         return _run(args)
+    if args.cmd == "tts":
+        return _tts(args)
     if args.cmd == "approve":
         return _approve(args)
     if args.cmd == "retry":

@@ -99,6 +99,24 @@ class Config:
             "~/.claude/skills/tts-drama/scripts/cosy_drama.py"
         )
     )
+    # TTS 后端选择（audio stage 配音模式；空=只做原音切段不配音）。
+    # 可选: voxcpm / voicebox / 未来扩展（tts_backend 注册表自动识别）。
+    tts_backend: str = ""
+
+    # --- TTS 后端：VoxCPM（OpenBMB 在线 HF Space,zero-shot 克隆）---
+    voxcpm_space_url: str = "https://openbmb-voxcpm-demo.hf.space"
+    voxcpm_reference_audio: str = ""  # 必填,参考音色 wav 本地路径
+    voxcpm_prompt_text: str = ""  # 参考音色对应文本
+
+    # --- TTS 后端：Voicebox（本地 Qwen3-TTS,HTTP REST,zero-shot 克隆）---
+    voicebox_base_url: str = "http://127.0.0.1:17493"
+    voicebox_profile_id: str = ""  # 已有克隆音色 id（优先复用,不存在则自动创建）
+    voicebox_profile_name: str = "dyfanpai-voice"  # 自动创建 profile 的名字
+    voicebox_reference_audio: str = ""  # 克隆参考音色 wav（自动创建 profile 时用）
+    voicebox_reference_text: str = ""  # 参考音色对应文本
+    voicebox_model_size: str = "1.7B"  # qwen-tts 模型大小: 1.7B / 0.6B
+    voicebox_language: str = "zh"
+    voicebox_instruct: str = ""  # 可选情感/语气指令（如 "用温柔的语气"）
 
     # --- 即梦 CLI ---
     dreamina_bin: str = field(default_factory=lambda: os.path.expanduser("~/.local/bin/dreamina"))
@@ -151,6 +169,20 @@ class Config:
                 "DY_FANPAI_TTS_DRAMA",
                 os.path.expanduser("~/.claude/skills/tts-drama/scripts/cosy_drama.py"),
             ),
+            tts_backend=_read("DY_FANPAI_TTS_BACKEND", ""),
+            voxcpm_space_url=_read(
+                "VOXCPM_SPACE_URL", "https://openbmb-voxcpm-demo.hf.space"
+            ),
+            voxcpm_reference_audio=_read("VOXCPM_REFERENCE_AUDIO", ""),
+            voxcpm_prompt_text=_read("VOXCPM_PROMPT_TEXT", ""),
+            voicebox_base_url=_read("VOICEBOX_BASE_URL", "http://127.0.0.1:17493"),
+            voicebox_profile_id=_read("VOICEBOX_PROFILE_ID", ""),
+            voicebox_profile_name=_read("VOICEBOX_PROFILE_NAME", "dyfanpai-voice"),
+            voicebox_reference_audio=_read("VOICEBOX_REFERENCE_AUDIO", ""),
+            voicebox_reference_text=_read("VOICEBOX_REFERENCE_TEXT", ""),
+            voicebox_model_size=_read("VOICEBOX_MODEL_SIZE", "1.7B"),
+            voicebox_language=_read("VOICEBOX_LANGUAGE", "zh"),
+            voicebox_instruct=_read("VOICEBOX_INSTRUCT", ""),
             dreamina_bin=_read(
                 "DY_FANPAI_DREAMINA_BIN", os.path.expanduser("~/.local/bin/dreamina")
             ),
