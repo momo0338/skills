@@ -179,7 +179,7 @@ await poll(
       o.videos?.length || o.gif?.length || (o.images || []).some((i) => /\.(mp4|webm|mov|mkv)$/i.test(i.filename || ""))
     );
   },
-  { intervalMs: 4000, timeoutMs: 900000 },
+  { intervalMs: 4000, timeoutMs: 1800000 }, // 30 分钟：H3 20 步在低配机器可超 10 分钟
 );
 
 // ---- 3. 取结果并下载 ----

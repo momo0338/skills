@@ -127,7 +127,7 @@
    megapixels 固定 **0.4**(用户实测稳定档)
 3. `images` dataURL → 上传 `/api/upload/image` → 文件名注入 LoadImage 节点
    (T2V 不传图;I2V 取 images[0];R2V 取前 2 张,单图删 139 节点+ref_image_1 引用)
-4. 提交 `POST /api/prompt`(client_id=infinite-canvas)→ `poll` 4s/15min →
+4. 提交 `POST /api/prompt`(client_id=infinite-canvas)→ poll 4s/**30min** →
    取 history → **SaveVideo 的 .mp4 挂在 outputs 的 `images` 键下**(按 filename 后缀识别)
 5. `GET /view?filename=...` 下载 blob → `return { blob, mimeType: "video/mp4" }`
 
@@ -141,7 +141,7 @@
 | "拉取模型列表失败" | ComfyUI 无 /models 接口 | 手动输入模型名添加 |
 | 提交被 CORS 拦 | ComfyUI 未开 CORS | 以 `--enable-cors-header=*` 重启,隧道需带出该参数 |
 | 报错"模型调用脚本执行失败" | 脚本运行时异常 | 看报错末尾真实原因,对照 §1.1 变量名 |
-| 生成超时(15min) | H3 20 步较慢或显存不足 | 降低 megapixels(改脚本 0.4→0.3)/换小分辨率 |
+| 生成超时(30min 上限) | H3 20 步在低配机器可超 10 分钟 | 调大脚本 poll 的 timeoutMs(默认 1800000=30min,改后需在无限画布重新粘贴脚本) |
 | 想用 R2V 音频参考驱动 | 无限画布插件脚本拿不到音频 | 走本地 workflow 或改 H3 工作流手动跑 |
 
 环境恢复顺序(隧道失效后):
