@@ -2,6 +2,23 @@
 
 本文件记录公共接口冻结与变更（执行方案 §11 WP1 / §12.2）。
 
+## [0.1.0] — 2026-08-05 · ComfyUI 直连 H3 三能力(T2V/I2V/R2V)
+
+### 新增
+- `comfyui.py`：`submit()` 支持**扁平模板**（顶层即 `{node_id: {class_type, inputs}}`，
+  graph nodes/links 自动识别转换）；新增 `submit_h3_t2v` / `submit_h3_r2v`；
+  占位符 `__ASPECT__`（H3 ResolutionSelector 8 档比例）+ `__SEED__`（随机种子）；
+  `aspect_ratio_for` / `prune_r2v_single`（单参考图裁剪）。
+- `service.py`：后端注册 `comfyui_h3_t2v` / `comfyui_h3_r2v`。
+- `config.py`：`comfyui_workflow_h3_t2v` / `comfyui_workflow_h3_r2v`
+  （`COMFYUI_WORKFLOW_H3_T2V` / `COMFYUI_WORKFLOW_H3_R2V`）。
+- `resources/workflows/`：`comfyui_h3_t2v.json`（17 节点）/ `comfyui_h3_r2v.json`
+  （19 节点）扁平模板，从 `scripts/h3_video_*.js` 抽取；README 补模板清单与占位符表。
+
+### 说明
+- 三能力（文生/图生/参考生视频）现在 CLI 直连 ComfyUI 可用，无需无限画布。
+- r2v 单参考图自动裁剪；双参考图保留两个 LoadImage。
+
 ## [0.1.0] — 2026-08-05 · 环境变量命名统一(COMFYUI_*)
 
 ### 变更

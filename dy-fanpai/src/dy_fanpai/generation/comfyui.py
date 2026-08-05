@@ -66,14 +66,18 @@ _H3_GRID_OFFSET = 5
 _H3_MIN_FRAMES = 124  # 官方训练范围 ~124-362(≈5s 起)
 
 
+# H3 系列 kind 前缀(全部走 24fps + 17k+5 网格帧数计算)
+_H3_KINDS = ("h3_i2v", "h3_t2v", "h3_r2v")
+
+
 def frames_for(duration: int, kind: str = "i2v") -> int:
     """按后端计算视频帧数。
 
-    - h3_i2v:24fps,向上对齐 17k+5 网格(与官方模板 ComfyMathExpression 同公式),
-      且不低于 124 帧(模型训练下限,~5s)。
+    - H3 系列(h3_i2v / h3_t2v / h3_r2v):24fps,向上对齐 17k+5 网格
+      (与官方模板 ComfyMathExpression 同公式),且不低于 124 帧(模型训练下限,~5s)。
     - 其它:16fps(Wan 默认)。
     """
-    if kind == "h3_i2v":
+    if kind in _H3_KINDS:
         raw = max(5, round(duration * FPS_H3))
         return max(_H3_MIN_FRAMES, raw + (_H3_GRID_OFFSET - raw % _H3_GRID) % _H3_GRID)
     return duration * FPS

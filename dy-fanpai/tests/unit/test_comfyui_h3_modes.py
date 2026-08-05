@@ -217,6 +217,16 @@ def test_r2v_flat_template_submit_single_ref(monkeypatch, tmp_path):
     assert "ref_images.ref_image_1" not in prompt["136"]["inputs"]
 
 
+def test_frames_for_h3_all_kinds():
+    """H3 三能力(t2v/i2v/r2v)帧数都应走 24fps + 17k+5 网格(5s→124)。"""
+    from dy_fanpai.generation.comfyui import frames_for
+
+    for kind in ("h3_i2v", "h3_t2v", "h3_r2v"):
+        assert frames_for(5, kind) == 124, f"{kind} 5s 应=124帧"
+    # Wan 系列仍 16fps
+    assert frames_for(5, "i2v") == 80
+
+
 def test_service_registers_h3_t2v_r2v():
     from dy_fanpai.generation import service as S
 
