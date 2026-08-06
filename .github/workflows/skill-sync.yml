@@ -1,4 +1,4 @@
-name: skill-sync
+name: repository-health
 
 on:
   push:
@@ -6,7 +6,7 @@ on:
   pull_request:
 
 jobs:
-  check:
+  skill-sync:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -15,3 +15,32 @@ jobs:
           python-version: '3.11'
       - name: Verify disk / README / SKILL_DEPS consistency
         run: python3 scripts/check_skill_sync.py
+
+  offline-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: |
+            dy-doudian/pyproject.toml
+            dy-fanpai/pyproject.toml
+      - name: Install FFmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+      - name: Install offline test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pytest pillow httpx
+          python -m pip install -e './dy-doudian[dev]'
+          python -m pip install -e './dy-fanpai[dev]'
+      - name: Run repository offline tests
+        run: |
+          python -m pytest -q scripts/tests
+          python -m pytest -q analyze-viral-commerce-video/tests
+          python -m pytest -q dy-cli/tests
+          python -m pytest -q dy-doudian/tests
+          python -m pytest -o addopts='' -q dy-fanpai/tests

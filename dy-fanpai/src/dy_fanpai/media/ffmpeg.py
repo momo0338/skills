@@ -104,6 +104,24 @@ def decode_ok(path: str, probe_secs: int = 2) -> bool:
     return not any(m in r.stderr for m in _BAD_MARKERS)
 
 
+def segment_duration(segment: dict, video_duration: float) -> float:
+    """解析装配目标时长，缺少规划字段时回退到素材实际时长。"""
+    configured = float(segment.get("duration") or 0)
+    if configured > 0:
+        return configured
+
+    start = segment.get("start")
+    end = segment.get("end")
+    if start is not None and end is not None:
+        span = float(end) - float(start)
+        if span > 0:
+            return span
+
+    if video_duration > 0:
+        return float(video_duration)
+    raise ValueError(f"片段 {segment.get('seg', '<unknown>')} 缺少有效时长")
+
+
 def assemble(plan_path, clips_dir: str, audio_dir: str | None, out: str) -> None:
     """装配主入口（编排层，含 ffmpeg IO）。
 
@@ -120,7 +138,7 @@ def assemble(plan_path, clips_dir: str, audio_dir: str | None, out: str) -> None
             missing.append(name)
             continue
         vd = dur(clip)
-        seg_dur = float(s.get("duration", 0)) or (float(s["end"]) - float(s["start"]))
+        seg_dur = segment_duration(s, vd)
         # 1) 视频归一化(按段目标时长裁剪,兼容 H3 帧数网格导致的超长 clip)
         nv = os.path.join(work, f"{name}.mp4")
         _run(normalize_args(clip, nv, seg_dur=seg_dur))

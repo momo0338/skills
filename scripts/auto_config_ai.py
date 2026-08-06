@@ -20,14 +20,15 @@ Platform support:
   - Linux:   同 macOS，支持 brew/go 安装
 """
 
-import sys
-import os
-import re
-import json
 import argparse
-import shutil
+import json
+import os
 import platform
+import re
+import shlex
+import shutil
 import subprocess
+import sys
 import urllib.request
 
 # 获取根技能目录
@@ -43,6 +44,7 @@ SKILL_DEPS = {
     "dy-cli": {
         "bins": ["dy"],
         "pip": ["dy-cli", "playwright"],
+        "pip_bins": {"dy": "dy-cli"},
         "install_cmds": {
             "pip": "pip install dy-cli playwright",
             "post_install": "playwright install",
@@ -51,6 +53,7 @@ SKILL_DEPS = {
     "opencli": {
         "bins": ["opencli"],
         "npm": ["@jackwener/opencli"],
+        "npm_bins": {"opencli": "@jackwener/opencli"},
         "install_cmds": {
             "npm": "npm install -g @jackwener/opencli",
         },
@@ -58,6 +61,9 @@ SKILL_DEPS = {
     "yt-dlp": {
         "bins": ["yt-dlp", "ffmpeg"],
         "pip": ["yt-dlp", "imageio-ffmpeg"],
+        "pip_bins": {"yt-dlp": "yt-dlp[default]"},
+        "brew_bins": ["ffmpeg"],
+        "download_bins": ["ffmpeg"],
         "install_cmds": {
             "pip": "pip install -U yt-dlp imageio-ffmpeg",
             "brew": "brew install yt-dlp ffmpeg",
@@ -67,6 +73,9 @@ SKILL_DEPS = {
     },
     "lux": {
         "bins": ["lux"],
+        "brew_bins": ["lux"],
+        "go_bins": ["lux"],
+        "download_bins": ["lux"],
         "install_cmds": {
             "brew": "brew install lux",
             "go": "go install github.com/iawia002/lux@latest",
@@ -88,8 +97,16 @@ SKILL_DEPS = {
     "defuddle": {
         "bins": ["defuddle"],
         "npm": ["defuddle"],
+        "npm_bins": {"defuddle": "defuddle"},
         "install_cmds": {
             "npm": "npm install -g defuddle",
+        },
+    },
+    "crawl4ai": {
+        "pip": ["crawl4ai"],
+        "install_cmds": {
+            "pip": "pip install crawl4ai",
+            "post_install": "crawl4ai-setup",
         },
     },
     "mptext-api": {
@@ -125,6 +142,7 @@ SKILL_DEPS = {
     "claude-real-video": {
         "bins": ["crv"],
         "pip": ["claude-real-video"],
+        "pip_bins": {"crv": "claude-real-video[fast]"},
         "install_cmds": {
             "pip": 'pip install "claude-real-video[fast]"',
         },
@@ -132,6 +150,7 @@ SKILL_DEPS = {
     "analyze-viral-commerce-video": {
         "bins": ["ffmpeg"],
         "pip": ["pillow", "openai-whisper"],
+        "brew_bins": ["ffmpeg"],
         "install_cmds": {
             "pip": "pip install pillow openai-whisper",
             "brew": "brew install ffmpeg",
@@ -140,6 +159,7 @@ SKILL_DEPS = {
     "videodl": {
         "bins": ["videodl"],
         "pip": ["videodl"],
+        "pip_bins": {"videodl": "videodl"},
         "install_cmds": {
             "pip": "pip install videodl",
         },
@@ -147,6 +167,9 @@ SKILL_DEPS = {
     "dy-fanpai": {
         "bins": ["dy-fanpai", "ffmpeg", "ffprobe"],
         "pip": ["pydantic", "requests"],
+        "pip_bins": {"dy-fanpai": "."},
+        "pip_install": {"args": ["install", "-e", "."], "cwd": "dy-fanpai"},
+        "brew_bins": ["ffmpeg", "ffprobe"],
         "install_cmds": {
             "pip": "cd dy-fanpai && pip install -e .",
             "brew": "brew install ffmpeg",
@@ -155,6 +178,8 @@ SKILL_DEPS = {
     "dy-doudian": {
         "bins": ["dy-doudian", "dy-doudian-mcp"],
         "pip": ["mcp", "httpx", "python-dotenv"],
+        "pip_bins": {"dy-doudian": ".", "dy-doudian-mcp": "."},
+        "pip_install": {"args": ["install", "-e", "."], "cwd": "dy-doudian"},
         "install_cmds": {
             "pip": "cd dy-doudian && pip install -e .",
         },
@@ -314,7 +339,7 @@ def get_pip_packages():
                 )
                 if result.returncode == 0:
                     packages = json.loads(result.stdout)
-                    return {p["name"].lower() for p in packages}
+                    return {_canonical_package_name(p["name"]) for p in packages}
             except (FileNotFoundError, subprocess.TimeoutExpired, json.JSONDecodeError, OSError):
                 continue
         # 回退: pip list
@@ -324,7 +349,7 @@ def get_pip_packages():
         )
         if result.returncode == 0:
             packages = json.loads(result.stdout)
-            return {p["name"].lower() for p in packages}
+            return {_canonical_package_name(p["name"]) for p in packages}
     except Exception:
         pass
     return set()
@@ -347,8 +372,69 @@ def get_npm_global_packages():
     return set()
 
 
+def _canonical_package_name(value):
+    """将 Python requirement 归一化为 pip list 使用的发行包名。"""
+    match = re.match(r"^([A-Za-z0-9][A-Za-z0-9._-]*)", value.strip())
+    if not match:
+        return None
+    return re.sub(r"[-_.]+", "-", match.group(1)).lower()
+
+
+def _is_local_install_target(value):
+    value = value.strip().strip("\"'")
+    return (
+        value in {".", ".."}
+        or value.startswith(("./", "../", "/", "~", "file:", "git+", "http://", "https://"))
+    )
+
+
+def _pip_targets_from_body(body):
+    """从 Markdown 命令行中提取发行包，忽略选项、URL 与本地 editable 安装。"""
+    targets = []
+    option_with_value = {
+        "-c", "--constraint", "-f", "--find-links", "-i", "--index-url",
+        "--extra-index-url", "--trusted-host", "-r", "--requirement", "-t", "--target",
+        "--prefix", "--root", "--src", "--python-version", "--platform",
+    }
+    for line in body.replace("\\\n", " ").splitlines():
+        try:
+            tokens = shlex.split(line, comments=True)
+        except ValueError:
+            continue
+        install_at = None
+        for index, token in enumerate(tokens[:-1]):
+            if token.lower() in {"pip", "pip3"} and tokens[index + 1].lower() == "install":
+                install_at = index + 2
+                break
+        if install_at is None:
+            continue
+
+        skip_next = False
+        for token in tokens[install_at:]:
+            if token in {"&&", "||", ";", "|"}:
+                break
+            if skip_next:
+                skip_next = False
+                continue
+            if token in {"-e", "--editable"} or token in option_with_value:
+                skip_next = True
+                continue
+            if token.startswith(("--editable=", "-")):
+                continue
+            if _is_local_install_target(token):
+                continue
+            name = _canonical_package_name(token)
+            if name:
+                targets.append(name)
+    return targets
+
+
+def _dedupe(values):
+    return list(dict.fromkeys(values))
+
+
 def parse_skill_md_deps(skill_path):
-    """从 SKILL.md 的 frontmatter 和内容中提取依赖信息"""
+    """从 SKILL.md 的 frontmatter 和内容中提取依赖信息。"""
     skill_md = os.path.join(skill_path, "SKILL.md")
     if not os.path.exists(skill_md):
         return {}
@@ -382,7 +468,9 @@ def parse_skill_md_deps(skill_path):
             for line in pkg_match.group(1).strip().split("\n"):
                 name_m = re.search(r"name:\s+(\S+)", line)
                 if name_m:
-                    deps["pip"].append(name_m.group(1).lower())
+                    name = _canonical_package_name(name_m.group(1))
+                    if name:
+                        deps["pip"].append(name)
 
         # 提取 requirements.environment_variables
         env_match = re.search(
@@ -398,20 +486,14 @@ def parse_skill_md_deps(skill_path):
     # 扫描 markdown body 中的安装命令
     body = content[fm_match.end():] if fm_match else content
 
-    # pip install xxx
-    pip_matches = re.findall(r"pip(?:3)?\s+install\s+(?:-[^\s]+\s+)*([^\s\\`]+)", body)
-    for pkg in pip_matches:
-        pkg = pkg.strip("\"'")
-        # 过滤掉 pip 自身的参数
-        if pkg and not pkg.startswith("-") and pkg not in ("install",):
-            deps["pip"].append(pkg.lower())
+    deps["pip"].extend(_pip_targets_from_body(body))
 
     # npm install -g xxx (also matches "npm i -g xxx")
     npm_matches = re.findall(r"npm\s+(?:install|i)\s+-g\s+([^\s\\`]+)", body)
     for pkg in npm_matches:
         deps["npm"].append(pkg.strip("\"'").lower())
 
-    return deps
+    return {kind: _dedupe(values) for kind, values in deps.items()}
 
 
 def check_skill_deps(skill_name, skill_path, pip_pkgs, npm_pkgs):
@@ -424,19 +506,16 @@ def check_skill_deps(skill_name, skill_path, pip_pkgs, npm_pkgs):
     registry_deps = SKILL_DEPS.get(skill_name, {})
     md_deps = parse_skill_md_deps(skill_path)
 
-    # 合并（注册表优先）
-    all_bins = list(registry_deps.get("bins", [])) + [
-        b for b in md_deps.get("bins", []) if b not in registry_deps.get("bins", [])
-    ]
-    all_pip = list(registry_deps.get("pip", [])) + [
-        p for p in md_deps.get("pip", []) if p not in registry_deps.get("pip", [])
-    ]
-    all_npm = list(registry_deps.get("npm", [])) + [
-        n for n in md_deps.get("npm", []) if n not in registry_deps.get("npm", [])
-    ]
-    all_env = list(registry_deps.get("env", [])) + [
-        e for e in md_deps.get("env", []) if e not in registry_deps.get("env", [])
-    ]
+    # 注册表对已声明的类别具有权威性；仅在类别未登记时采用 SKILL.md 推断值。
+    def declared_or_inferred(kind):
+        if kind in registry_deps:
+            return list(registry_deps[kind])
+        return list(md_deps.get(kind, []))
+
+    all_bins = declared_or_inferred("bins")
+    all_pip = declared_or_inferred("pip")
+    all_npm = declared_or_inferred("npm")
+    all_env = declared_or_inferred("env")
 
     missing = {"bins": [], "pip": [], "npm": [], "env": []}
 
@@ -445,8 +524,7 @@ def check_skill_deps(skill_name, skill_path, pip_pkgs, npm_pkgs):
             missing["bins"].append(b)
 
     for p in all_pip:
-        # Normalize: strip extras like [default] for comparison with pip list
-        p_normalized = re.sub(r"\[.*?\]", "", p).lower()
+        p_normalized = _canonical_package_name(p)
         if p_normalized not in pip_pkgs:
             missing["pip"].append(p)
 
@@ -464,6 +542,13 @@ def check_skill_deps(skill_name, skill_path, pip_pkgs, npm_pkgs):
 
 def print_deps_report(skill_name, missing, install_cmds):
     """打印单个技能的依赖缺失报告"""
+    registry = SKILL_DEPS.get(skill_name, {})
+    missing_bins = set(missing["bins"])
+    pip_bin_missing = missing_bins.intersection(registry.get("pip_bins", {}))
+    npm_bin_missing = missing_bins.intersection(registry.get("npm_bins", {}))
+    brew_bin_missing = missing_bins.intersection(registry.get("brew_bins", []))
+    go_bin_missing = missing_bins.intersection(registry.get("go_bins", []))
+    download_bin_missing = missing_bins.intersection(registry.get("download_bins", []))
     if missing["bins"]:
         print(f"    Missing binaries: {', '.join(missing['bins'])}")
     if missing["pip"]:
@@ -476,15 +561,15 @@ def print_deps_report(skill_name, missing, install_cmds):
     if install_cmds:
         is_windows = platform.system() == "Windows"
         for method, cmd in install_cmds.items():
-            if method == "pip" and missing["pip"]:
+            if method == "pip" and (missing["pip"] or pip_bin_missing):
                 print(f"    -> Try: {cmd}")
-            elif method == "npm" and missing["npm"]:
+            elif method == "npm" and (missing["npm"] or npm_bin_missing):
                 print(f"    -> Try: {cmd}")
-            elif method == "brew" and missing["bins"] and not is_windows:
+            elif method == "brew" and brew_bin_missing and not is_windows:
                 print(f"    -> Try: {cmd}")
-            elif method == "go" and missing["bins"]:
+            elif method == "go" and go_bin_missing:
                 print(f"    -> Try: {cmd}")
-            elif method in ("windows_download", "macos_download") and missing["bins"]:
+            elif method in ("windows_download", "macos_download") and download_bin_missing:
                 download_key = "windows_download" if is_windows else "macos_download"
                 if method == download_key:
                     print(f"    -> Auto-install: run with --install")
@@ -504,8 +589,8 @@ def _find_pip_cmd():
 
 def _install_lux_binary(dry_run=False):
     """从 GitHub Releases 下载 lux 二进制（跨平台，自动代理回退）"""
-    import zipfile
     import tempfile
+    import zipfile
 
     scripts_dir = _get_pip_scripts_dir()
     if not scripts_dir:
@@ -677,24 +762,39 @@ def install_missing_deps(skill_name, missing, dry_run=False):
     installed_pip = []
     installed_npm = []
     failed = []
+    handled_bins = set()
+
+    pip_bin_map = registry.get("pip_bins", {})
+    npm_bin_map = registry.get("npm_bins", {})
+    pip_bin_targets = [pip_bin_map[b] for b in missing["bins"] if b in pip_bin_map]
+    npm_bin_targets = [npm_bin_map[b] for b in missing["bins"] if b in npm_bin_map]
+    pip_targets = _dedupe(list(missing["pip"]) + pip_bin_targets)
+    npm_targets = _dedupe(list(missing["npm"]) + npm_bin_targets)
 
     # --- pip 安装 ---
-    if missing["pip"] and "pip" in install_cmds:
+    if pip_targets and "pip" in install_cmds:
         cmd_str = install_cmds["pip"]
         print(f"    Installing pip packages: {cmd_str}")
         if dry_run:
             print(f"    [DryRun] Would run: {cmd_str}")
-            installed_pip.extend(missing["pip"])
+            installed_pip.extend(pip_targets)
+            handled_bins.update(b for b in missing["bins"] if b in pip_bin_map)
         else:
-            # 从 missing["pip"] 构建 pip install 命令
-            pkg_names = list(missing["pip"])
-            # 用完整命令字符串通过 shell 执行，避免 Windows 路径问题
             pip_cmd = _find_pip_cmd()
-            full_cmd = " ".join(pip_cmd) + " install -i https://pypi.tuna.tsinghua.edu.cn/simple " + " ".join(pkg_names)
-            print(f"    Running: {full_cmd}")
-            result = _safe_subprocess_run(full_cmd, shell=True, timeout=120)
+            install_spec = registry.get("pip_install")
+            if install_spec:
+                full_cmd = pip_cmd + list(install_spec["args"])
+                install_cwd = os.path.join(DEFAULT_SKILLS_DIR, install_spec["cwd"])
+            else:
+                full_cmd = pip_cmd + [
+                    "install", "-i", "https://pypi.tuna.tsinghua.edu.cn/simple", *pip_targets,
+                ]
+                install_cwd = None
+            print(f"    Running: {shlex.join(full_cmd)}")
+            result = _safe_subprocess_run(full_cmd, cwd=install_cwd, timeout=120)
             if result.returncode == 0:
-                installed_pip.extend(missing["pip"])
+                installed_pip.extend(pip_targets)
+                handled_bins.update(b for b in missing["bins"] if b in pip_bin_map)
                 print(f"    OK: pip packages installed")
             else:
                 failed.extend(missing["pip"])
@@ -725,25 +825,27 @@ def install_missing_deps(skill_name, missing, dry_run=False):
         else:
             print(f"    Running post-install: {post_cmd}")
             if not dry_run:
-                result = _safe_subprocess_run(post_cmd, shell=True, timeout=120)
+                result = _safe_subprocess_run(shlex.split(post_cmd), timeout=120)
                 if result.returncode != 0:
                     print(f"    WARNING: post-install command failed (non-fatal)")
 
     # --- npm 安装 ---
-    if missing["npm"] and "npm" in install_cmds:
+    if npm_targets and "npm" in install_cmds:
         cmd_str = install_cmds["npm"]
         print(f"    Installing npm packages: {cmd_str}")
         if dry_run:
             print(f"    [DryRun] Would run: {cmd_str}")
-            installed_npm.extend(missing["npm"])
+            installed_npm.extend(npm_targets)
+            handled_bins.update(b for b in missing["bins"] if b in npm_bin_map)
         else:
-            # 用完整命令字符串通过 shell 执行
-            pkg_names = list(missing["npm"])
-            full_cmd = "npm install -g --registry=https://registry.npmmirror.com " + " ".join(pkg_names)
-            print(f"    Running: {full_cmd}")
-            result = _safe_subprocess_run(full_cmd, shell=True, timeout=120)
+            full_cmd = [
+                "npm", "install", "-g", "--registry=https://registry.npmmirror.com", *npm_targets,
+            ]
+            print(f"    Running: {shlex.join(full_cmd)}")
+            result = _safe_subprocess_run(full_cmd, timeout=120)
             if result.returncode == 0:
-                installed_npm.extend(missing["npm"])
+                installed_npm.extend(npm_targets)
+                handled_bins.update(b for b in missing["bins"] if b in npm_bin_map)
                 print(f"    OK: npm packages installed")
             else:
                 failed.extend(missing["npm"])
@@ -755,31 +857,35 @@ def install_missing_deps(skill_name, missing, dry_run=False):
     # --- 无法自动安装的依赖 ---
     if missing["bins"]:
         for b in missing["bins"]:
+            if b in handled_bins:
+                continue
             # 按优先级尝试: brew (macOS) > go > 平台下载 > 失败
             can_auto = False
             is_windows = platform.system() == "Windows"
 
             # 优先尝试 brew (macOS)
-            if not is_windows and "brew" in install_cmds:
+            if not is_windows and b in registry.get("brew_bins", []) and "brew" in install_cmds:
                 cmd_str = install_cmds["brew"]
                 print(f"    Installing via brew: {cmd_str}")
                 if not dry_run:
-                    result = _safe_subprocess_run(cmd_str, shell=True, timeout=120)
+                    result = _safe_subprocess_run(shlex.split(cmd_str), timeout=120)
                     if result.returncode == 0:
                         can_auto = True
+                        handled_bins.update(set(missing["bins"]).intersection(registry["brew_bins"]))
                         print(f"    OK: brew install succeeded")
                     else:
                         print(f"    brew install failed, trying next method...")
                 else:
                     print(f"    [DryRun] Would run: {cmd_str}")
                     can_auto = True
+                    handled_bins.update(set(missing["bins"]).intersection(registry["brew_bins"]))
 
             # 尝试 go install
-            if not can_auto and "go" in install_cmds:
+            if not can_auto and b in registry.get("go_bins", []) and "go" in install_cmds:
                 cmd_str = install_cmds["go"]
                 print(f"    Installing via go: {cmd_str}")
                 if not dry_run:
-                    result = _safe_subprocess_run(cmd_str, shell=True, timeout=120)
+                    result = _safe_subprocess_run(shlex.split(cmd_str), timeout=120)
                     if result.returncode == 0:
                         can_auto = True
                         print(f"    OK: go install succeeded")
@@ -792,7 +898,7 @@ def install_missing_deps(skill_name, missing, dry_run=False):
             # 尝试平台下载 (windows_download / macos_download)
             if not can_auto:
                 download_key = "windows_download" if is_windows else "macos_download"
-                if download_key in install_cmds:
+                if b in registry.get("download_bins", []) and download_key in install_cmds:
                     func_name = install_cmds[download_key]
                     if func_name.startswith("_"):
                         print(f"    Running: {func_name}()")

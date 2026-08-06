@@ -1,4 +1,4 @@
-"""media/ffmpeg.py 离线确定性单测(命令构造 + 解码体检逻辑,不跑真实 ffmpeg)。
+"""media/ffmpeg.py 离线确定性单测(命令构造 + 时长契约 + 解码体检逻辑,不跑真实 ffmpeg)。
 
 dur / assemble 含 ffmpeg IO,用合成小视频做 T3 集成测试,不在本文件。
 """
@@ -6,6 +6,19 @@ dur / assemble 含 ffmpeg IO,用合成小视频做 T3 集成测试,不在本文�
 
 
 from dy_fanpai.media import ffmpeg as F
+
+
+def test_segment_duration_prefers_explicit_duration():
+    segment = {"seg": "S1", "duration": 4, "start": 0, "end": 3}
+    assert F.segment_duration(segment, 2.0) == 4.0
+
+
+def test_segment_duration_uses_timeline_span():
+    assert F.segment_duration({"seg": "S1", "start": 1.5, "end": 4.0}, 2.0) == 2.5
+
+
+def test_segment_duration_falls_back_to_video_duration():
+    assert F.segment_duration({"seg": "S1"}, 2.0) == 2.0
 
 
 def test_normalize_args():

@@ -1,6 +1,6 @@
 # Momo Skills Core Library (AI Agent 技能库)
 
-> 包含 **18 个通用与专项 AI Agent 技能**，覆盖网页正文提取、智能视频看懂抽帧、媒体音视频下载、万站 CLI 操作、抖音专项 CLI、抖音带货翻拍、抖音小店经营数据、网络代理管理、企业情报深度调研及微信公众号采集等场景。
+> 包含 **19 个通用与专项 AI Agent 技能**，覆盖网页正文提取、智能视频看懂抽帧、媒体音视频下载、万站 CLI 操作、抖音专项 CLI、抖音带货翻拍、抖音小店经营数据、网络代理管理、企业情报深度调研及微信公众号采集等场景。
 
 ---
 
@@ -16,6 +16,7 @@
 | **[scrapling](./scrapling)** | `scrapling/` | 本地网页正文提取（Fast/Stealth 无头双模式，自动修复懒加载图片 `data-src`） | Python `scrapling`, `html2text`, `browserforge` |
 | **[jina-reader](./jina-reader)** | `jina-reader/` | 云端网页转 Markdown 工具（零本地依赖，支持 AI 图片描述与 Token 过滤） | HTTP API (`r.jina.ai`) |
 | **[defuddle](./defuddle)** | `defuddle/` | 网页去杂清洁提取 CLI，快速提取纯净 Markdown，大幅节省 Token | Node.js `defuddle` CLI |
+| **[crawl4ai](./crawl4ai)** | `crawl4ai/` | LLM 原生网页提取（Playwright 完整渲染 JS/SPA，BM25 主题过滤 Fit Markdown，JSON CSS 结构化字段抽取） | Python `crawl4ai`, Playwright |
 | **[lux](./lux)** | `lux/` | 多平台视频下载 CLI（YouTube、Bilibili、抖音、TikTok 等） | Homebrew `lux`, `ffmpeg` |
 | **[mptext-api](./mptext-api)** | `mptext-api/` | 微信公众号 API 工具（支持公众号搜索、文章列表获取、多格式/批量下载） | Python `requests`, mptext.top API |
 | **[fengniao-search](./fengniao-search)** | `fengniao-search/` | 风鸟企业与风险情报检索（工商信息、司法风险、经营异常、股东背景等） | Node.js `tool.mjs`, 风鸟 API |
@@ -88,6 +89,19 @@ npm install -g defuddle @jackwener/opencli
 ---
 
 ## 🧰 开发与维护
+
+### 开发环境基线
+
+仓库离线测试统一以 Python 3.12 为基线。建议使用项目虚拟环境，避免全局 Python
+及其依赖版本污染测试结果：
+
+```bash
+uv venv --python 3.12
+source .venv/bin/activate
+```
+
+CI 会运行技能同步检查、依赖解析回归测试，以及四个含测试套件的技能项目；真实账号、
+浏览器写操作和付费 Provider 调用不进入自动 CI。
 
 ### 新增技能时（必须同步三处，否则检查失败）
 
