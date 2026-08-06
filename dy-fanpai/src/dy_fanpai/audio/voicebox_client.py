@@ -128,16 +128,22 @@ def ensure_model_loaded(cfg: Config) -> None:
 
 
 def find_profile_id(cfg: Config) -> str | None:
-    """按配置名/id 找已存在的 profile；找不到返回 None（确定性 + 轻 IO）。"""
+    """按配置 id 或名字找已存在的 profile；找不到返回 None（确定性 + 轻 IO）。
+
+    - 优先 ``cfg.voicebox_profile_id``（精确 id 或名字）；
+    - 未配置时回退按 ``cfg.voicebox_profile_name`` 查找（2026-08-05 修复：
+      之前只在 id 配置非空时查找，未配置时每段都重复 create_profile → S2 起 400）。
+    """
     want = cfg.voicebox_profile_id
-    if not want:
-        return None
+    want_name = cfg.voicebox_profile_name or "dyfanpai-voice"
     try:
         profiles = _get_json(cfg, "/profiles", timeout=15)
     except Exception:
         return None
     for p in profiles or []:
-        if p.get("id") == want or p.get("name") == want:
+        if want and (p.get("id") == want or p.get("name") == want):
+            return p["id"]
+        if not want and p.get("name") == want_name:
             return p["id"]
     return None
 

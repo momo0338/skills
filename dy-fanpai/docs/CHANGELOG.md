@@ -2,6 +2,62 @@
 
 本文件记录公共接口冻结与变更（执行方案 §11 WP1 / §12.2）。
 
+## [0.1.0] — 2026-08-06 · 复盘优化：锁回收 / assemble CLI / 轮询脚本 / set-url
+
+### 新增
+- `cli.py`：新增 `set-url` 命令（写 `~/.config/dy-fanpai/<key>_base_url`），
+  配合 `scripts/tunnel_comfyui.sh` 一键更新隧道域名，替代手写 printf。
+- `scripts/poll_comfyui_tasks.py`：正式版 ComfyUI 任务轮询下载工具
+  （读 clips/*.meta.json → 按间隔查 /history → 出片自动下载；断点续传；
+  双 id 兜底查队列实际执行 id；正确遍历 outputs.images 列表）。
+- `pipeline.py`：ASSEMBLE 阶段由"跳过"改为真实执行（新增 `_exec_assemble`
+  调 media.ffmpeg.assemble → output/FULL.mp4），`run --stage assemble` 可用。
+- `tests/unit/test_generation_service.py`：锁回收 4 个新用例。
+
+### 变更
+- `generation/service.py` `acquire_lock`：增加**陈旧锁回收**——锁文件持有者
+  PID 已死（kill -9/沙盒超时残留）时自动回收加锁，不再永久"被占用"需手工删；
+  损坏/空锁文件同样视为陈旧。活锁仍拒绝（并发保护）。
+- `scripts/tunnel_comfyui.sh`：输出改用 `dy-fanpai set-url comfyui <url>` 提示。
+
+### 说明
+- 46s vs 41.4s 成片时差为**设计行为**（planner 把短段归并为整数秒段，
+  duration 字段即归并后时长），非 bug，未改。
+- jianying-editor 技能侧：新增 `scripts/utils/__init__.py` 根治 users.pth
+  硬编码 GPT-SoVITS 路径劫持 namespace utils 包的问题（技能仓库外部修改）。
+
+## [0.1.0] — 2026-08-05 · 全 H3 路线工程债修复（Live 实测暴露）
+
+### 新增
+- `cli.py`：`approve` 增加 `--live`（批准时开启 run.live）与 `--max-submits N`
+  （设置提交硬上限），不再需要手工改 run.json。
+- `cli.py`：`run` / `retry` 增加 `--i2v-backend`（选择 i2v/无主播 mm 段生成后端），
+  README 已声明但 CLI 此前未接线。
+- `pipeline.py`：`execute_stage` 的 GENERATE 分支由"跳过"改为真实执行
+  （新增 `_exec_generate` 调 generation.service.run）；`run_flow` 透传 `i2v_backend`。
+- `scripts/tunnel_comfyui.sh`：MI308X 侧一键建 trycloudflare 隧道 + 打印 Mac 侧
+  更新命令（解决隧道域名漂移）。
+- `docs/ANCHOR_ASSET_STANDARD.md`：产品锚图素材规范（禁止带营销文字的宣传图
+  作 H3/即梦锚图；1501# 仅 `sku/*（合并）.png` 可用）。
+- `tests/unit/test_voicebox_client.py`：find_profile_id 5 个确定性用例。
+
+### 变更
+- `generation/service.py` `route_backend`：**放宽 mm 段硬规则**——无真人出镜
+  （shots 全 `host_on_camera=False`）的 mm 段允许走 alt 后端（如 comfyui_h3），
+  有主播出镜仍必须走即梦（口型驱动）。`service.run` 提交前把 segments 相对
+  anchor 路径基于 planning/ 解析为绝对路径（此前 FileNotFoundError）。
+- `audio/voicebox_client.py` `find_profile_id`：未配置 `voicebox_profile_id` 时
+  回退按 `voicebox_profile_name` 查找已有 profile（此前每段重复 create_profile
+  → S2 起 HTTP 400）。
+- `media/ffmpeg.py` `normalize_args`：新增 `seg_dur` 参数，assemble 按段目标
+  时长 `-t` 裁剪 clip（兼容 H3 帧数网格导致 4s 段出 5s clip 的时长错位）。
+- `models.py`：`ProviderName` 补 `minimax` / `comfyui` / `comfyui_h3` /
+  `comfyui_h3_t2v` / `comfyui_h3_r2v` 枚举成员。
+
+### 说明
+- 无主播 mm 段走 H3 时用 `submit_h3_i2v`（纯视觉，seg["anchor"] 驱动），
+  配音在 assemble 阶段混流——符合无主播画外音形态，无需 LatentSync。
+
 ## [0.1.0] — 2026-08-05 · ComfyUI 直连 H3 三能力(T2V/I2V/R2V)
 
 ### 新增

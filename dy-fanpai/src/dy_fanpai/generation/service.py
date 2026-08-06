@@ -40,11 +40,21 @@ from . import ark, comfyui, dreamina, minimax, xyq
 # 确定性函数（离线可测）
 # ---------------------------------------------------------------------------
 def route_backend(seg: dict, alt: str | None = None) -> str:
-    """人物/口播(mm)必须走即梦（口型驱动）；纯产品 i2v 可走替代后端(ark/xyq)，否则即梦。
+    """人物/口播(mm)默认走即梦（口型驱动）；纯产品 i2v 可走替代后端(ark/xyq)，否则即梦。
 
-    mm 段因需口型不被 i2v 后端接管——这是路由硬规则。
+    硬规则放宽（2026-08-05）：mm 段**无真人出镜**（纯画外音 + 手部/产品展示，
+    shots 全部 host_on_camera=False 或 person 不含面部）时不需要口型，
+    允许走 alt 后端（如 comfyui_h3）；有主播出镜的 mm 段仍必须走即梦。
     """
     if seg["type"] == "mm":
+        shots = seg.get("shots") or []
+        has_host = any(
+            (s.get("host_on_camera") is True)
+            or ("脸" in (s.get("person") or "") or "面部" in (s.get("person") or ""))
+            for s in shots
+        )
+        if not has_host:
+            return alt if alt else "dreamina"
         return "dreamina"
     return alt if alt else "dreamina"
 
@@ -79,17 +89,45 @@ def save_task(path: str, task: GenerationTask) -> None:
 def acquire_lock(lock_path: str | None) -> bool:
     """同一工作区加锁（best-effort）。
 
-    文件不存在→创建并返回 True；已存在（视为并发占用）→返回 False。
-    测试可传 lock_path=None 跳过。真实并发由调用方在 run 前先 acquire。
+    文件不存在→创建并返回 True；已存在→检查持有进程是否存活：
+    - 持有进程已死（如被 kill -9 / 沙盒超时）→ 视为陈旧锁，回收后加锁返回 True
+      （2026-08-05 修复：此前 137 杀进程残留锁，导致工作区永久"被占用"需手工删）；
+    - 持有进程存活 → 返回 False（真实并发占用）。
+    测试可传 lock_path=None 跳过。
     """
     if lock_path is None:
         return True
     if os.path.exists(lock_path):
-        return False
+        # 读持有者 PID，判断是否还活着
+        try:
+            owner = int(open(lock_path, encoding="utf-8").read().strip())
+        except (OSError, ValueError):
+            owner = 0  # 文件损坏/空 → 视为陈旧
+        if owner > 0 and _pid_alive(owner):
+            return False
+        # 陈旧锁：清除后继续加锁
+        try:
+            os.remove(lock_path)
+        except OSError:
+            pass
     os.makedirs(os.path.dirname(os.path.abspath(lock_path)), exist_ok=True)
     with open(lock_path, "w", encoding="utf-8") as f:
         f.write(str(os.getpid()))
     return True
+
+
+def _pid_alive(pid: int) -> bool:
+    """检查 PID 是否存活（跨平台 best-effort；macOS/Linux 用 kill 0）。"""
+
+    try:
+        os.kill(pid, 0)
+        return True
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True  # 存在但无权限查看 → 视为存活
+    except OSError:
+        return False
 
 
 def release_lock(lock_path: str | None) -> None:
@@ -180,6 +218,26 @@ def run(
     backend_map = backends or _default_backends()
     os.makedirs(clips_dir, exist_ok=True)
 
+    # 锚图路径解析：segments 里 anchor/images 是相对 planning/ 的（如 assets/hero.jpg），
+    # 提交前基于 plan_path 所在目录解析为绝对路径，保证各后端上传能读到文件。
+    base = os.path.dirname(os.path.abspath(plan_path))
+    for seg in segs:
+        for key in ("anchor",):
+            v = seg.get(key)
+            if isinstance(v, str) and v and not os.path.isabs(v):
+                cand = os.path.join(base, v)
+                seg[key] = cand if os.path.exists(cand) else v
+        imgs = seg.get("images")
+        if isinstance(imgs, list):
+            resolved = []
+            for v in imgs:
+                if isinstance(v, str) and v and not os.path.isabs(v):
+                    cand = os.path.join(base, v)
+                    resolved.append(cand if os.path.exists(cand) else v)
+                else:
+                    resolved.append(v)
+            seg["images"] = resolved
+
     if not acquire_lock(lock_path):
         print("[gen][锁] 工作区已被占用,放弃本次运行")
         return {"locked": True}
@@ -195,7 +253,7 @@ def run(
                 summary["skipped"] += 1
                 continue
 
-            backend = route_backend(seg, alt=i2v_backend if seg["type"] != "mm" else None)
+            backend = route_backend(seg, alt=i2v_backend)
             tag = {"mm": "口播", "i2v": "image2video"}[seg["type"]]
             print(f"\n===== {name} {tag} {seg['duration']}s [{backend}] =====", flush=True)
 

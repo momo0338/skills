@@ -203,6 +203,7 @@ def execute_stage(
     jy_drafts: str | None = None,
     leg: str | None = None,
     tts_backend: str | None = None,
+    i2v_backend: str | None = None,
 ) -> Stage:
     """执行单个阶段（先闸口检查，未批准抛 GateBlocked）。返回该阶段。"""
     gate = required_gate(stage)
@@ -225,11 +226,18 @@ def execute_stage(
             executed = True
         else:
             _skip_offline(stage, live=False)
+    elif stage == Stage.GENERATE:
+        if run.live:
+            _exec_generate(ws, run, i2v_backend=i2v_backend)
+            executed = True
+        else:
+            _skip_offline(stage, live=False)
+    elif stage == Stage.ASSEMBLE:
+        _exec_assemble(ws, run)
+        executed = True
     elif stage == Stage.DELIVER:
         _exec_deliver(ws, run, bgm=bgm, jy_drafts=jy_drafts)
         executed = True
-    elif stage in (Stage.GENERATE, Stage.ASSEMBLE):
-        _skip_offline(stage, live=run.live)
     # PREPARE：无操作
 
     if executed:
@@ -237,6 +245,50 @@ def execute_stage(
     run.current_stage = stage
     ws.save(run)
     return stage
+
+
+def _exec_generate(ws: Workspace, run, *, i2v_backend: str | None = None) -> None:
+    """P5 生成：跑 generation.service.run（口播 mm 默认即梦；i2v/无主播 mm 走 i2v_backend）。
+
+    仅 live 模式真调（需已批准 G3 cost 与凭证）；产物 clips/{seg}.mp4。
+    """
+    from .generation import service as G
+
+    segs = ws.planning / "segments.json"
+    if not segs.exists():
+        raise RuntimeError("缺少 planning/segments.json，无法生成（先 plan）")
+    summary = G.run(
+        str(segs), str(ws.clips), str(ws.audio), Config.load(),
+        manifest=run, lock_path=str(ws.lock_path),
+        i2v_backend=i2v_backend or "dreamina",
+    )
+    run.stage_results["generate"] = summary
+    print(f"[run] 生成完成：{summary}")
+
+
+def _exec_assemble(ws: Workspace, run) -> None:
+    """P5 装配：clips/{seg}.mp4 + audio/segments/{seg}.wav → output/FULL.mp4。
+
+    离线可跑（无需 live/密钥）；按段目标时长裁剪 clip（兼容 H3 帧数网格
+    导致的超长段），成片时长与 segments 规划对齐。
+    """
+    from .media import ffmpeg as F
+
+    segs = ws.planning / "segments.json"
+    if not segs.exists():
+        raise RuntimeError("缺少 planning/segments.json，无法装配（先 plan）")
+    if not (ws.clips / "S1.mp4").exists() and not list(ws.clips.glob("*.mp4")):
+        raise RuntimeError("clips/ 无生成片段，先 generate")
+    out_dir = ws.output
+    out_dir.mkdir(parents=True, exist_ok=True)
+    F.assemble(
+        plan_path=str(segs),
+        clips_dir=str(ws.clips),
+        audio_dir=str(ws.audio / "segments"),
+        out=str(out_dir / "FULL.mp4"),
+    )
+    run.stage_results["assemble"] = {"full": str(out_dir / "FULL.mp4")}
+    print(f"[run] 装配完成 → {out_dir / 'FULL.mp4'}")
 
 
 def run_flow(
@@ -249,6 +301,7 @@ def run_flow(
     jy_drafts: str | None = None,
     leg: str | None = None,
     tts_backend: str | None = None,
+    i2v_backend: str | None = None,
 ) -> None:
     """从 current_stage 跑到目标 stage（默认 DELIVER）；遇未批准闸口即停。"""
     target = stage or Stage.DELIVER
@@ -257,4 +310,4 @@ def run_flow(
     end_idx = order.index(target)
     for st in order[start_idx:end_idx + 1]:
         execute_stage(st, ws, run, backends=backends, bgm=bgm, jy_drafts=jy_drafts,
-                      leg=leg, tts_backend=tts_backend)
+                      leg=leg, tts_backend=tts_backend, i2v_backend=i2v_backend)

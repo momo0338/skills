@@ -40,8 +40,14 @@ def test_route_backend():
     assert S.route_backend({"type": "mm"}) == "dreamina"
     assert S.route_backend({"type": "i2v"}, alt="ark") == "ark"
     assert S.route_backend({"type": "i2v"}) == "dreamina"
-    # mm 段不被 i2v 替代后端接管(口型需即梦)
-    assert S.route_backend({"type": "mm"}, alt="ark") == "dreamina"
+    # mm 段无真人出镜（纯画外音+手部展示）→ 允许走 alt 后端（2026-08-05 放宽）
+    assert S.route_backend({"type": "mm", "shots": [{"host_on_camera": False}]},
+                           alt="ark") == "ark"
+    # mm 段有主播出镜 → 仍必须走即梦（口型驱动）
+    assert S.route_backend({"type": "mm", "shots": [{"host_on_camera": True}]},
+                           alt="ark") == "dreamina"
+    # 无 shots 字段时按无主播处理（兼容旧段数据，避免误钉死）
+    assert S.route_backend({"type": "mm", "shots": []}, alt="comfyui_h3") == "comfyui_h3"
 
 
 def test_within_cap():
@@ -72,6 +78,36 @@ def test_acquire_lock(tmp_path):
     assert S.acquire_lock(lp) is False  # 已占用
     S.release_lock(lp)
     assert S.acquire_lock(lp) is True
+
+
+def test_acquire_lock_reclaims_stale(tmp_path):
+    """陈旧锁（持有者进程已死）应被回收，不阻塞后续运行（2026-08-05 修复）。"""
+    lp = str(tmp_path / ".lock")
+    # 写一个不存在进程的 PID → 视为陈旧锁，回收后加锁成功
+    with open(lp, "w", encoding="utf-8") as f:
+        f.write("99999999")  # 极不可能存在的 PID
+    assert S.acquire_lock(lp) is True
+    # 回收后文件里是当前进程 PID，再获取应拒绝（活锁）
+    assert S.acquire_lock(lp) is False
+    S.release_lock(lp)
+
+
+def test_acquire_lock_rejects_live(tmp_path):
+    """活锁（持有者进程存活）应拒绝（真实并发保护）。"""
+    lp = str(tmp_path / ".lock")
+    with open(lp, "w", encoding="utf-8") as f:
+        f.write(str(os.getpid()))  # 当前进程 → 存活
+    assert S.acquire_lock(lp) is False
+    S.release_lock(lp)
+
+
+def test_acquire_lock_corrupt_file(tmp_path):
+    """损坏/空锁文件视为陈旧，回收后加锁。"""
+    lp = str(tmp_path / ".lock")
+    with open(lp, "w", encoding="utf-8") as f:
+        f.write("abc")  # 非数字
+    assert S.acquire_lock(lp) is True
+    S.release_lock(lp)
 
 
 # ---------------------------------------------------------------------------

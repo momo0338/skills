@@ -62,6 +62,11 @@ class ProviderName(StrEnum):
     KIMI = "kimi"  # Kimi K3：反推腿2
     DREAMINA = "dreamina"  # 即梦：人物口播 / 纯产品 i2v
     XYQ = "xyq"  # 小云雀
+    MINIMAX = "minimax"  # MiniMax H3（API 直连）
+    COMFYUI = "comfyui"  # 自建 ComfyUI：Wan2.x i2v
+    COMFYUI_H3 = "comfyui_h3"  # 自建 ComfyUI：MiniMax H3(FL2VA/ref2va)
+    COMFYUI_H3_T2V = "comfyui_h3_t2v"  # 自建 ComfyUI：H3 文生视频
+    COMFYUI_H3_R2V = "comfyui_h3_r2v"  # 自建 ComfyUI：H3 参考生视频
     COSYVOICE = "cosyvoice"  # CosyVoice TTS
     SEEDVC = "seedvc"  # Seed-VC 换声
     JIANYING = "jianying"  # 剪映草稿交付

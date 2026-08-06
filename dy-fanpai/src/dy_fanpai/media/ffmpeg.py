@@ -38,15 +38,23 @@ def dur(path: str) -> float:
          "-of", "csv=p=0", path]).strip())
 
 
-def normalize_args(clip: str, dst: str) -> list[str]:
-    """逐段视频归一化（确定性）：720x1280 + setsar=1 + yuv420p + libx264 crf20。"""
-    return [
+def normalize_args(clip: str, dst: str, seg_dur: float | None = None) -> list[str]:
+    """逐段视频归一化（确定性）：720x1280 + setsar=1 + yuv420p + libx264 crf20。
+
+    seg_dur: 段目标时长（秒）。生成 clip 可能超长（如 H3 帧数对齐网格，
+    4s 段可能出 5s clip），传入后加 ``-t`` 裁剪到段长，保证成片时长与
+    segments 精确对齐；不传则保持原时长。
+    """
+    args = [
         "ffmpeg", "-y", "-i", clip, "-an",
         "-c:v", "libx264", "-crf", "20", "-preset", "medium", "-pix_fmt", "yuv420p",
         "-vf", f"scale={TARGET_W}:{TARGET_H}:force_original_aspect_ratio=decrease,"
                f"pad={TARGET_W}:{TARGET_H}:(ow-iw)/2:(oh-ih)/2,setsar=1",
-        dst, "-loglevel", "error",
     ]
+    if seg_dur is not None and seg_dur > 0:
+        args += ["-t", f"{seg_dur:.2f}"]
+    args += [dst, "-loglevel", "error"]
+    return args
 
 
 def pad_audio_args(wav: str, video_dur: float, dst: str) -> list[str]:
@@ -112,10 +120,12 @@ def assemble(plan_path, clips_dir: str, audio_dir: str | None, out: str) -> None
             missing.append(name)
             continue
         vd = dur(clip)
-        # 1) 视频归一化
+        seg_dur = float(s.get("duration", 0)) or (float(s["end"]) - float(s["start"]))
+        # 1) 视频归一化(按段目标时长裁剪,兼容 H3 帧数网格导致的超长 clip)
         nv = os.path.join(work, f"{name}.mp4")
-        _run(normalize_args(clip, nv))
+        _run(normalize_args(clip, nv, seg_dur=seg_dur))
         norm_list.append(nv)
+        vd = min(vd, seg_dur) if seg_dur else vd
         # 2) 段配音 pad 到视频时长(无配音则纯静音)
         na = os.path.join(work, f"{name}.wav")
         wav = os.path.join(audio_dir, f"{name}.wav") if audio_dir else ""

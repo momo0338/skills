@@ -418,11 +418,14 @@ def submit_i2v(image_path: str, prompt: str, cfg: Config, duration: int = 5) -> 
 
 def submit_h3_i2v(
     image_path: str, prompt: str, cfg: Config, duration: int = 5,
-    width: int = 768, height: int = 1344,
+    width: int = 480, height: int = 832,
 ) -> str | None:
     """纯产品 image2video：MiniMax H3(FL2VA) i2v 工作流(24fps + 原生立体声)。
 
-    H3 原生画布短边 768,9:16 上限 768x1344;默认 768x1344。
+    ★尺寸必须落在 H3 训练分辨率网格（官方 ResolutionSelector 0.4MP）：
+    9:16 → 480x832（JS 实机脚本 h3_video_i2v.js 同款参数）。2026-08-05 实测
+    768x1344(1.03MP) 触发 latent 尺寸错误：shape [1,24,1,1,40,2,22,2]
+    (84480) invalid for input of size 86400——面积超训练域，latent 空间对不上。
     """
     pid, _ = submit(prompt, cfg, first_frame=image_path, duration=duration,
                     width=width, height=height, kind="h3_i2v")
@@ -438,11 +441,11 @@ def submit_mm(image_paths: list[str], audio_path: str | None, prompt: str, cfg: 
 
 def submit_h3_t2v(
     prompt: str, cfg: Config, duration: int = 5,
-    width: int = 768, height: int = 1344, seed: int | None = None,
+    width: int = 480, height: int = 832, seed: int | None = None,
 ) -> str | None:
     """文生视频：MiniMax H3(FL2VA) t2v 工作流(24fps + 原生立体声,无图输入)。
 
-    默认 768x1344(9:16, H3 画布短边 768 上限)。
+    默认 480x832(9:16, H3 官方 ResolutionSelector 0.4MP 网格)。
     """
     pid, _ = submit(prompt, cfg, duration=duration, width=width, height=height,
                     kind="h3_t2v", seed=seed)
@@ -451,12 +454,12 @@ def submit_h3_t2v(
 
 def submit_h3_r2v(
     image_paths: list[str], prompt: str, cfg: Config, duration: int = 5,
-    width: int = 768, height: int = 1344, seed: int | None = None,
+    width: int = 480, height: int = 832, seed: int | None = None,
 ) -> str | None:
     """参考生视频：MiniMax H3(ref2va) r2v 工作流(1~2 张参考图,24fps)。
 
     参考图驱动(动作/姿态/风格迁移);单图时自动移除第二个 LoadImage 与
-    ref_image_1 引用。默认 768x1344。
+    ref_image_1 引用。默认 480x832(9:16, H3 0.4MP 训练网格)。
     """
     pid, _ = submit(prompt, cfg, images=image_paths, duration=duration,
                     width=width, height=height, kind="h3_r2v", seed=seed)

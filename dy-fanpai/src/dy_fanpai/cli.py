@@ -41,6 +41,9 @@ def _build_parser() -> argparse.ArgumentParser:
     rn.add_argument("--tts-backend", default=None,
                     help="audio 阶段配音后端（voxcpm / voicebox / 注册表扩展；"
                          "默认取配置 DY_FANPAI_TTS_BACKEND，空=只原音切段）")
+    rn.add_argument("--i2v-backend", default=None,
+                    help="i2v/无主播 mm 段生成后端（dreamina 默认 / ark / xyq / minimax / "
+                         "comfyui / comfyui_h3 / comfyui_h3_t2v / comfyui_h3_r2v）")
 
     tt = sub.add_parser("tts", help="仅执行 TTS 配音（不走完整流水线）")
     tt.add_argument("workspace")
@@ -52,10 +55,17 @@ def _build_parser() -> argparse.ArgumentParser:
     ap.add_argument("workspace")
     ap.add_argument("gate", choices=[g.value for g in Gate])
     ap.add_argument("--by", default="integrator")
+    ap.add_argument("--live", action="store_true",
+                    help="批准时同时开启 Live（run.live=True，允许真调 API/花钱）")
+    ap.add_argument("--max-submits", type=int, default=None,
+                    help="设置生成提交硬上限（max_submits；默认保持现值）")
 
     rt = sub.add_parser("retry", help="断点续跑")
     rt.add_argument("workspace")
     rt.add_argument("--segments", default=None)
+    rt.add_argument("--i2v-backend", default=None,
+                    help="i2v/无主播 mm 段生成后端（dreamina 默认 / ark / xyq / minimax / "
+                         "comfyui / comfyui_h3 / comfyui_h3_t2v / comfyui_h3_r2v）")
 
     dl = sub.add_parser("deliver", help="交付")
     dl.add_argument("workspace")
@@ -65,6 +75,10 @@ def _build_parser() -> argparse.ArgumentParser:
     cl = sub.add_parser("clean", help="清理（dry-run）")
     cl.add_argument("workspace")
     cl.add_argument("--yes", action="store_true", help="实际删除（默认仅 dry-run 报告）")
+
+    su = sub.add_parser("set-url", help="写入 ComfyUI 等 URL 配置（配合 tunnel_comfyui.sh）")
+    su.add_argument("key", choices=["comfyui"], help="配置键")
+    su.add_argument("url", help="URL 值，如 https://xxx.trycloudflare.com")
     return p
 
 
@@ -150,6 +164,20 @@ def _clean(args) -> int:
     return 0
 
 
+def _set_url(args) -> int:
+    """写入 URL 配置（~/.config/dy-fanpai/<key>_base_url），配合 tunnel 脚本。"""
+    from .config import CONFIG_DIR
+
+    key = {"comfyui": "comfyui_base_url"}[args.key]
+    path = CONFIG_DIR / key
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    url = args.url.rstrip("/")
+    path.write_text(url, encoding="utf-8")
+    print(f"[set-url] {key} → {url}")
+    print("[set-url] 验证: dy-fanpai doctor")
+    return 0
+
+
 def _approve(args) -> int:
     try:
         ws = Workspace(Path(args.workspace))
@@ -159,6 +187,15 @@ def _approve(args) -> int:
         return 1
     gate = Gate(args.gate)
     workflow.approve_gate(run, gate, by=args.by, note=f"CLI approve {gate.value}")
+    if getattr(args, "live", False):
+        run.live = True
+        print("[approve] Live 已开启（run.live=True）")
+    if getattr(args, "max_submits", None) is not None:
+        if args.max_submits < 0:
+            print("[approve] 失败: --max-submits 必须 >= 0", file=sys.stderr)
+            return 1
+        run.max_submits = args.max_submits
+        print(f"[approve] max_submits 已设为 {args.max_submits}")
     ws.save(run)
     print(f"[approve] 闸口 {gate.value} 已批准（by {args.by}）")
     return 0
@@ -176,11 +213,13 @@ def _run(args) -> int:
             pipeline.execute_stage(
                 Stage(args.stage), ws, run, leg=getattr(args, "leg", None),
                 tts_backend=getattr(args, "tts_backend", None),
+                i2v_backend=getattr(args, "i2v_backend", None),
             )
         else:
             pipeline.run_flow(
                 ws, run, leg=getattr(args, "leg", None),
                 tts_backend=getattr(args, "tts_backend", None),
+                i2v_backend=getattr(args, "i2v_backend", None),
             )
     except workflow.GateBlocked as e:
         print(f"[run] 闸口拦截，已停止：{e}", file=sys.stderr)
@@ -254,6 +293,7 @@ def _retry(args) -> int:
     summary = G.run(
         str(segs), str(ws.clips), str(ws.audio), cfg,
         only=only, manifest=run, lock_path=str(ws.lock_path),
+        i2v_backend=args.i2v_backend or "dreamina",
     )
     print(f"[retry] 生成续跑摘要：{summary}")
     ws.save(run)
@@ -280,6 +320,8 @@ def main(argv: list[str] | None = None) -> int:
         return _deliver(args)
     if args.cmd == "clean":
         return _clean(args)
+    if args.cmd == "set-url":
+        return _set_url(args)
     return 2
 
 

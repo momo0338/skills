@@ -16,6 +16,12 @@ def test_normalize_args():
     assert "libx264" in joined
     assert "crf" in joined and "20" in joined
     assert "yuv420p" in joined
+    assert "-t" not in args  # 不传段长时保持原时长
+
+
+def test_normalize_args_with_seg_dur():
+    args = F.normalize_args("clip.mp4", "nv.mp4", seg_dur=4)
+    assert "-t" in args and args[args.index("-t") + 1] == "4.00"
 
 
 def test_pad_audio_args():
