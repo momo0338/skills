@@ -53,16 +53,18 @@ asyncio.run(main())
 ```python
 import asyncio
 from crawl4ai import AsyncWebCrawler, CrawlerRunConfig
+from crawl4ai.markdown_generation_strategy import DefaultMarkdownGenerator
 from crawl4ai.content_filter_strategy import BM25ContentFilter
 
 async def main():
-    filter = BM25ContentFilter(user_query="如何配置代理", threshold=1.0)
     async with AsyncWebCrawler() as crawler:
         result = await crawler.arun(
             url="https://example.com/docs",
-            config=CrawlerRunConfig(content_filter=filter)
+            config=CrawlerRunConfig(markdown_generator=DefaultMarkdownGenerator(
+                content_filter=BM25ContentFilter(user_query="如何配置代理", bm25_threshold=1.0)
+            ))
         )
-        print(result.fit_markdown)  # 过滤后的精准内容
+        print(result.markdown.fit_markdown)  # 过滤后的精准内容
 
 asyncio.run(main())
 ```
@@ -150,7 +152,8 @@ python3 <SKILL_DIR>/scripts/fetch.py "https://example.com/article" --max-chars 8
 
 1. **首次安装必须执行 `crawl4ai-setup`**，否则报浏览器缺失；报错时运行 `crawl4ai-doctor` 按提示修复（Linux 常见缺 libnss3 等系统库）。
 2. **动态页面提取不到内容**：加 `wait_for="css:..."` 或 `delay_before_return_html`；懒加载页面用 `js_code` 滚动触发。
-3. **过滤效果差**：调低 `BM25ContentFilter` 的 `threshold`（默认 1.0，越小保留越多）。
+3. **过滤效果差**：调低 `BM25ContentFilter` 的 `bm25_threshold`（默认 1.0，越小保留越多）。
 4. **结构化抽取为空**：检查 `baseSelector`/字段 selector 是否匹配实际 DOM（可用浏览器 DevTools 验证）。
 5. **性能**：单次启动浏览器约 2-5s，批量抓取建议复用同一个 `AsyncWebCrawler` 实例或使用 `arun_many` / Dispatcher 流式并发。
-6. **协议**：Apache 2.0，可自由商用；遵守目标网站 robots 与服务条款。
+6. **强反爬站点**：实测知乎返回 403、少数派等待超时——国内强风控平台（微信/知乎/少数派等）建议优先使用 scrapling-fetcher（自带针对性的选择器与 Stealth 模式）；crawl4ai 更适合公开站、文档站、SPA 与结构化抽取。
+7. **协议**：Apache 2.0，可自由商用；遵守目标网站 robots 与服务条款。

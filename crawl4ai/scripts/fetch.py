@@ -35,7 +35,10 @@ async def run(args):
 
     if args.query:
         from crawl4ai.content_filter_strategy import BM25ContentFilter
-        config.content_filter = BM25ContentFilter(user_query=args.query, threshold=1.0)
+        from crawl4ai.markdown_generation_strategy import DefaultMarkdownGenerator
+        config.markdown_generator = DefaultMarkdownGenerator(
+            content_filter=BM25ContentFilter(user_query=args.query, bm25_threshold=1.0)
+        )
 
     async with AsyncWebCrawler(config=browser) as crawler:
         result = await crawler.arun(url=args.url, config=config)
@@ -44,7 +47,8 @@ async def run(args):
         print(f"抓取失败: {result.error_message}", file=sys.stderr)
         sys.exit(1)
 
-    markdown = result.fit_markdown if (args.query and result.fit_markdown) else result.markdown
+    markdown = (result.markdown.fit_markdown if (args.query and result.markdown.fit_markdown)
+                else result.markdown.raw_markdown) if getattr(result, "markdown", None) else ""
     markdown = markdown or ""
 
     if args.json:
