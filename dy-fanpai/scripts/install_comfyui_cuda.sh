@@ -3,7 +3,7 @@
 # install_comfyui_cuda.sh — NVIDIA(CUDA)平台安装 ComfyUI
 #
 # 与 install_comfyui_rocm.sh 对称的 NVIDIA 分支:
-#   - 装官方 CUDA 版 torch(torchvision/torchaudio),默认 cu126
+#   - 装官方 CUDA 版 torch(torchvision/torchaudio),默认 cu128
 #   - 可选装 xformers / flash-attn(失败不阻塞启动)
 #   - 装完校验 torch.cuda.is_available()
 #
@@ -14,7 +14,7 @@
 #   bash install_comfyui_cuda.sh --workspace /home/user/comfy
 #
 # 环境变量:
-#   COMFY_CUDA_VERSION : CUDA 轮子版本,默认 cu126(可选 cu121/cu124/cu128)
+#   COMFY_CUDA_VERSION : CUDA 轮子版本,默认 cu128(可选 cu121/cu124/cu126)
 #   COMFY_GPU          : 强制指定(见 detect_gpu.sh),本脚本不强制
 #
 # 说明:本脚本可独立运行;通常由 install_comfyui.sh 检测到 NVIDIA GPU 后自动调用,
@@ -37,7 +37,7 @@ while [ $# -gt 0 ]; do
 done
 COMFY_DIR="$WORK/ComfyUI"
 MIRROR_PREFIX="https://ghfast.top/"   # GitHub 加速镜像(国内拉取慢时可去掉)
-CUDA_VER="${COMFY_CUDA_VERSION:-cu126}"
+CUDA_VER="${COMFY_CUDA_VERSION:-cu128}"
 
 echo "==> 工作目录: $WORK | CUDA 轮子: $CUDA_VER"
 mkdir -p "$WORK"

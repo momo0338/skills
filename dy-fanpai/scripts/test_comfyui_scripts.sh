@@ -47,7 +47,7 @@ trap 'rm -rf "$T"' EXIT
 # ---------------------------------------------------------------------------
 say "== 1. 语法与静态检查 =="
 for f in detect_gpu.sh install_comfyui.sh install_comfyui_cuda.sh \
-         install_comfyui_rocm.sh run_comfyui.sh test_comfyui_scripts.sh; do
+         install_comfyui_rocm.sh run_comfyui.sh run_comfyui_nvidia.sh test_comfyui_scripts.sh; do
   if bash -n "$f" 2>/dev/null; then
     PASS=$((PASS+1)); echo "  ✅ bash -n: $f"
   else
@@ -56,7 +56,7 @@ for f in detect_gpu.sh install_comfyui.sh install_comfyui_cuda.sh \
 done
 if command -v shellcheck >/dev/null 2>&1; then
   if shellcheck -S warning detect_gpu.sh install_comfyui.sh install_comfyui_cuda.sh \
-                        install_comfyui_rocm.sh run_comfyui.sh; then
+                        install_comfyui_rocm.sh run_comfyui.sh run_comfyui_nvidia.sh; then
     PASS=$((PASS+1)); echo "  ✅ shellcheck: 全部通过"
   else
     FAIL=$((FAIL+1)); echo "  ❌ shellcheck 有告警(见上)"
@@ -226,10 +226,10 @@ check "NVIDIA 识别" "$OUT" '运行环境: NVIDIA/CUDA \(torch cuda=12.4\)'
 check "NVIDIA 无加速库 → split-cross-attention(且不带 --highvram/--disable-xformers)" \
   "$OUT" 'ARGS>>> main.py --listen 0.0.0.0 --port 8188 --disable-auto-launch --use-split-cross-attention --fp16-vae$'
 
-# 5.2 NVIDIA: 有 xformers
+# 5.2 NVIDIA: 有 xformers(新版 ComfyUI 自动启用,无需 --xformers 参数)
 D="$T/run_cuda_xf"; mk_fake_venv "$D" "" "12.4" yes no
 OUT=$(run_with_venv "$D" "")
-check "NVIDIA 有 xformers → --xformers" "$OUT" 'ARGS>>>.*--xformers --fp16-vae$'
+check "NVIDIA 有 xformers → 自动启用(无 --xformers 参数,带默认 fp16-vae)" "$OUT" 'ARGS>>> main.py --listen 0.0.0.0 --port 8188 --disable-auto-launch --fp16-vae$'
 
 # 5.3 NVIDIA: COMFY_ATTN=sdpa
 D="$T/run_cuda_sdpa"; mk_fake_venv "$D" "" "12.4" yes no
@@ -255,11 +255,19 @@ D="$T/run_hip_fp32"; mk_fake_venv "$D" "6.2" "" no no
 OUT=$(run_with_venv "$D" "COMFY_FP16_VAE=0")
 check "AMD COMFY_FP16_VAE=0 → 无 --fp16-vae" "$OUT" 'ARGS>>>.*--enable-triton-backend$'
 
-# 5.7 未知环境(无 torch、无硬件工具)
+# 5.7 未知环境(无 torch、无硬件工具):保守参数,无 --highvram 且无 --fp16-vae(非 nvidia 默认关)
 D="$T/run_unknown"
 mk_fake_venv "$D" "" "" no no
 OUT=$(run_with_venv "$D" "")
-check "未知环境 → 保守参数" "$OUT" 'ARGS>>> main.py --listen 0.0.0.0 --port 8188 --disable-auto-launch --use-split-cross-attention --fp16-vae$'
+check "未知环境 → 保守参数" "$OUT" 'ARGS>>> main.py --listen 0.0.0.0 --port 8188 --disable-auto-launch --use-split-cross-attention$'
+
+# 5.8 run_comfyui_nvidia.sh: NVIDIA 专属脚本帮助与强制参数
+say ""
+say "== 5.8 run_comfyui_nvidia.sh(仅 NVIDIA 的启动脚本) =="
+OUT=$(bash run_comfyui_nvidia.sh -h 2>&1)
+check "nvidia 脚本 -h 帮助可读" "$OUT" 'Ubuntu \+ NVIDIA 环境启动 ComfyUI'
+check "nvidia 脚本帮助含 fp16-vae 说明" "$OUT" 'fp16-vae'
+check "nvidia 脚本帮助含 cuda-malloc 说明" "$OUT" 'cuda-malloc'
 
 # ---------------------------------------------------------------------------
 say ""

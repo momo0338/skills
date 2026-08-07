@@ -2,6 +2,38 @@
 
 本文件记录公共接口冻结与变更（执行方案 §11 WP1 / §12.2）。
 
+## [0.1.0] — 2026-08-06 · Ubuntu + NVIDIA 环境适配（ComfyUI 启动）
+
+### 新增
+- `scripts/run_comfyui_nvidia.sh`：**NVIDIA/CUDA 专属启动脚本**（原 run_comfyui.sh
+  是 AMD/双平台通用版，参数非 NVIDIA 最优）。差异：
+  - `--fp16-vae` 默认开启（NVIDIA 上更快更稳；AMD 粉红问题不存在）
+  - `--enable-cuda-malloc` 默认开启（显存复用优化）
+  - `--highvram` 自动决策：显存 >= 32GB 自动开（跑 14B 视频模型），消费卡默认关
+  - 注意力后端：flash-attn > xformers > sdpa 自动探测
+  - 启动前置校验：CUDA torch + nvidia-smi 缺失即明确报错；崩溃排查注释为 NVIDIA 语境
+  - **Python 环境三级选择**（2026-08-06 调整，系统优先）：
+    ① 系统 python3 有 torch+CUDA+comfy → 直接用系统 python（DSW/预装零安装）；
+    ② 系统不满足 → 切 venv（env/.venv），venv 满足则 venv 运行；
+    ③ 均不满足 → 自动在 venv 安装 CUDA torch + requirements + flash-attn 后运行；
+    `COMFY_NO_INSTALL=1` 可禁止自动安装，`COMFY_CUDA_VERSION` 指定 CUDA 轮子（默认 cu128）
+- `scripts/test_comfyui_scripts.sh`：新增 5.8 节（nvidia 脚本帮助/参数断言），
+  语法检查清单加入 run_comfyui_nvidia.sh。
+
+### 变更
+- `scripts/run_comfyui.sh`：`COMFY_FP16_VAE` 默认值**按 GPU 类型区分**——
+  NVIDIA 默认 1（fp16 开），AMD 默认 0（防粉红输出）。此前 AMD 的默认 0 误作用于
+  NVIDIA 分支（08-04 粉红修复的副作用，本次修正）。
+- `scripts/install_comfyui_cuda.sh`：默认 CUDA 轮子 **cu126 → cu128**（2026 新 torch 主流）。
+- `scripts/test_comfyui_scripts.sh`：修正 2 条过时断言——NVIDIA 有 xformers 时
+  新版 ComfyUI 自动启用不留 `--xformers` 参数（期望改为无 xformers 参数 + fp16-vae）；
+  未知环境保守参数不带 fp16-vae。
+
+### 说明
+- 模型侧：Wan2.2 下载脚本强制 umt5 fp16 是 AMD ROCm 兼容决策，NVIDIA 上可换
+  fp8 版本更省显存（脚本注释已注明）；MiniMax H3 int8 pruned 权重两平台通用。
+- 回归测试 54/54 通过。
+
 ## [0.1.0] — 2026-08-06 · 复盘优化：锁回收 / assemble CLI / 轮询脚本 / set-url
 
 ### 新增

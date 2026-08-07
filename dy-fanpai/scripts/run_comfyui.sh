@@ -171,14 +171,18 @@ else
   echo "==> 未知 GPU 环境,使用保守参数(仅 CPU 可用时请确认 torch 为 CPU 版)"
 fi
 
-# AMD 上 fp16 VAE 内核不稳定: 08-04 实机实测(MI308X/ROCm 7.2)三次生成全输出粉红/噪点,
-# 不同输入图与 prompt 结果一致 → 系统性 VAE 解码数值问题,非 prompt/图词导致。
-# 默认改为 0(关闭 --fp16-vae,走 fp32);确认 fp16 稳定后可 COMFY_FP16_VAE=1 显式打开。
-# (NVIDIA 侧同样适用: 若 VAE 相关崩溃/粉红输出,优先关掉排查)
-COMFY_FP16_VAE="${COMFY_FP16_VAE:-0}"
+# VAE 精度默认值按 GPU 类型区分(2026-08-06 修复:此前 NVIDIA 分支误吃 AMD 默认):
+#   - AMD/ROCm: fp16 VAE 内核不稳定(08-04 实测 MI308X 全输出粉红/噪点),默认 0=关闭
+#   - NVIDIA/CUDA: fp16 VAE 更快更稳,默认 1=开启
+# 均可用 COMFY_FP16_VAE=1|0 显式覆盖。
+if [[ "$GPU_TYPE" == "nvidia" ]]; then
+  COMFY_FP16_VAE="${COMFY_FP16_VAE:-1}"
+else
+  COMFY_FP16_VAE="${COMFY_FP16_VAE:-0}"
+fi
 if [[ "$COMFY_FP16_VAE" == "1" ]]; then
   VAE_ARGS="--fp16-vae"
-  echo "==> VAE 使用 fp16(08-04 实测 AMD 粉红输出根因,已默认关闭;此处显式打开)"
+  echo "==> VAE 使用 fp16(NVIDIA 默认;AMD 若需排查粉红请 COMFY_FP16_VAE=0)"
 else
   VAE_ARGS=""
   echo "==> VAE 使用 fp32(--fp16-vae 已关,AMD ROCm 默认,防粉红输出)"
