@@ -1,0 +1,14 @@
+# 千川开放平台 API 配置
+# 申请地址: https://developer.oceanengine.com/  (巨量引擎开放平台)
+# 流程: 创建应用 -> 授权广告主 -> 获取 access_token
+api:
+  app_id: ""            # 应用ID（必填，用于获取token）
+  app_secret: ""        # 应用密钥（必填）
+  access_token: ""      # 授权access_token（通过 OAuth 获取）
+  advertiser_id: 0      # 千川投放账户ID（广告主ID）
+  version: "v1.0"
+
+# 数据拉取范围（默认取最近N天）
+fetch:
+  days: 1               # 每次拉取最近几天的数据（日报=1）
+  time_granularity: "TIME_GRANULARITY_DAILY"  # 天维度

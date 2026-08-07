@@ -1,6 +1,6 @@
 # Momo Skills Core Library (AI Agent 技能库)
 
-> 包含 **19 个通用与专项 AI Agent 技能**，覆盖网页正文提取、智能视频看懂抽帧、媒体音视频下载、万站 CLI 操作、抖音专项 CLI、抖音带货翻拍、抖音小店经营数据、网络代理管理、企业情报深度调研及微信公众号采集等场景。
+> 包含 **20 个通用与专项 AI Agent 技能**，覆盖网页正文提取、智能视频看懂抽帧、媒体音视频下载、万站 CLI 操作、抖音专项 CLI、抖音带货翻拍、抖音小店经营数据、千川投流决策、网络代理管理、企业情报深度调研及微信公众号采集等场景。
 
 ---
 
@@ -27,6 +27,7 @@
 | **[videodl](./videodl)** | `videodl/` | 多平台视频下载 CLI（URL 直下，支持指定平台过滤与保存目录） | Python `videodl` |
 | **[dy-fanpai](./dy-fanpai)** | `dy-fanpai/` | 抖音带货视频翻拍（参考视频反推、规划人审、即梦/Ark/小云雀生成、音频/装配/质检、字幕与剪映草稿交付，四闸口+费用硬上限） | Python `dy-fanpai`, `ffmpeg`, `ffprobe` |
 | **[dy-doudian](./dy-doudian)** | `dy-doudian/` | 抖音小店（抖店）经营数据工具与 MCP Server（订单/商品/评价/直播/账单只读查询，access_token 自动刷新） | Python `mcp`, `httpx`, 抖店开放平台 API |
+| **[dy-qianchuan](./dy-qianchuan)** | `dy-qianchuan/` | 巨量千川投流日报与策略调整（真实ROI/保本ROI、素材12维评分+四分类、账号类型诊断、掉量排查、ROI四层漏斗、HTML看板+每日操作清单） | Python `requests`, `pyyaml`, 千川开放平台 API |
 
 ---
 

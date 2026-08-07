@@ -1,0 +1,37 @@
+# 千川成本参数配置（必填：真实业务数据）
+# 所有比率用小数，如 55% = 0.55
+cost_params:
+  gross_margin: 0.55        # 毛利率 = (售价-进货-包装) / 售价，必填
+  refund_rate: 0.15         # 退款率，必填（>30% 即盈亏平衡线告警）
+  platform_fee_rate: 0.05   # 平台扣点率
+  tech_fee_rate: 0.006      # 技术服务费率（2026年起千川乘方减免至0.6%，原2%）
+  commission_rate: 0.15     # 达人佣金率（直播带货场景）
+  freight_rate: 0.03        # 运费占GMV比例
+  fixed_cost_month: 120000  # 月固定成本（人工+场地+其他，元）
+  target_profit: 100000     # 目标月净利润（用于计算目标ROI）
+
+# 素材诊断阈值（来自方法论，可按需调整）
+thresholds:
+  material_score:
+    healthy: 8.0            # >=8 健康继续投
+    watch: 6.0              # 6-8 密切观察
+  ab_test:
+    min_spend: 150          # 新素材至少消耗150元才算有效测试
+    pass_roi: 12            # ROI>=12 才算通过
+    pass_rate: 0.5          # 通过率>=50% 说明素材方向正确
+    min_daily_budget: 50    # 单条新素材日预算不低于50-100元（周期化运营）
+    min_impressions: 3000   # 测试周期前置条件：累计展现>=3000次
+    test_cycle_days: 3      # 3天初步判断（展现不足3000延长观察）
+    kill_days: 7            # 7天不轻易关停
+    kill_roi_ratio: 0.6     # 连续7天无起量且ROI<目标60%才关停
+    test_budget_ratio: 0.2  # 测试预算占账户日预算20%左右
+  inventory:
+    main_active: 5          # 主推爆款安全库存
+    backup: 8               # 备选素材安全库存
+    testing: 6              # 测试中素材安全库存
+    ratio_3_1: true         # 3:1原则：每3条在投至少1条备选
+  stage_test_budget:
+    cold_start: 0.5         # 冷启动期测试预算占比50%
+    stable: 0.15            # 稳定期15%
+    surge: 0.3              # 冲量期30%
+    decline: 0.10           # 衰退期10%

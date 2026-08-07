@@ -184,6 +184,12 @@ SKILL_DEPS = {
             "pip": "cd dy-doudian && pip install -e .",
         },
     },
+    "dy-qianchuan": {
+        "pip": ["requests", "pyyaml"],
+        "install_cmds": {
+            "pip": "pip install requests pyyaml",
+        },
+    },
 }
 
 # ============================================================================
