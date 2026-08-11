@@ -5,6 +5,8 @@
 *.mkv
 *.log
 __pycache__/
+.pytest_cache/
+.analysis-tmp/
 dy-cli/outputs/
 .omo/
 .venv/
