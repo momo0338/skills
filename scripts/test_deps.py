@@ -47,7 +47,7 @@ skill_names = [s[0] for s in skills]
 expected_skills = [
     "analyze-viral-commerce-video", "claude-real-video", "crawl4ai", "defuddle", "dy-cli",
     "dy-doudian", "dy-fanpai",
-    "fengniao-search", "jina-reader", "lux", "mptext-api", "opencli", "proxy",
+    "dev-resource-accelerator", "fengniao-search", "jina-reader", "lux", "mptext-api", "opencli", "proxy",
     "qibook-company-profile", "qibook-company-wiki-deepresearch", "scrapling",
     "videodl", "yt-dlp", "zhihu-search",
 ]

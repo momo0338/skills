@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "github": {
+    "prefix_mirrors": [
+      {
+        "name": "ghfast.top",
+        "base_url": "https://ghfast.top/",
+        "kinds": ["download", "raw", "clone"]
+      },
+      {
+        "name": "gh-proxy.com",
+        "base_url": "https://gh-proxy.com/",
+        "kinds": ["download", "raw", "clone"]
+      },
+      {
+        "name": "ghproxy.vip",
+        "base_url": "https://ghproxy.vip/",
+        "kinds": ["download", "raw", "clone"]
+      },
+      {
+        "name": "gh-fast.com",
+        "base_url": "https://gh-fast.com/",
+        "kinds": ["download", "raw", "clone"]
+      },
+      {
+        "name": "mirror.ghproxy.com",
+        "base_url": "https://mirror.ghproxy.com/",
+        "kinds": ["download", "raw", "clone"]
+      }
+    ],
+    "clone_mirrors": [
+      {
+        "name": "gitclone.com",
+        "base_url": "https://gitclone.com/github.com/",
+        "kinds": ["clone"]
+      }
+    ],
+    "direct_name": "github-direct"
+  }
+}
+

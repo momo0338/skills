@@ -122,6 +122,9 @@ SKILL_DEPS = {
             "pip": "pip install requests",
         },
     },
+    "dev-resource-accelerator": {
+        "bins": ["git", "curl"],
+    },
     "fengniao-search": {
         "env": ["FN_API_KEY"],
     },

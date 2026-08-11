@@ -1,0 +1,4 @@
+interface:
+  display_name: "研发资源加速"
+  short_description: "为公开GitHub资源选择镜像、阻断敏感请求并自动安全回退"
+  default_prompt: "Use $dev-resource-accelerator to access this public GitHub resource with safe mirror fallback."
