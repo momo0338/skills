@@ -150,6 +150,13 @@ SKILL_DEPS = {
             "pip": 'pip install "claude-real-video[fast]"',
         },
     },
+    "whispercpp": {
+        "bins": ["whisper-cli", "ffmpeg", "tesseract"],
+        "brew_bins": ["whisper-cli", "ffmpeg", "tesseract"],
+        "install_cmds": {
+            "brew": "brew install whisper-cpp ffmpeg tesseract tesseract-lang",
+        },
+    },
     "analyze-viral-commerce-video": {
         "bins": ["ffmpeg"],
         "pip": ["pillow", "openai-whisper"],
