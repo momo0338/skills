@@ -191,6 +191,30 @@ def build_html(result):
     else:
         roi_funnel_html = ""
 
+    # 追投建议（分步实操手册: 翻倍定锚/追投铁律/ROI层级）
+    boost_html = ""
+    boost = result.get("boost", {})
+    if boost:
+        boost_rows = ""
+        for c in boost.get("boost_candidates", [])[:5]:
+            boost_rows += f'<li><b>{c["name"]}</b> — ROI {c["roi"]} · 消耗 {money(c["stat_cost"])} · 评分 {c["score"]}</li>'
+        boost_html = f"""
+    <div class="section">
+      <h2>素材追投建议（翻倍定锚法 / 追投铁律）</h2>
+      <div class="note" style="margin-bottom:12px">{boost['anchor_note']}</div>
+      <div class="cards">
+        <div class="card"><div class="label">可追投优质素材</div>
+          <div class="value" style="font-size:20px">{len(boost.get('boost_candidates', []))} 条</div></div>
+        <div class="card"><div class="label">新素材预算（铁律2·30%）</div>
+          <div class="value" style="font-size:20px">{money(boost.get('new_material_budget', 0))}</div></div>
+        <div class="card"><div class="label">平均ROI</div>
+          <div class="value" style="font-size:20px">{boost.get('avg_roi', 0)}</div></div>
+      </div>
+      <div class="note" style="margin-top:12px;margin-bottom:8px">{boost.get('new_material_note', '')}</div>
+      <div class="note" style="margin-bottom:0;background:#FAEEDA;color:#633806">{boost.get('roi_layer_note', '')}</div>
+      {('<ul style="margin-top:8px;font-size:13px;color:#444441;list-style:none">' + boost_rows + '</ul>') if boost_rows else ''}
+    </div>"""
+
     # 测试预算
     budget_note = (f'<div class="note">阶段：<b>{stage["stage"]}</b>（{stage["desc"]}）· '
                    f'测试预算占比 {strategy["stage_budget_ratio"]*100:.0f}% → '
@@ -268,6 +292,7 @@ td {{ padding:8px 6px; border-bottom:0.5px solid #f1efe8; }}
   {budget_note}
   {account_type_note}
   {roi_funnel_html}
+  {boost_html}
   <div class="section">
     <h2>成本构成拆解（真实 ROI 核算）</h2>
     {cost_bars}

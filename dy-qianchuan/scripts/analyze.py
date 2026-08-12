@@ -453,6 +453,67 @@ class RoiFunnelDiagnoser:
         }
 
 
+class BoostEngine:
+    """素材追投建议引擎（分步实操手册: 玩法A四关激活 / 玩法B翻倍定锚 / 玩法D追投铁律）
+    输出: 可追投素材清单 + 追投预算建议 + 新素材激活建议
+    """
+
+    def __init__(self, material_results, profit, account):
+        self.materials = material_results
+        self.profit = profit
+        self.account = account
+
+    def analyze(self):
+        breakeven = self.profit["breakeven_roi"]
+        total_spend = sum(m["stat_cost"] for m in self.materials)
+        rois = [m["roi"] for m in self.materials if m.get("roi")]
+        avg_roi = sum(rois) / len(rois) if rois else 0
+
+        # 铁律1·追高不追低: 只追 ROI≥保本1.2倍 且 消耗正常的优质素材
+        boost_candidates = []
+        for m in self.materials:
+            if m["roi"] >= breakeven * 1.2 and m["stat_cost"] >= 800 and m["status"] in ("健康",):
+                boost_candidates.append({
+                    "name": m["name"],
+                    "roi": m["roi"],
+                    "stat_cost": m["stat_cost"],
+                    "score": m["score"],
+                })
+        # 按ROI降序
+        boost_candidates.sort(key=lambda x: x["roi"], reverse=True)
+
+        # 铁律2·追新不追老: 每天30%预算给3天内新素材
+        new_mats = [m for m in self.materials if m.get("days_on", 99) <= 3]
+        new_budget = round(total_spend * 0.30)
+        new_budget_note = (f"3天内新素材{len(new_mats)}条，按铁律2划 {new_budget} 元（30%预算）"
+                           if new_mats else f"无3天内新素材，需补充新素材池（铁律2要求每天30%预算给新素材）")
+
+        # 玩法B·翻倍定锚建议: 当ROI卡死或低于目标时给出
+        target_roi = self.profit["target_roi"]
+        if self.profit["surface_roi"] < target_roi and avg_roi < breakeven * 2:
+            anchor_note = ("玩法B·翻倍定锚: 主计划ROI设系统推荐值2倍+10条追投赛马(100元/5h)"
+                           "，消耗10~25块查ROI不达标即关，循环3~5轮沉淀6~8条")
+        else:
+            anchor_note = "主计划ROI达标，维持现状；追投只对优质素材（追高不追低）"
+
+        # 玩法G·ROI层级建议: ROI卡死时降层扩池
+        if self.profit["surface_roi"] < breakeven and self.account.get("pay_roi", 0) > 0:
+            roi_layer_note = ("玩法G·降层扩池: 当前ROI低于保本线，ROI降到系统建议值80%"
+                              "（成交目标出价=客单价×毛利率÷0.8），等20~30min看消耗；降层扩池只做一次")
+        else:
+            roi_layer_note = "ROI层级正常，无需降层扩池"
+
+        return {
+            "boost_candidates": boost_candidates,
+            "new_material_budget": new_budget,
+            "new_material_note": new_budget_note,
+            "anchor_note": anchor_note,
+            "roi_layer_note": roi_layer_note,
+            "avg_roi": round(avg_roi, 2),
+            "total_spend": total_spend,
+        }
+
+
 class AccountTypeDiagnoser:
     """账号类型诊断（来自全域投放方法论: 先诊断再开药方）
     维度: 自然流占比/开播在线/2小时后在线/ROI稳定性/素材更新频率/客单价
@@ -656,6 +717,8 @@ def main():
     risk_checks = RiskChecker.check(account, profit, material_results, cost_params)
     # 4.7 ROI四层漏斗归因（小伍: 先流量再承接最后素材）
     roi_funnel = RoiFunnelDiagnoser.diagnose(account, profit)
+    # 4.8 追投建议（分步实操手册: 四关激活/翻倍定锚/追投铁律）
+    boost = BoostEngine(material_results, profit, account).analyze()
     # 5. 策略输出
     strategy = StrategyBuilder(profit, material_results, stage, cost_params, inventory_warning).build()
 
@@ -670,6 +733,7 @@ def main():
         "decline_checks": decline_checks,
         "risk_checks": risk_checks,
         "roi_funnel": roi_funnel,
+        "boost": boost,
         "strategy": strategy,
     }
 
@@ -690,6 +754,12 @@ def main():
         lvl_icon = {"高": "🔴", "中": "🟠", "低": "🟢"}.get(r["level"], "•")
         print(f"  {lvl_icon} [{r['level']}] {r['item']}: {r['detail']} → {r['action']}")
     print(f"【ROI漏斗】{roi_funnel['layer']}（{roi_funnel['issue']}）→ {roi_funnel['action']}")
+    print(f"【追投建议】{boost['anchor_note']}")
+    print(f"  {boost['new_material_note']}")
+    if boost['boost_candidates']:
+        top = boost['boost_candidates'][0]
+        print(f"  可追投优质素材 {len(boost['boost_candidates'])} 条，首选: {top['name']} (ROI {top['roi']})")
+    print(f"  {boost['roi_layer_note']}")
     print(f"【账号类型】{account_type['type']} - 自然流占比~{account_type['natural_share']*100:.0f}% "
           f"ROI稳定={account_type['roi_stable']} 客单价{account_type['unit_price']}元")
     print(f"  策略: {account_type['strategy']}")
