@@ -1,0 +1,4 @@
+interface:
+  display_name: "抖音「我的」数据整理"
+  short_description: "抖音登录态下把消息/喜欢/收藏/观看历史/稍后再看整理成统计表"
+  default_prompt: "Use $dy-wode 把抖音账号的喜欢、收藏、观看历史、稍后再看、私信视频整理成统计表格。"

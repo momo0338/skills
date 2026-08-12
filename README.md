@@ -1,6 +1,6 @@
 # Momo Skills Core Library (AI Agent 技能库)
 
-> 包含 **22 个通用与专项 AI Agent 技能**，覆盖网页正文提取、智能视频看懂抽帧、媒体音视频下载、万站 CLI 操作、抖音专项 CLI、抖音带货翻拍、抖音小店经营数据、千川投流决策、研发资源加速、网络代理管理、企业情报深度调研、微信公众号采集及本地视频语音转写等场景。
+> 包含 **23 个通用与专项 AI Agent 技能**，覆盖网页正文提取、智能视频看懂抽帧、媒体音视频下载、万站 CLI 操作、抖音专项 CLI、抖音「我的」个人数据整理、抖音带货翻拍、抖音小店经营数据、千川投流决策、研发资源加速、网络代理管理、企业情报深度调研、微信公众号采集及本地视频语音转写等场景。
 
 ---
 
@@ -12,6 +12,7 @@
 | **[whispercpp](./whispercpp)** | `whispercpp/` | 本地视频批量语音转写 + 画面 OCR 融合纠错（ffmpeg 提音频 + whisper.cpp large-v3-turbo GPU 加速，术语提示词、跳过无关文件、时间戳转写稿；tesseract OCR 提取画面文字线索，LLM 交叉修正同音错字；macOS/Windows 双平台原生运行） | `whisper-cpp`(brew/macOS) 或官方预编译包(Windows), `ffmpeg`, `tesseract`(可选), ggml-large-v3-turbo 模型 |
 | **[opencli](./opencli)** | `opencli/` | 万站合一 CLI 工具（覆盖抖音、知乎、B站、YouTube、小红书、雪球等 164 站点 + 10 桌面应用） | Node.js, `@jackwener/opencli`, Chrome Extension |
 | **[dy-cli](./dy-cli)** | `dy-cli/` | 抖音全功能 CLI 工具（搜索、无水印音视频/图文下载、热榜 Top 50、点赞/评论/收藏互动、发布与数据分析） | Python `dy-cli` |
+| **[dy-wode](./dy-wode)** | `dy-wode/` | 抖音「我的」个人数据整理（登录态下采集喜欢/收藏/观看历史/稍后再看/私信视频，批量取点赞/评论/收藏/转发统计，输出 Markdown/CSV/JSON/Excel 表格；逐分类缓存与中断续跑） | Python `dy-cli`, `openpyxl`, ego lite（ego-browser） |
 | **[proxy](./proxy)** | `proxy/` | 代理池获取与管理工具（实时同步 `momo0338/proxy` 节点，支持 HTTP/SOCKS5 轮换、延迟测试与环境变量导出） | Python `proxy_manager.py`, GitHub raw |
 | **[dev-resource-accelerator](./dev-resource-accelerator)** | `dev-resource-accelerator/` | 公开 GitHub 仓库、Release、Raw 与归档的镜像优先访问、自动回退和安全拦截 | Python, `git`, `curl` |
 | **[yt-dlp](./yt-dlp)** | `yt-dlp/` | 全能音视频下载（最高画质/音质、字幕提取、播放列表批处理、Cookie 认证） | `yt-dlp`, `ffmpeg` |

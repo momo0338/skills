@@ -50,6 +50,14 @@ SKILL_DEPS = {
             "post_install": "playwright install",
         },
     },
+    "dy-wode": {
+        "bins": ["dy", "ego-browser"],
+        "pip": ["dy-cli", "openpyxl"],
+        "pip_bins": {"dy": "dy-cli"},
+        "install_cmds": {
+            "pip": "pip install dy-cli openpyxl",
+        },
+    },
     "opencli": {
         "bins": ["opencli"],
         "npm": ["@jackwener/opencli"],
