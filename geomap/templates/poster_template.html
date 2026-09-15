@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>__TITLE__</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html {
+      width: 1080px;
+      height: 2160px;
+      margin: 0;
+      padding: 0;
+      background: __BG_GRADIENT__;
+    }
+    body {
+      width: 1080px;
+      height: 2160px;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background: __BG_GRADIENT__;
+      font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "HarmonyOS Sans SC", "Microsoft YaHei", sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      position: relative;
+    }
+
+    /* 顶部标题区域 */
+    .header-area {
+      margin-top: 118px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      z-index: 10;
+    }
+    .pill-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: __PILL_BG__;
+      color: __PILL_COLOR__;
+      font-size: 72px;
+      font-weight: 900;
+      padding: 10px 80px;
+      border-radius: 999px;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+      letter-spacing: 4px;
+    }
+    .main-title {
+      color: #FFFFFF;
+      font-size: 76px;
+      font-weight: 900;
+      margin-top: 26px;
+      letter-spacing: 4px;
+      text-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+    }
+    .sub-title {
+      color: rgba(255, 255, 255, 0.88);
+      font-size: 30px;
+      font-weight: 600;
+      margin-top: 14px;
+      letter-spacing: 2px;
+    }
+
+    /* 中部地图画板 */
+    .map-wrapper {
+      position: absolute;
+      top: 500px;
+      width: 1000px;
+      height: 800px;
+      z-index: 5;
+    }
+    #map-svg {
+      width: 100%;
+      height: 100%;
+      overflow: visible;
+    }
+    path.city-polygon {
+      stroke-linejoin: round;
+      stroke-linecap: round;
+    }
+    .city-label {
+      font-size: 26px;
+      font-weight: 800;
+      text-anchor: middle;
+      dominant-baseline: central;
+      pointer-events: none;
+    }
+
+    /* 引线层（位于色块之上、徽章之下） */
+    #leader-svg {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%;
+      height: 100%;
+      overflow: visible;
+      pointer-events: none;
+      z-index: 18;
+    }
+
+    /* 数据徽章卡片 (Badge) */
+    .badge-card {
+      position: absolute;
+      transform: translate(-50%, -50%);
+      border: 3px solid #FFFFFF;
+      border-radius: 8px;
+      box-shadow: 0 7px 20px rgba(0, 0, 0, 0.32);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      text-align: center;
+      pointer-events: none;
+      z-index: 20;
+    }
+    .badge-metric {
+      background: #0959A1;
+      color: #FFFFFF;
+      font-size: 19px;
+      font-weight: 800;
+      padding: 4px 12px;
+      white-space: nowrap;
+      letter-spacing: 1px;
+    }
+    .badge-city {
+      color: #FFFFFF;
+      font-size: 24px;
+      font-weight: 900;
+      padding: 5px 12px;
+      white-space: nowrap;
+      letter-spacing: 1px;
+    }
+
+    /* 编号标记 chip（label_mode = "chip" 时替代徽章，直接压在城市中心，几乎不遮挡） */
+    .chip-marker {
+      position: absolute;
+      transform: translate(-50%, -50%);
+      width: 58px;
+      height: 58px;
+      border-radius: 50%;
+      border: 3px solid #FFFFFF;
+      box-shadow: 0 5px 14px rgba(0, 0, 0, 0.34);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #FFFFFF;
+      font-size: 30px;
+      font-weight: 900;
+      line-height: 1;
+      pointer-events: none;
+      z-index: 20;
+    }
+
+    /* 防盗微型水印网 */
+    .watermark-layer {
+      position: absolute;
+      top: 0; left: 0; width: 100%; height: 100%;
+      pointer-events: none;
+      z-index: 15;
+    }
+    .wm-item {
+      position: absolute;
+      font-size: 26px;
+      font-weight: 900;
+      color: __WM_COLOR__;
+      transform: rotate(-30deg);
+      border: 2px solid __WM_COLOR__;
+      border-radius: 6px;
+      padding: 2px 8px;
+      opacity: 0.55;
+    }
+
+    /* 运营里程排行卡 */
+    .rank-panel {
+      position: absolute;
+      top: 1342px;
+      width: 924px;
+      background: rgba(255, 255, 255, 0.94);
+      backdrop-filter: blur(16px);
+      border-radius: 24px;
+      box-shadow: 0 14px 38px rgba(0, 0, 0, 0.22);
+      padding: 22px 30px 20px;
+      z-index: 22;
+      display: flex;
+      flex-direction: column;
+    }
+    .rank-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      padding-bottom: 12px;
+      border-bottom: 2px solid #E3EBF3;
+      margin-bottom: 10px;
+    }
+    .rank-head-main {
+      font-size: 29px;
+      font-weight: 900;
+      color: #0B3C66;
+      letter-spacing: 1px;
+    }
+    .rank-head-sub {
+      font-size: 19px;
+      font-weight: 700;
+      color: #8A9AAB;
+      letter-spacing: 1px;
+    }
+    .rank-row {
+      display: flex;
+      align-items: center;
+      height: 46px;
+    }
+    .rank-no {
+      width: 34px;
+      font-size: 22px;
+      font-weight: 900;
+      color: #9AA9B8;
+      text-align: center;
+      flex: none;
+    }
+    .rank-no.top { color: #E5251E; }
+    .rank-name {
+      width: 172px;
+      font-size: 25px;
+      font-weight: 900;
+      color: #17324B;
+      flex: none;
+      letter-spacing: 1px;
+    }
+    .rank-tag {
+      font-size: 16px;
+      font-weight: 800;
+      color: #0859A1;
+      background: #E8F2FC;
+      border-radius: 5px;
+      padding: 1px 7px;
+      margin-left: 4px;
+      vertical-align: 3px;
+    }
+    .rank-bar-wrap {
+      flex: 1;
+      height: 20px;
+      background: #EEF3F8;
+      border-radius: 10px;
+      overflow: hidden;
+      margin-right: 14px;
+    }
+    .rank-bar {
+      height: 100%;
+      border-radius: 10px;
+    }
+    .rank-val {
+      width: 108px;
+      text-align: right;
+      font-size: 23px;
+      font-weight: 900;
+      color: #17324B;
+      flex: none;
+      letter-spacing: 0.5px;
+    }
+
+    /* 底部专属 Dock 栏与印章 */
+    .footer-area {
+      position: absolute;
+      bottom: 58px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      z-index: 25;
+      width: 100%;
+    }
+    .logo-dock {
+      width: 900px;
+      min-height: 112px;
+      background: rgba(255, 255, 255, 0.92);
+      backdrop-filter: blur(16px);
+      border-radius: 24px;
+      box-shadow: 0 12px 35px rgba(0, 0, 0, 0.2);
+      display: flex;
+      justify-content: space-around;
+      align-items: center;
+      padding: 14px 40px;
+      margin-bottom: 18px;
+    }
+    .logo-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+    .logo-icon {
+      max-height: 70px;
+      max-width: 140px;
+      object-fit: contain;
+    }
+    .logo-name {
+      font-size: 23px;
+      font-weight: 900;
+      color: #1A1A1A;
+      margin-top: 6px;
+      letter-spacing: 1px;
+    }
+    .logo-sub {
+      font-size: 13px;
+      color: #555555;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    .source-note {
+      color: rgba(255, 255, 255, 0.62);
+      font-size: 17px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      margin-bottom: 14px;
+      text-align: center;
+    }
+
+    /* 品牌徽章/印章 */
+    .brand-stamp {
+      border: 3.5px solid #FFFFFF;
+      border-radius: 14px;
+      padding: 7px 24px;
+      color: #FFFFFF;
+      font-size: 33px;
+      font-weight: 900;
+      letter-spacing: 3px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(255, 255, 255, 0.08);
+      backdrop-filter: blur(4px);
+      box-shadow: 0 6px 18px rgba(0,0,0,0.15);
+    }
+  </style>
+  <script src="d3.v7.min.js"></script>
+</head>
+<body>
+
+  <div class="header-area">
+    <div class="pill-badge">__PILL_TEXT__</div>
+    <div class="main-title">__MAIN_TITLE__</div>
+    <div class="sub-title" id="sub-title-box">__SUB_TITLE__</div>
+  </div>
+
+  <div class="map-wrapper" id="map-wrapper">
+    <svg id="map-svg">
+      <defs>
+        <filter id="map-shadow" x="-10%" y="-10%" width="130%" height="130%">
+          <feDropShadow dx="0" dy="16" stdDeviation="18" flood-color="#02284C" flood-opacity="0.35" />
+        </filter>
+      </defs>
+      <g id="map-g" filter="url(#map-shadow)"></g>
+    </svg>
+    <div class="watermark-layer" id="wm-layer"></div>
+    <svg id="leader-svg"></svg>
+    <div id="badges-container"></div>
+  </div>
+
+  <div class="rank-panel" id="rank-panel"></div>
+
+  <div class="footer-area">
+    <div class="logo-dock" id="logo-dock">__LOGOS_HTML__</div>
+    <div class="source-note" id="source-note"></div>
+    <div class="brand-stamp">__BRAND_STAMP__</div>
+  </div>
+
+  <script>
+    const CONFIG = __CONFIG_JSON__;
+    const GEO_DATA = __GEO_JSON__;
+
+    if (!CONFIG.subtitle) {
+      const sub = document.getElementById("sub-title-box");
+      if (sub) sub.style.display = "none";
+    }
+    if (!CONFIG.logos || CONFIG.logos.length === 0) {
+      const dock = document.getElementById("logo-dock");
+      if (dock) dock.style.display = "none";
+    }
+    const sourceBox = document.getElementById("source-note");
+    if (CONFIG.source_note) {
+      sourceBox.innerText = CONFIG.source_note;
+    } else {
+      sourceBox.style.display = "none";
+    }
+
+    const svgG = d3.select("#map-g");
+    const container = document.getElementById("map-wrapper");
+    const width = 1000;
+    const height = 800;
+    const leaderSvg = d3.select("#leader-svg").attr("viewBox", `0 0 ${width} ${height}`);
+    const leaderPts = [];
+
+    // 1. 通用墨卡托投影 (通过 d3.geoTransform 彻底解决反向 Winding Order 导致的全球翻转问题)
+    let minLon = Infinity, maxLon = -Infinity, minLat = Infinity, maxLat = -Infinity;
+    function extractCoords(coords) {
+      if (typeof coords[0] === "number") {
+        const [lon, lat] = coords;
+        if (lon < minLon) minLon = lon;
+        if (lon > maxLon) maxLon = lon;
+        if (lat < minLat) minLat = lat;
+        if (lat > maxLat) maxLat = lat;
+      } else {
+        coords.forEach(extractCoords);
+      }
+    }
+    GEO_DATA.features.forEach(f => extractCoords(f.geometry.coordinates));
+
+    const centerLon = (minLon + maxLon) / 2;
+    const centerLat = (minLat + maxLat) / 2;
+
+    function mercY(lat) {
+      const rad = lat * Math.PI / 180;
+      return Math.log(Math.tan(Math.PI / 4 + rad / 2));
+    }
+
+    const minMercY = mercY(minLat);
+    const maxMercY = mercY(maxLat);
+    const dMercY = maxMercY - minMercY;
+    const dLonRad = (maxLon - minLon) * Math.PI / 180;
+
+    const FIT = 0.94;
+    const scaleX = (width * FIT) / dLonRad;
+    const scaleY = (height * FIT) / dMercY;
+    const autoScale = Math.min(scaleX, scaleY);
+    const centerMercY = mercY(centerLat);
+
+    const projection = d3.geoTransform({
+      point: function(lon, lat) {
+        const x = (lon - centerLon) * (Math.PI / 180) * autoScale + width / 2;
+        const y = -(mercY(lat) - centerMercY) * autoScale + height / 2;
+        this.stream.point(x, y);
+      }
+    });
+
+    function projectPoint(coords) {
+      const [lon, lat] = coords;
+      const x = (lon - centerLon) * (Math.PI / 180) * autoScale + width / 2;
+      const y = -(mercY(lat) - centerMercY) * autoScale + height / 2;
+      return [x, y];
+    }
+
+    const pathGenerator = d3.geoPath().projection(projection);
+
+    const highlightMap = {};
+    (CONFIG.highlights || []).forEach(h => {
+      highlightMap[h.name] = h;
+    });
+
+    const COLOR_PALETTE = {
+      red: "#E5251E",
+      orange: "#F37021",
+      green: "#6DB935",
+      yellow: "#FDB827",
+      blue: "#0859A1",
+      gray: "#FFFFFF"
+    };
+    function resolveColor(c) {
+      return COLOR_PALETTE[c] || c || COLOR_PALETTE.red;
+    }
+
+    // 2. 绘制城市多边形
+    svgG.selectAll("path.city-polygon")
+      .data(GEO_DATA.features)
+      .join("path")
+      .attr("class", "city-polygon")
+      .attr("d", pathGenerator)
+      .attr("fill", d => {
+        const cityName = d.properties.name;
+        const hl = highlightMap[cityName];
+        if (hl) {
+          return resolveColor(hl.color);
+        }
+        return "#FFFFFF";
+      })
+      .attr("stroke", d => {
+        const cityName = d.properties.name;
+        const hl = highlightMap[cityName];
+        return hl ? "#FFFFFF" : "#D4DFEB";
+      })
+      .attr("stroke-width", d => {
+        const hl = highlightMap[d.properties.name];
+        return hl ? 2.5 : 1.5;
+      });
+
+    // 3. 绘制未高亮城市的普通文字标签
+    svgG.selectAll("text.city-label")
+      .data(GEO_DATA.features.filter(d => !highlightMap[d.properties.name]))
+      .join("text")
+      .attr("class", "city-label")
+      .attr("fill", "#667788")
+      .attr("x", d => {
+        const center = d.properties.center || d.properties.centroid;
+        return center ? projectPoint(center)[0] : pathGenerator.centroid(d)[0];
+      })
+      .attr("y", d => {
+        const center = d.properties.center || d.properties.centroid;
+        return center ? projectPoint(center)[1] : pathGenerator.centroid(d)[1];
+      })
+      .text(d => d.properties.name);
+
+    // 4. 挂载高亮城市标记
+    //    label_mode = "badge"（默认）：城市旁的双色数据徽章 + 引线
+    //    label_mode = "chip"          ：城市中心的小号编号圆点，与下方排行卡的行号一一对应
+    //    label_mode = "onmap"         ：城市名 + 指标直接标在色块内（白字深描边），零浮层零遮挡
+    const badgesDiv = document.getElementById("badges-container");
+    const wmLayer = document.getElementById("wm-layer");
+    const placements = [];
+    const LABEL_MODE = CONFIG.label_mode || "badge";
+
+    // 编号 = 该城市在 ranking 中的名次（排行卡的行号就是图例）
+    const rankIndex = {};
+    (CONFIG.ranking || []).forEach((r, i) => { rankIndex[r.name] = i + 1; });
+
+    // —— onmap：色块内直标。城市名一行、指标一行，均带深色描边保证在红/橙/绿底上可读 ——
+    if (LABEL_MODE === "onmap") {
+      const gLab = leaderSvg.append("g").attr("class", "onmap-labels");
+      function haloText(g, x, y, size, weight, spacing, txt) {
+        g.append("text").attr("x", x).attr("y", y)
+            .attr("text-anchor", "middle").attr("dominant-baseline", "central")
+            .attr("fill", "#FFFFFF").attr("font-size", size).attr("font-weight", weight)
+            .attr("letter-spacing", spacing)
+            .attr("stroke", "rgba(6,40,72,0.5)").attr("stroke-width", 5)
+            .attr("paint-order", "stroke").attr("stroke-linejoin", "round")
+            .text(txt);
+      }
+      (CONFIG.highlights || []).forEach(hl => {
+        const feature = GEO_DATA.features.find(f => f.properties.name === hl.name);
+        if (!feature) return;
+        const center = feature.properties.center || feature.properties.centroid;
+        const p = center ? projectPoint(center) : pathGenerator.centroid(feature);
+        const x = p[0] + (hl.offset ? hl.offset[0] : 0);
+        const y = p[1] + (hl.offset ? hl.offset[1] : 0);
+
+        haloText(gLab, x, y, 26, 900, "1", hl.name);
+        if (hl.metric) haloText(gLab, x, y + 32, 20, 800, "0.5", hl.metric);
+      });
+    }
+
+    if (LABEL_MODE !== "onmap") (CONFIG.highlights || []).forEach(hl => {
+      const feature = GEO_DATA.features.find(f => f.properties.name === hl.name);
+      if (!feature) return;
+
+      const center = feature.properties.center || feature.properties.centroid;
+      let p = center ? projectPoint(center) : pathGenerator.centroid(feature);
+      let x = p[0];
+      let y = p[1];
+
+      const cityColor = resolveColor(hl.color);
+      const el = document.createElement("div");
+      // 两种模式都吃 offset：chip 模式下用于把挨得太近的编号点错开
+      if (hl.offset) { x += hl.offset[0]; y += hl.offset[1]; }
+
+      if (LABEL_MODE === "chip") {
+        el.className = "chip-marker";
+        el.style.background = cityColor;
+        el.innerText = rankIndex[hl.name] || "";
+      } else {
+        el.className = "badge-card";
+        const metricHtml = hl.metric ? ('<div class="badge-metric">' + hl.metric + '</div>') : '';
+        el.innerHTML = metricHtml + '<div class="badge-city" style="background: ' + cityColor + ';">' + hl.name + '</div>';
+      }
+
+      el.style.left = x + "px";
+      el.style.top = y + "px";
+      badgesDiv.appendChild(el);
+      // 锚点 = 未加偏移的真实城市中心（chip 模式即标记本身的位置，无需引线）
+      placements.push({ el: el, ax: p[0], ay: p[1], color: cityColor, name: hl.name });
+    });
+
+    // 4b. 引线：城市锚点 → 徽章，白色描边保证在深蓝底/白色色块上都读得清
+    (function drawLeaders() {
+      if (LABEL_MODE !== "badge") return;
+      const mwRect = container.getBoundingClientRect();
+      const g = leaderSvg.append("g").attr("class", "leader-layer");
+      placements.forEach(pl => {
+        const r = pl.el.getBoundingClientRect();
+        const l = r.left - mwRect.left, t = r.top - mwRect.top;
+        const rr = r.right - mwRect.left, bb = r.bottom - mwRect.top;
+        const bx = (l + rr) / 2, by = (t + bb) / 2;
+        // 锚点本身就落在徽章内 = 徽章压在城市上，无需引线（也避免出现孤立圆点）
+        const inside = pl.ax >= l - 2 && pl.ax <= rr + 2 && pl.ay >= t - 2 && pl.ay <= bb + 2;
+        if (inside) return;
+        [[ "rgba(255,255,255,0.92)", 7 ], [ pl.color, 3.2 ]].forEach(([stroke, w]) => {
+          g.append("line")
+            .attr("x1", pl.ax).attr("y1", pl.ay)
+            .attr("x2", bx).attr("y2", by)
+            .attr("stroke", stroke).attr("stroke-width", w)
+            .attr("stroke-linecap", "round");
+        });
+        g.append("circle").attr("cx", pl.ax).attr("cy", pl.ay).attr("r", 10.5)
+          .attr("fill", "#FFFFFF").attr("opacity", 0.95);
+        g.append("circle").attr("cx", pl.ax).attr("cy", pl.ay).attr("r", 5.8)
+          .attr("fill", pl.color).attr("data-city", pl.name);
+      });
+    })();
+
+    // 5. 运营里程排行卡
+    const rankPanel = document.getElementById("rank-panel");
+    const rankList = CONFIG.ranking || [];
+    if (rankList.length === 0) {
+      rankPanel.style.display = "none";
+    } else {
+      const maxVal = Math.max.apply(null, rankList.map(r => r.value));
+      let rowsHtml = "";
+      rankList.forEach((r, i) => {
+        const pct = Math.max(6, Math.round((r.value / maxVal) * 100));
+        const tag = r.tag ? ('<span class="rank-tag">' + r.tag + '</span>') : "";
+        rowsHtml +=
+          '<div class="rank-row">' +
+            '<div class="rank-no' + (i === 0 ? ' top' : '') + '">' + (i + 1) + '</div>' +
+            '<div class="rank-name">' + r.name + tag + '</div>' +
+            '<div class="rank-bar-wrap"><div class="rank-bar" style="width:' + pct + '%;background:' + resolveColor(r.color) + ';"></div></div>' +
+            '<div class="rank-val">' + r.value_text + '</div>' +
+          '</div>';
+      });
+      rankPanel.innerHTML =
+        '<div class="rank-head">' +
+          '<div class="rank-head-main">' + (CONFIG.rank_title || "运营里程排行") + '</div>' +
+          '<div class="rank-head-sub">' + (CONFIG.rank_sub || "") + '</div>' +
+        '</div>' + rowsHtml;
+    }
+
+    // 6. 生成微型防盗水印网 (以省份边界内部散落)
+    if (CONFIG.watermark_text) {
+      const wmPositions = [
+        { top: 105, left: 330 },
+        { top: 265, left: 220 },
+        { top: 395, left: 455 },
+        { top: 530, left: 560 },
+        { top: 655, left: 390 }
+      ];
+      wmPositions.forEach(p => {
+        const item = document.createElement("div");
+        item.className = "wm-item";
+        item.style.top = p.top + "px";
+        item.style.left = p.left + "px";
+        item.innerText = CONFIG.watermark_text;
+        wmLayer.appendChild(item);
+      });
+    }
+
+    // 7. 等字体与 d3 渲染完成后再标记就绪，避免截图字体回退
+    const markReady = () => { window.__RENDER_READY__ = true; };
+    if (document.fonts && document.fonts.ready) {
+      document.fonts.ready.then(() => requestAnimationFrame(() => requestAnimationFrame(markReady)));
+    } else {
+      requestAnimationFrame(() => requestAnimationFrame(markReady));
+    }
+  </script>
+</body>
+</html>

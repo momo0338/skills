@@ -1,0 +1,36 @@
+{
+  "province": "江苏省",
+  "pill_text": "江苏省",
+  "pill_bg": "#DDF32E",
+  "pill_color": "#0859A1",
+  "title": "已开通地铁的城市",
+  "subtitle": "6市地铁成网 · 淮安有轨电车 | 截至2026年9月",
+  "watermark_text": "满爸爱生活",
+  "brand_stamp": "满爸爱生活",
+  "source_note": "数据来源：交通运输部月度运营数据速报 + 各市轨道交通运营方公开数据",
+  "rank_title": "运营里程排行",
+  "rank_sub": "单位：公里（含市域线）",
+  "highlights": [
+    { "name": "南京市", "metric": "579km · 14条", "color": "red",    "offset": [-187, 6] },
+    { "name": "苏州市", "metric": "346km · 9条",  "color": "orange", "offset": [120, 20] },
+    { "name": "无锡市", "metric": "142km · 5条",  "color": "orange", "offset": [-164, 112] },
+    { "name": "徐州市", "metric": "95km · 4条",   "color": "green",  "offset": [-63, -76] },
+    { "name": "南通市", "metric": "60km · 2条",   "color": "green",  "offset": [115, -88] },
+    { "name": "常州市", "metric": "54km · 2条",   "color": "green",  "offset": [-157, 45] }
+  ],
+  "ranking": [
+    { "name": "南京市", "value": 579, "value_text": "579 km", "color": "red" },
+    { "name": "苏州市", "value": 346, "value_text": "346 km", "color": "orange" },
+    { "name": "无锡市", "value": 142, "value_text": "142 km", "color": "orange" },
+    { "name": "徐州市", "value": 95,  "value_text": "95 km",  "color": "green" },
+    { "name": "南通市", "value": 60,  "value_text": "60 km",  "color": "green" },
+    { "name": "常州市", "value": 54,  "value_text": "54 km",  "color": "green" },
+    { "name": "淮安市", "value": 20,  "value_text": "20 km",  "color": "blue", "tag": "有轨电车" }
+  ],
+  "logos": [
+    { "name": "南京地铁", "sub": "NANJING METRO" },
+    { "name": "苏州轨道", "sub": "SUZHOU RAIL" },
+    { "name": "无锡地铁", "sub": "WUXI METRO" },
+    { "name": "徐州地铁", "sub": "XUZHOU METRO" }
+  ]
+}

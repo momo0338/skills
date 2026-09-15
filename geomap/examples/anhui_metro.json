@@ -1,0 +1,47 @@
+{
+  "province": "安徽省",
+  "pill_text": "安徽省",
+  "pill_bg": "#DDF32E",
+  "pill_color": "#0859A1",
+  "title": "已开通地铁的城市",
+  "watermark_text": "满爸爱生活",
+  "brand_stamp": "满爸爱生活",
+  "highlights": [
+    {
+      "name": "合肥市",
+      "metric": "运营275.5km",
+      "color": "orange",
+      "offset": [
+        0,
+        0
+      ]
+    },
+    {
+      "name": "滁州市",
+      "metric": "运营44.86km",
+      "color": "green",
+      "offset": [
+        0,
+        0
+      ]
+    },
+    {
+      "name": "马鞍山市",
+      "metric": "运营27.49km",
+      "color": "green",
+      "offset": [
+        0,
+        -10
+      ]
+    },
+    {
+      "name": "芜湖市",
+      "metric": "运营46.2km",
+      "color": "green",
+      "offset": [
+        0,
+        10
+      ]
+    }
+  ]
+}
