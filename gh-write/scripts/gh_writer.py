@@ -88,50 +88,16 @@ def build_draft_content(gh: dict, hot_items: list, new_items: list, custom_title
     pub_at = gh.get('latest_release', {}).get('published_at') or '持续活跃维护'
     repo_url = gh.get('html_url') or f"https://github.com/{full_name}"
 
-    badge_table = f"""<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:16px;margin:18px 0;box-shadow:0 1px 3px rgba(0,0,0,0.03);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-    <div style="font-size:16px;font-weight:700;color:#0f172a;display:flex;align-items:center;gap:6px;">
-      <svg style="width:18px;height:18px;fill:#1e293b;" viewBox="0 0 16 16"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"></path></svg>
-      {full_name}
-    </div>
-    <span style="font-size:12px;background:#e2e8f0;color:#475569;padding:2px 8px;border-radius:12px;font-weight:600;">{license_type}</span>
-  </div>
-
-  <div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:8px;padding:10px 12px;margin-bottom:12px;">
-    <div style="font-size:11px;color:#64748b;margin-bottom:3px;font-weight:500;">🌐 项目开源地址（长按直接复制）：</div>
-    <div style="font-size:13px;color:#0969da;font-family:ui-monospace,Menlo,Consolas,monospace;word-break:break-all;font-weight:600;line-height:1.4;">
-      {repo_url}
-    </div>
-  </div>
-
-  <div style="display:flex;gap:8px;margin-bottom:12px;">
-    <div style="flex:1;background:#ffffff;border:1px solid #e2e8f0;border-radius:8px;padding:8px 4px;text-align:center;">
-      <div style="font-size:11px;color:#64748b;">社区热度</div>
-      <div style="font-size:14px;font-weight:700;color:#0f172a;margin-top:2px;">⭐ {stars_str}</div>
-      <div style="font-size:10px;color:#94a3b8;margin-top:2px;">{forks_str} 🍴</div>
-    </div>
-    <div style="flex:1;background:#ffffff;border:1px solid #e2e8f0;border-radius:8px;padding:8px 4px;text-align:center;">
-      <div style="font-size:11px;color:#64748b;">开源协议</div>
-      <div style="font-size:14px;font-weight:700;color:#e11d48;margin-top:2px;">{license_type}</div>
-      <div style="font-size:10px;color:#10b981;margin-top:2px;">自由开源商用</div>
-    </div>
-    <div style="flex:1;background:#ffffff;border:1px solid #e2e8f0;border-radius:8px;padding:8px 4px;text-align:center;">
-      <div style="font-size:11px;color:#64748b;">核心语言</div>
-      <div style="font-size:14px;font-weight:700;color:#0f172a;margin-top:2px;">{primary_lang}</div>
-      <div style="font-size:10px;color:#94a3b8;margin-top:2px;">现代化架构</div>
-    </div>
-  </div>
-
-  <div style="font-size:13px;color:#334155;line-height:1.8;margin-bottom:6px;">
-    <div>📜 <strong>开源协议</strong>：<span style="background:#f1f5f9;color:#e11d48;padding:1px 5px;border-radius:4px;font-family:monospace;font-size:12px;">{license_type}</span> 协议（完全自由开源、代码可任意商用）</div>
-    <div>🛠️ <strong>技术栈详情</strong>：{lang_display}</div>
-    <div>🚀 <strong>最新版本</strong>：{tag_name} ({pub_at})</div>
-  </div>
-
-  <div style="border-top:1px dashed #cbd5e1;padding-top:8px;margin-top:6px;font-size:12px;color:#64748b;line-height:1.6;">
-    💡 <strong>核心定位</strong>：{desc or '专为解决上述痛点打造的高性能开源利器'}
-  </div>
-</div>"""
+    # 纯语义 Markdown 项目名片（遵循规范：MD专注语义，杜绝内联 HTML 视觉代码）
+    badge_table = f"""| 指标 | 详情 | 说明 |
+| :--- | :--- | :--- |
+| **项目名称** | [{full_name}]({repo_url}) | GitHub 官方开源仓库 |
+| **开源地址** | `{repo_url}` | 长按可直接复制 |
+| **社区热度** | ⭐ **{stars_str}** Stars ｜ 🍴 **{forks_str}** Forks | 全球开发者高口碑认可 |
+| **开源协议** | `{license_type}` | 自由开源透明 |
+| **技术底座** | `{lang_display}` | 现代化技术栈架构 |
+| **最新版本** | `{tag_name}` ({pub_at}) | 持续活跃维护中 |
+| **核心定位** | {desc or '专为解决上述痛点打造的高性能开源利器'} |"""
 
     # 特性列表
     features = gh.get("readme_analysis", {}).get("features", [])
