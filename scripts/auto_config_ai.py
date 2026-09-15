@@ -41,6 +41,20 @@ HOME_DIR = os.path.expanduser("~")
 # 每个技能可在此声明所需依赖，也可以在 SKILL.md frontmatter 中声明
 # ============================================================================
 SKILL_DEPS = {
+    "competition-write": {},
+    "geomap": {},
+    "github-cli": {
+        "bins": ["gh"],
+        "brew_bins": ["gh"],
+        "install_cmds": {
+            "brew": "brew install gh",
+        },
+    },
+    "guide-write": {},
+    "ima-skill": {},
+    "mp-html": {},
+    "mp-publish": {},
+    "mp-save": {},
     "dy-cli": {
         "bins": ["dy"],
         "pip": ["dy-cli", "playwright"],
