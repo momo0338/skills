@@ -132,6 +132,7 @@ const cfg = __CFG__
   const t0 = Date.now()
   let reason = 'budget'
   for (let i = 0; i < __MAXSTEPS__; i++) {
+    if (__TARGETLIMIT__ > 0 && lastN >= __TARGETLIMIT__) { reason = 'limit'; break }
     __SCROLLBODY__
     const st = await js(`(() => {
       const g = window.__dygrid, s = window.__dyscroll
@@ -142,11 +143,12 @@ const cfg = __CFG__
     })()`)
     if (st.n < 0) { reason = 'lost'; break }
     if (st.n === lastN) quiet++; else { quiet = 0; lastN = st.n }
+    if (__TARGETLIMIT__ > 0 && st.n >= __TARGETLIMIT__) { reason = 'limit'; break }
     if (i >= 40 && st.atBottom && quiet >= 25) { reason = 'end'; break }
   }
   cliLog('SCROLLDONE|' + cfg.key + '|' + lastN + '|' + Math.round((Date.now() - t0) / 1000) + '|' + reason)
 
-  // 一次性读 UL 内全部卡片 ID + 文本
+  // 一次性读 UL 内全部卡片 ID + 文本 (+ 可选 React Fiber 元数据)
   const cards = await js(`(() => {
     const root = window.__dygrid || null
     if (!root) return []
@@ -156,12 +158,48 @@ const cfg = __CFG__
       const m = (a.getAttribute('href') || '').match(/(\\d{15,25})/)
       if (!m || seen.has(m[1])) continue
       seen.add(m[1])
-      out.push({ id: m[1], text: (a.textContent || '').trim().replace(/\\s+/g, ' ').slice(0, 200) })
+      
+      let fiber = null
+      let curr = a
+      while (curr && !fiber) {
+        const k = Object.keys(curr).find(key => key.startsWith('__reactFiber$'))
+        if (k) {
+          let f = curr[k]
+          let depth = 0
+          while (f && depth < 20) {
+            if (f.memoizedProps && f.memoizedProps.awemeInfo) {
+              const ai = f.memoizedProps.awemeInfo
+              fiber = {
+                desc: (ai.desc || '').trim(),
+                author: (ai.authorInfo && ai.authorInfo.nickname) ? ai.authorInfo.nickname : '',
+                create_time: ai.createTime || 0,
+                digg: (ai.stats && ai.stats.diggCount) || 0,
+                comment: (ai.stats && ai.stats.commentCount) || 0,
+                collect: (ai.stats && ai.stats.collectCount) || 0,
+                share: (ai.stats && ai.stats.shareCount) || 0
+              }
+              break
+            }
+            f = f.return
+            depth++
+          }
+        }
+        curr = curr.parentElement
+      }
+      
+      out.push({
+        id: m[1],
+        text: (a.textContent || '').trim().replace(/\\s+/g, ' ').slice(0, 200),
+        fiber: fiber
+      })
     }
     return out
   })()`)
   cliLog('TABSUMMARY|' + cfg.key + '|' + cards.length)
-  for (const c of cards) cliLog('CARD|' + cfg.key + '|' + c.id + '|' + c.text)
+  for (const c of cards) {
+    cliLog('CARDDATA|' + cfg.key + '|' + Buffer.from(JSON.stringify(c)).toString('base64'))
+    cliLog('CARD|' + cfg.key + '|' + c.id + '|' + c.text)
+  }
   }
 
 try { await completeTaskSpace(task.id, { keep: false }) } catch (e) {}
@@ -185,9 +223,12 @@ def collect_tabs(keys: list[str], args) -> dict[str, list[dict]]:
                     pass
         # 每个分类单独一个浏览器进程：单个分类超时/失败不影响其他分类
         print(f"正在通过 ego-browser 采集「{TABS[k][0]}」…", flush=True)
+        target_limit = args.limit if args.limit > 0 else 0
         code = NODE_TEMPLATE.replace("__KEY__", json.dumps(k)).replace(
             "__CFG__", json.dumps({"key": k, "url": TABS[k][1]}, ensure_ascii=False)
         ).replace("__MAXSTEPS__", str(args.max_steps)).replace(
+            "__TARGETLIMIT__", str(target_limit)
+        ).replace(
             "__SCROLLBODY__", FAST_BODY if args.fast_scroll else WHEEL_BODY
         )
         try:
@@ -198,9 +239,18 @@ def collect_tabs(keys: list[str], args) -> dict[str, list[dict]]:
         n = 0
         done = None
         for line in out.splitlines():
-            if line.startswith("CARD|"):
-                _, key, vid, text = line.split("|", 3)
+            if line.startswith("CARDDATA|"):
+                _, key, b64 = line.split("|", 2)
                 if key in result:
+                    import base64
+                    card_data = json.loads(base64.b64decode(b64).decode("utf-8"))
+                    item = {"aweme_id": card_data["id"], "card_text": card_data.get("text", "")}
+                    if card_data.get("fiber"):
+                        item["fiber"] = card_data["fiber"]
+                    result[key].append(item)
+            elif line.startswith("CARD|"):
+                _, key, vid, text = line.split("|", 3)
+                if key in result and not any(it["aweme_id"] == vid for it in result[key]):
                     result[key].append({"aweme_id": vid, "card_text": text})
             elif line.startswith("TABSUMMARY|"):
                 _, key, n = line.split("|", 2)
@@ -211,7 +261,7 @@ def collect_tabs(keys: list[str], args) -> dict[str, list[dict]]:
         label = TABS[k][0]
         if done:
             cnt, secs, reason = done
-            note = {"end": "已到底", "budget": "步数预算用尽，可能不完整！", "lost": "页面异常"}.get(reason, reason)
+            note = {"end": "已到底", "budget": "步数预算用尽，可能不完整！", "lost": "页面异常", "limit": "已达目标数量"}.get(reason, reason)
             print(f"  {label}：{n} 个视频（滚到 {cnt} 条，{secs}s，{note}）", flush=True)
         else:
             print(f"  {label}：{n} 个视频", flush=True)
@@ -325,17 +375,25 @@ def build_rows(category_items: dict[str, list[dict]], details: dict[str, dict]) 
         for item in items:
             vid = item["aweme_id"]
             detail = details.get(vid) or {}
+            fiber = item.get("fiber") or {}
             st = detail.get("statistics") or {}
+            desc = (detail.get("desc") or fiber.get("desc") or item.get("card_text") or item.get("title") or "").strip()
+            author = (detail.get("author") or {}).get("nickname") or fiber.get("author") or ""
+            create_time = detail.get("create_time") or fiber.get("create_time")
+            digg = st.get("digg_count") or fiber.get("digg") or 0
+            comment = st.get("comment_count") or fiber.get("comment") or 0
+            collect = st.get("collect_count") or fiber.get("collect") or 0
+            share = st.get("share_count") or fiber.get("share") or 0
             row = {
                 "分类": label,
-                "视频名称": (detail.get("desc") or item.get("card_text") or item.get("title") or "").strip(),
+                "视频名称": desc,
                 "视频ID": vid,
-                "作者": (detail.get("author") or {}).get("nickname") or "",
-                "发布时间": fmt_ts(detail.get("create_time")),
-                "点赞数": st.get("digg_count") or 0,
-                "评论数": st.get("comment_count") or 0,
-                "收藏数": st.get("collect_count") or 0,
-                "转发数": st.get("share_count") or 0,
+                "作者": author,
+                "发布时间": fmt_ts(create_time),
+                "点赞数": digg,
+                "评论数": comment,
+                "收藏数": collect,
+                "转发数": share,
                 "备注": "",
             }
             if key == "message":
@@ -382,6 +440,7 @@ def main() -> int:
     ap.add_argument("--list-only", action="store_true", help="只列 ID 与卡片文本，不取统计、不写文件")
     ap.add_argument("--out", help="输出目录（写 md/csv/json）")
     ap.add_argument("--limit", type=int, default=0, help="每个分类最多保留 N 条（0=不限）")
+    ap.add_argument("--recent", type=int, nargs="?", const=20, default=None, help="快速采集最新 N 条作品（默认 20，不执行全量慢滚）")
     ap.add_argument("--max-steps", type=int, default=1200, help="每个分类最大滚动步数（喜欢是大列表，可调大）")
     ap.add_argument("--tab-timeout", type=int, default=1800, help="单个分类浏览器进程超时秒数")
     ap.add_argument("--pace", type=int, default=3, help="分类之间的冷却秒数（降低风控概率，0=不冷却）")
@@ -389,6 +448,14 @@ def main() -> int:
     ap.add_argument("--cache-dir", default="", help="采集缓存目录（逐分类落盘，中断可续跑）")
     ap.add_argument("--resume", action="store_true", help="优先读取缓存目录中已有分类，跳过重新采集（需 --cache-dir）")
     args = ap.parse_args()
+
+    if args.recent is not None:
+        if args.limit == 0:
+            args.limit = args.recent
+        if args.max_steps == 1200:
+            args.max_steps = 15
+        if args.pace == 3:
+            args.pace = 1
 
     if args.resume and not args.cache_dir:
         args.cache_dir = os.path.expanduser("~/.cache/dy-wode")

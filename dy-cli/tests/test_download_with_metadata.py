@@ -542,6 +542,40 @@ class MetadataTests(unittest.TestCase):
             MODULE._signed_douyin_comment_page = original_signed
             MODULE._iesdouyin_comment_page = original_ies
 
+    def test_fetch_aweme_detail_fallback(self) -> None:
+        class FallbackClient:
+            def get_video_detail(self, aweme_id: str) -> dict:
+                return {"aweme_id": aweme_id, "desc": "fallback"}
+
+        res = MODULE.fetch_aweme_detail(FallbackClient(), "123456")
+        self.assertEqual(res["desc"], "fallback")
+
+    def test_archive_one_note_with_images(self) -> None:
+        note_detail = {
+            "aweme_id": "7684429646524801393",
+            "desc": "图文作品测试",
+            "create_time": 1789170701,
+            "author": {"nickname": "摄影师", "sec_uid": "sec-1"},
+            "statistics": {"digg_count": 10},
+            "images": [
+                {"url_list": ["https://cdn/img1.jpg"]},
+                {"url_list": ["https://cdn/img2.jpg"]},
+            ],
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            path, status = MODULE.archive_one(
+                FakeClient(),
+                note_detail,
+                Path(directory),
+                options(),
+                "0.2.2",
+            )
+            self.assertEqual(status, "complete")
+            data = json.loads(path.read_text(encoding="utf-8"))
+            self.assertEqual(data["content"]["content_type"], "image")
+            self.assertEqual(len(data["local_assets"]), 2)
+            self.assertEqual(data["local_assets"][0]["role"], "image")
+
 
 if __name__ == "__main__":
     unittest.main()

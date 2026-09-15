@@ -19,7 +19,7 @@ version: 1.0.0
 
 ## 安装状态
 
-- **安装路径**：`/usr/local/bin/opencli`
+- **安装路径**：`/usr/local/bin/opencli`（⚠️ WorkBuddy 沙箱 PATH 里没有，必须用全路径调用）
 - **当前版本**：1.8.6
 - **npm 包**：`@jackwener/opencli`
 - **Node.js 要求**：>= 20
@@ -82,14 +82,32 @@ opencli <site> <command> [options]
 
 ### 小红书 (xiaohongshu)
 
+> ⚠️ WorkBuddy 沙箱 PATH 不含 opencli，**必须用全路径 `/usr/local/bin/opencli`**。
+> 2026-09-04 实测：已登录「满爸爱生活」账号，`whoami`/`creator-profile` 验证通过。
+> 标注 [write] 的命令走登录浏览器 UI 自动化（发布/删除等敏感操作须先经用户确认内容）。
+
 | 命令 | 用途 | 类型 |
 |------|------|------|
-| `opencli xiaohongshu hot` | 小红书热门 | cookie |
-| `opencli xiaohongshu search <query>` | 搜索笔记 | cookie |
-| `opencli xiaohongshu note <id>` | 笔记详情 | cookie |
-| `opencli xiaohongshu download <URL>` | 下载笔记（图片/视频） | cookie |
-| `opencli xiaohongshu comments <note_id>` | 笔记评论 | cookie |
-| `opencli xiaohongshu user <user_id>` | 用户公开笔记 | cookie |
+| `opencli xiaohongshu whoami` | 当前登录账号与粉丝数 | read |
+| `opencli xiaohongshu search <query>` | 搜索笔记 | read |
+| `opencli xiaohongshu note <note-id>` | 笔记正文+互动数据 | read |
+| `opencli xiaohongshu comments <note-id>` | 笔记评论（含楼中楼） | read |
+| `opencli xiaohongshu feed` | 首页推荐 Feed | read |
+| `opencli xiaohongshu user <id>` | 用户公开笔记 | read |
+| `opencli xiaohongshu download <note-id>` | 下载笔记图片/视频 | read |
+| `opencli xiaohongshu notifications` | 通知（提及/点赞/互关） | read |
+| `opencli xiaohongshu liked` / `saved` | 赞过 / 收藏列表 | read |
+| `opencli xiaohongshu drafts` / `draft-open` / `draft-delete` / `draft-clear` | 本地草稿箱管理 | read/write |
+| `opencli xiaohongshu creator-profile` | 创作者账号信息（粉丝/等级） | read |
+| `opencli xiaohongshu creator-stats` | 创作数据总览（含每日趋势） | read |
+| `opencli xiaohongshu creator-notes` / `creator-notes-summary` | 笔记列表+单篇数据 | read |
+| `opencli xiaohongshu creator-note-detail <note-id>` | 单篇详情（观看来源/观众画像） | read |
+| `opencli xiaohongshu publish <content>` | 发布图文笔记（UI 自动化） | write |
+| `opencli xiaohongshu delete-note <note-id>` | 删除已发布笔记（UI 自动化） | write |
+| `opencli xiaohongshu follow` / `unfollow <user-id>` | 关注 / 取关 | write |
+| `opencli xiaohongshu login` | 打开登录页等待授权 | write |
+
+注：旧文档中的 `hot` 命令在 v1.8.6 已不存在（用 `feed` 或 `search` 替代）。
 
 ### YouTube (youtube)
 

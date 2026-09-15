@@ -25,6 +25,9 @@ python3 "$SKILL_DIR/scripts/dy_wode.py"
 # 只列 ID 与卡片文本（最快，不取统计、不写文件）
 python3 dy_wode.py --list-only
 
+# 快速查看最新/近期新增（不全量慢滚，秒级出表）
+python3 dy_wode.py --categories favorite --recent 20
+
 # 指定分类 + 写 md/csv/json 到输出目录
 python3 dy_wode.py --categories like,favorite,record --out ~/Desktop/dy-wode
 

@@ -1071,10 +1071,33 @@ def iter_mix_posts(client: Any, mix_id: str, limit: int) -> Iterable[dict[str, A
         cursor = next_cursor
 
 
+def fetch_aweme_detail(client: Any, aweme_id: str) -> dict[str, Any]:
+    """获取作品详情：优先调用 multi/aweme/detail（带登录 Cookie，免复杂签名，原生支持视频与图文），
+    失败时回退 client.get_video_detail。"""
+    try:
+        from urllib.parse import urlencode
+        from dy_cli.utils.signature import get_base_params, get_headers
+
+        params = {**get_base_params(), "aweme_ids": f"[{aweme_id}]"}
+        url = "https://www.douyin.com/aweme/v1/web/multi/aweme/detail/?" + urlencode(params)
+        cookie = getattr(client, "cookie", None)
+        headers = get_headers(cookie)
+        http_client = getattr(client, "client", None)
+        if http_client is not None:
+            resp = http_client.get(url, headers=headers, timeout=20)
+            if resp.status_code == 200:
+                for d in (resp.json().get("aweme_details") or []):
+                    if str(d.get("aweme_id")) == str(aweme_id):
+                        return d
+    except Exception:
+        pass
+    return client.get_video_detail(aweme_id)
+
+
 def resolve_mix_id(client: Any, resolve_id: Any, target: str) -> str:
     try:
         aweme_id = resolve_aweme_id(client, resolve_id, target)
-        detail = client.get_video_detail(aweme_id)
+        detail = fetch_aweme_detail(client, aweme_id)
         mix_info = detail.get("mix_info") or {}
         mix_id = str(mix_info.get("mix_id") or "")
         if mix_id:
@@ -1160,7 +1183,7 @@ def main(argv: list[str] | None = None) -> int:
                         aweme_id = str(detail.get("aweme_id") or "")
                         if not aweme_id:
                             raise ArchiveError("作品条目缺少 aweme_id")
-                        detail = client.get_video_detail(aweme_id)
+                        detail = fetch_aweme_detail(client, aweme_id)
                         detail_source = "video_detail"
                     path, status = archive_one(
                         client,
@@ -1177,7 +1200,7 @@ def main(argv: list[str] | None = None) -> int:
                     print(f"[{position}/{len(posts)}] failed: {exc}", file=sys.stderr)
         else:
             aweme_id = resolve_aweme_id(client, resolve_id, args.target)
-            detail = client.get_video_detail(aweme_id)
+            detail = fetch_aweme_detail(client, aweme_id)
             path, status = archive_one(client, detail, output_dir, args, dy_cli_version)
             statuses.append(status)
             print(f"{status}: {path}")

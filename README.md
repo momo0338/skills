@@ -1,6 +1,6 @@
 # Momo Skills Core Library (AI Agent 技能库)
 
-> 包含 **23 个通用与专项 AI Agent 技能**，覆盖网页正文提取、智能视频看懂抽帧、媒体音视频下载、万站 CLI 操作、抖音专项 CLI、抖音「我的」个人数据整理、抖音带货翻拍、抖音小店经营数据、千川投流决策、研发资源加速、网络代理管理、企业情报深度调研、微信公众号采集及本地视频语音转写等场景。
+> 包含 **27 个通用与专项 AI Agent 技能**，覆盖大模型自主浏览器操作、全站深度爬虫、网页正文提取、智能视频看懂抽帧、媒体音视频下载、万站 CLI 操作、抖音专项 CLI、抖音「我的」个人数据整理、抖音带货翻拍、抖音小店经营数据、千川投流决策、研发资源加速、网络代理管理、企业情报深度调研、微信公众号采集及本地视频语音转写等场景。
 
 ---
 
@@ -20,8 +20,12 @@
 | **[jina-reader](./jina-reader)** | `jina-reader/` | 云端网页转 Markdown 工具（零本地依赖，支持 AI 图片描述与 Token 过滤） | HTTP API (`r.jina.ai`) |
 | **[defuddle](./defuddle)** | `defuddle/` | 网页去杂清洁提取 CLI，快速提取纯净 Markdown，大幅节省 Token | Node.js `defuddle` CLI |
 | **[crawl4ai](./crawl4ai)** | `crawl4ai/` | LLM 原生网页提取（Playwright 完整渲染 JS/SPA，BM25 主题过滤 Fit Markdown，JSON CSS 结构化字段抽取） | Python `crawl4ai`, Playwright |
+| **[browser-use](./browser-use)** | `browser-use/` | LLM 驱动的自主浏览器操作 Agent（视觉+DOM 结合、自主规划、多步交互点击填表与动态探索） | Python `browser-use`, `langchain-openai`, Playwright |
+| **[firecrawl](./firecrawl)** | `firecrawl/` | LLM 原生全站爬虫（整站递归 Crawl、站点地图 Map 发现、反爬绕过与 JSON Schema 结构化提取） | Python `firecrawl-py`, HTTP API, `FIRECRAWL_API_KEY` |
 | **[lux](./lux)** | `lux/` | 多平台视频下载 CLI（YouTube、Bilibili、抖音、TikTok 等） | Homebrew `lux`, `ffmpeg` |
 | **[mptext-api](./mptext-api)** | `mptext-api/` | 微信公众号 API 工具（支持公众号搜索、文章列表获取、多格式/批量下载） | Python `requests`, mptext.top API |
+| **[mp-hot](./mp-hot)** | `mp-hot/` | 微信公众号「搜一搜」热门文章与全维度互动数据自动化检索、阅读与归档 | Python `requests`, 微信搜一搜 |
+| **[mp-search](./mp-search)** | `mp-search/` | 微信公众号文章极速检索与采集（原生官方短链、全维度互动数据与对比表格） | Python `requests`, 微信搜一搜 |
 | **[fengniao-search](./fengniao-search)** | `fengniao-search/` | 风鸟企业与风险情报检索（工商信息、司法风险、经营异常、股东背景等） | Node.js `tool.mjs`, 风鸟 API |
 | **[zhihu-search](./zhihu-search)** | `zhihu-search/` | 知乎内容搜索工具 | Python `zhihu-search.py`, 知乎 API |
 | **[qibook-company-profile](./qibook-company-profile)** | `qibook-company-profile/` | 企书企业/人员组合查询工具 | Python `combined_query.py`, 企书 API |

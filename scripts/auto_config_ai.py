@@ -68,12 +68,12 @@ SKILL_DEPS = {
     },
     "yt-dlp": {
         "bins": ["yt-dlp", "ffmpeg"],
-        "pip": ["yt-dlp", "imageio-ffmpeg"],
+        "pip": ["yt-dlp"],
         "pip_bins": {"yt-dlp": "yt-dlp[default]"},
-        "brew_bins": ["ffmpeg"],
+        "brew_bins": ["ffmpeg", "yt-dlp"],
         "download_bins": ["ffmpeg"],
         "install_cmds": {
-            "pip": "pip install -U yt-dlp imageio-ffmpeg",
+            "pip": "pip install -U yt-dlp",
             "brew": "brew install yt-dlp ffmpeg",
             "windows_download": "_install_ffmpeg_windows",
             "post_install": "_post_install_ffmpeg",
@@ -117,6 +117,19 @@ SKILL_DEPS = {
             "post_install": "crawl4ai-setup",
         },
     },
+    "browser-use": {
+        "pip": ["browser-use", "langchain-openai"],
+        "install_cmds": {
+            "pip": "pip install browser-use langchain-openai",
+        },
+    },
+    "firecrawl": {
+        "pip": ["firecrawl-py"],
+        "env": ["FIRECRAWL_API_KEY"],
+        "install_cmds": {
+            "pip": "pip install firecrawl-py",
+        },
+    },
     "mptext-api": {
         "pip": ["requests"],
         "env": ["MPTEXT_API_KEY"],
@@ -124,6 +137,8 @@ SKILL_DEPS = {
             "pip": "pip install requests",
         },
     },
+    "mp-hot": {},
+    "mp-search": {},
     "proxy": {
         "pip": ["requests"],
         "install_cmds": {
@@ -547,18 +562,52 @@ def check_skill_deps(skill_name, skill_path, pip_pkgs, npm_pkgs):
         if not command_exists(b):
             missing["bins"].append(b)
 
+    pip_bin_map = registry_deps.get("pip_bins", {})
+    npm_bin_map = registry_deps.get("npm_bins", {})
+
     for p in all_pip:
+        # 如果该 pip 包仅用于提供某个已存在的 CLI 二进制，则视为已满足
+        provided_bins = [b for b, pkg in pip_bin_map.items() if pkg == p]
+        if provided_bins and all(command_exists(b) for b in provided_bins):
+            continue
         p_normalized = _canonical_package_name(p)
         if p_normalized not in pip_pkgs:
             missing["pip"].append(p)
 
     for n in all_npm:
+        # 如果该 npm 包仅用于提供某个已存在的 CLI 二进制，则视为已满足
+        provided_bins = [b for b, pkg in npm_bin_map.items() if pkg == n]
+        if provided_bins and all(command_exists(b) for b in provided_bins):
+            continue
         if n.lower() not in npm_pkgs:
             missing["npm"].append(n)
 
+    # 加载 ~/.codex/.env 中的键值作为备用环境检测
+    codex_env = {}
+    codex_env_path = os.path.expanduser("~/.codex/.env")
+    if os.path.exists(codex_env_path):
+        try:
+            with open(codex_env_path, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if "=" in line and not line.startswith("#"):
+                        k, v = line.split("=", 1)
+                        codex_env[k.strip()] = v.strip().strip('"\'')
+        except Exception:
+            pass
+
+    # 检查技能目录内是否有本地 key 文件（如 mptext-api/scripts/.mpkey）
+    local_key_files = {
+        "MPTEXT_API_KEY": [os.path.join(skill_path, "scripts", ".mpkey"), os.path.join(skill_path, ".mpkey")],
+    }
+
     for e in all_env:
-        if not os.environ.get(e):
-            missing["env"].append(e)
+        # 检查环境变量、codex_env 或本地 key 文件
+        if os.environ.get(e) or codex_env.get(e):
+            continue
+        if e in local_key_files and any(os.path.exists(kf) for kf in local_key_files[e]):
+            continue
+        missing["env"].append(e)
 
     all_ok = all(len(v) == 0 for v in missing.values())
     return all_ok, missing
@@ -956,12 +1005,16 @@ def install_missing_deps(skill_name, missing, dry_run=False):
 AI_TARGETS = [
     {
         "name": "Claude Code / Claude Agent",
+        "detect_bins": ["claude"],
+        "detect_apps": ["/Applications/Claude.app", os.path.join(HOME_DIR, "Applications", "Claude.app")],
         "detect_paths": [os.path.join(HOME_DIR, ".claude"), os.path.join(HOME_DIR, ".claude.json.backup")],
         "skills_dir": os.path.join(HOME_DIR, ".claude", "skills"),
         "type": "symlink_dir",
     },
     {
         "name": "Google Gemini / Antigravity Agent",
+        "detect_bins": ["gemini", "antigravity"],
+        "detect_apps": ["/Applications/Google Gemini.app", "/Applications/Antigravity.app"],
         "detect_paths": [os.path.join(HOME_DIR, ".gemini"), os.path.join(HOME_DIR, ".antigravity-ide")],
         "skills_config_json": os.path.join(HOME_DIR, ".gemini", "config", "skills.json"),
         "skills_dir": os.path.join(HOME_DIR, ".gemini", "config", "skills"),
@@ -969,54 +1022,80 @@ AI_TARGETS = [
     },
     {
         "name": "OpenAI Codex Agent",
+        "detect_bins": ["codex"],
+        "detect_apps": ["/Applications/ChatGPT.app", "/Applications/Codex.app", os.path.join(HOME_DIR, "Applications", "ChatGPT.app")],
         "detect_paths": [os.path.join(HOME_DIR, ".codex")],
         "skills_dir": os.path.join(HOME_DIR, ".codex", "skills"),
         "type": "symlink_dir",
     },
     {
         "name": "WorkBuddy AI",
-        "detect_paths": [os.path.join(HOME_DIR, ".workbuddy"), os.path.join(HOME_DIR, "Workbuddy")],
+        "detect_bins": ["workbuddy"],
+        "detect_apps": ["/Applications/WorkBuddy.app", "/Applications/Workbuddy.app", os.path.join(HOME_DIR, "Applications", "WorkBuddy.app")],
+        "detect_paths": [os.path.join(HOME_DIR, ".workbuddy")],
         "skills_dir": os.path.join(HOME_DIR, ".workbuddy", "skills"),
         "type": "symlink_dir",
     },
     {
         "name": "Trae CN / Trae IDE",
-        "detect_paths": [os.path.join(HOME_DIR, ".trae-cn"), os.path.join(HOME_DIR, ".trae")],
+        "detect_bins": ["trae"],
+        "detect_apps": [
+            "/Applications/Trae.app",
+            "/Applications/Trae CN.app",
+            os.path.join(HOME_DIR, "Applications", "Trae.app"),
+            os.path.join(HOME_DIR, "Applications", "Trae CN.app"),
+            os.path.expandvars(r"%LOCALAPPDATA%\Programs\Trae"),
+            os.path.expandvars(r"%LOCALAPPDATA%\Programs\Trae CN"),
+        ],
         "skills_dir": os.path.join(HOME_DIR, ".trae-cn", "skills"),
         "type": "symlink_dir",
     },
     {
         "name": "OpenCode Agent",
+        "detect_bins": ["opencode"],
         "detect_paths": [os.path.join(HOME_DIR, ".opencode"), os.path.join(HOME_DIR, "opencode")],
         "skills_dir": os.path.join(HOME_DIR, ".opencode", "skills"),
         "type": "symlink_dir",
     },
     {
         "name": "Cursor IDE",
-        "detect_paths": [os.path.join(HOME_DIR, ".cursor"), os.path.join(HOME_DIR, ".cursorrules")],
+        "detect_bins": ["cursor"],
+        "detect_apps": [
+            "/Applications/Cursor.app",
+            os.path.join(HOME_DIR, "Applications", "Cursor.app"),
+            os.path.expandvars(r"%LOCALAPPDATA%\Programs\cursor"),
+        ],
         "skills_dir": os.path.join(HOME_DIR, ".cursor", "skills"),
         "type": "symlink_dir",
     },
     {
         "name": "Windsurf IDE",
-        "detect_paths": [os.path.join(HOME_DIR, ".codeium"), os.path.join(HOME_DIR, ".windsurfrules")],
+        "detect_bins": ["windsurf"],
+        "detect_apps": [
+            "/Applications/Windsurf.app",
+            os.path.join(HOME_DIR, "Applications", "Windsurf.app"),
+            os.path.expandvars(r"%LOCALAPPDATA%\Programs\Windsurf"),
+        ],
         "skills_dir": os.path.join(HOME_DIR, ".codeium", "windsurf", "skills"),
         "type": "symlink_dir",
     },
     {
         "name": "OpenClaw Agent",
+        "detect_bins": ["openclaw"],
         "detect_paths": [os.path.join(HOME_DIR, ".openclaw")],
         "skills_dir": os.path.join(HOME_DIR, ".openclaw", "skills"),
         "type": "symlink_dir",
     },
     {
         "name": "Cline / Roo Code",
+        "detect_bins": ["cline", "roocode"],
         "detect_paths": [os.path.join(HOME_DIR, ".cline")],
         "skills_dir": os.path.join(HOME_DIR, ".cline", "skills"),
         "type": "symlink_dir",
     },
     {
         "name": "OpenHands Agent",
+        "detect_bins": ["openhands"],
         "detect_paths": [os.path.join(HOME_DIR, ".openhands")],
         "skills_dir": os.path.join(HOME_DIR, ".openhands", "skills"),
         "type": "symlink_dir",
@@ -1038,9 +1117,20 @@ def discover_valid_skills(skills_root):
     return skills
 
 def is_target_installed(target):
-    """检查某个 AI 工具是否存在于本机"""
+    """检查某个 AI 工具是否存在于本机（优先检测 CLI 二进制或应用安装包）"""
+    # 1. 检测 CLI 二进制命令
+    for cmd in target.get("detect_bins", []):
+        if command_exists(cmd):
+            return True
+
+    # 2. 检测 GUI 应用安装路径（.app / Programs 目录）
+    for app_path in target.get("detect_apps", []):
+        if app_path and os.path.exists(app_path):
+            return True
+
+    # 3. 检测主配置/运行时目录（仅对非 IDE 类纯 CLI/Agent 工具生效）
     for p in target.get("detect_paths", []):
-        if os.path.exists(p):
+        if p and os.path.exists(p):
             return True
     return False
 

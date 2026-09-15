@@ -24,6 +24,13 @@ pip install requests
 
 ## 配置 API 密钥
 
+> **当前状态（2026-09-04 实测更新）**
+> - Key 已配置在 `scripts/.mpkey`（600 权限），实测 `verify-key` 有效（code:0）。
+> - ⚠️ **WorkBuddy 沙箱内直接跑本脚本会被 Cloudflare 盾拦（down.mptext.top 全域 403，连首页都挑战）**，requests/curl 均不可用。
+> - ✅ **可用姿势**：用 ego-browser 打开 `https://down.mptext.top/`（本机浏览器已登录，过 CF）后在页面上下文里 `fetch('/api/public/v1/...', { headers: { 'X-Auth-Key': <key> } })` 同源调用。
+> - ⚠️ **响应格式与下文文档不符**：实际返回 `{"base_resp":{"ret":0,"err_msg":"ok"},"list":[...]}`（搜索）/ `article_list`（文章），不是 `{"code":..,"data":..}`。
+> - ⚠️ 2026-09-04 实测 `list-articles` 对所有 fakeid 返回 `ret=200013`（0 篇），疑似 mptext 服务端公众号会话失效，与本地 key 无关；`search-account`、`verify-key` 正常。
+
 所有 API 请求需要在 Header 中携带 `X-Auth-Key` 进行认证。
 
 API 密钥在登录 https://down.mptext.top 后自动生成，可在网站的 API 页面查看。密钥有效期与登录会话一致（4 天）。

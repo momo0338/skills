@@ -13,3 +13,5 @@ dy-cli/outputs/
 .ruff_cache/
 .workbuddy/
 .cortexkit/
+.mpkey
+*.key
