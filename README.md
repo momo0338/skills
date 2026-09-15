@@ -1,6 +1,6 @@
 # Momo Skills Core Library (AI Agent 技能库)
 
-> 包含 **27 个通用与专项 AI Agent 技能**，覆盖大模型自主浏览器操作、全站深度爬虫、网页正文提取、智能视频看懂抽帧、媒体音视频下载、万站 CLI 操作、抖音专项 CLI、抖音「我的」个人数据整理、抖音带货翻拍、抖音小店经营数据、千川投流决策、研发资源加速、网络代理管理、企业情报深度调研、微信公众号采集及本地视频语音转写等场景。
+> 包含 **29 个通用与专项 AI Agent 技能**，覆盖大模型自主浏览器操作、全站深度爬虫、网页正文提取、智能视频看懂抽帧、媒体音视频下载、万站 CLI 操作、抖音专项 CLI、抖音「我的」个人数据整理、抖音带货翻拍、抖音小店经营数据、千川投流决策、研发资源加速、网络代理管理、企业情报深度调研、微信公众号采集、本地视频语音转写、GitHub 仓库深度数据调研及公众号技术专栏自动化采写等场景。
 
 ---
 
@@ -35,6 +35,8 @@
 | **[dy-fanpai](./dy-fanpai)** | `dy-fanpai/` | 抖音带货视频翻拍（参考视频反推、规划人审、即梦/Ark/小云雀生成、音频/装配/质检、字幕与剪映草稿交付，四闸口+费用硬上限） | Python `dy-fanpai`, `ffmpeg`, `ffprobe` |
 | **[dy-doudian](./dy-doudian)** | `dy-doudian/` | 抖音小店（抖店）经营数据工具与 MCP Server（订单/商品/评价/直播/账单只读查询，access_token 自动刷新） | Python `mcp`, `httpx`, 抖店开放平台 API |
 | **[dy-qianchuan](./dy-qianchuan)** | `dy-qianchuan/` | 巨量千川投流日报与策略调整（真实ROI/保本ROI、素材12维评分+四分类、账号类型诊断、掉量排查、ROI四层漏斗、HTML看板+每日操作清单） | Python `requests`, `pyyaml`, 千川开放平台 API |
+| **[gh-research](./gh-research)** | `gh-research/` | GitHub 开源项目深度数据调研（秒级抽取实时 Stars/Forks/Release 版本/多语言分布/README 核心功能提炼） | `gh` (GitHub CLI) |
+| **[gh-write](./gh-write)** | `gh-write/` | 微信公众号「GitHub 项目推荐」专栏文章自动化采写（融合 GitHub 技术数据与搜一搜双维度舆情，生成移动端科技卡片 UI 与草稿脚手架） | Python, Markdown |
 
 ---
 

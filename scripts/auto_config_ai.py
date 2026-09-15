@@ -139,6 +139,14 @@ SKILL_DEPS = {
     },
     "mp-hot": {},
     "mp-search": {},
+    "gh-research": {
+        "bins": ["gh"],
+        "brew_bins": ["gh"],
+        "install_cmds": {
+            "brew": "brew install gh",
+        },
+    },
+    "gh-write": {},
     "proxy": {
         "pip": ["requests"],
         "install_cmds": {
