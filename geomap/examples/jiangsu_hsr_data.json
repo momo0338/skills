@@ -1,0 +1,143 @@
+{
+  "province": "江苏省",
+  "pill_text": "江苏省",
+  "pill_bg": "#DDF32E",
+  "pill_color": "#0859A1",
+  "title": "13市通高铁分布历程",
+  "subtitle": "全国首批市市通高铁省份 · 5纵6横成网",
+  "watermark_text": "满爸爱生活",
+  "brand_stamp": "满爸爱生活",
+  "highlights": [
+    {
+      "name": "南京市",
+      "metric": "2010年·沪宁/京沪",
+      "color": "red",
+      "offset": [
+        -20,
+        0
+      ]
+    },
+    {
+      "name": "徐州市",
+      "metric": "2011年·米字枢纽",
+      "color": "red",
+      "offset": [
+        0,
+        0
+      ]
+    },
+    {
+      "name": "苏州市",
+      "metric": "2010年·沪宁城际",
+      "color": "orange",
+      "offset": [
+        25,
+        25
+      ]
+    },
+    {
+      "name": "无锡市",
+      "metric": "2010年·沪宁城际",
+      "color": "orange",
+      "offset": [
+        -10,
+        10
+      ]
+    },
+    {
+      "name": "常州市",
+      "metric": "2010年·沪宁城际",
+      "color": "orange",
+      "offset": [
+        0,
+        -20
+      ]
+    },
+    {
+      "name": "镇江市",
+      "metric": "2010年·沪宁城际",
+      "color": "orange",
+      "offset": [
+        15,
+        -15
+      ]
+    },
+    {
+      "name": "连云港市",
+      "metric": "2018年·连青客专",
+      "color": "green",
+      "offset": [
+        0,
+        0
+      ]
+    },
+    {
+      "name": "宿迁市",
+      "metric": "2019年·徐宿淮盐",
+      "color": "green",
+      "offset": [
+        -15,
+        0
+      ]
+    },
+    {
+      "name": "淮安市",
+      "metric": "2019年·徐宿淮盐",
+      "color": "green",
+      "offset": [
+        0,
+        0
+      ]
+    },
+    {
+      "name": "盐城市",
+      "metric": "2019年·徐宿淮盐",
+      "color": "green",
+      "offset": [
+        15,
+        0
+      ]
+    },
+    {
+      "name": "扬州市",
+      "metric": "2020年·连镇客专",
+      "color": "green",
+      "offset": [
+        -15,
+        -15
+      ]
+    },
+    {
+      "name": "泰州市",
+      "metric": "2020年·连镇客专",
+      "color": "green",
+      "offset": [
+        20,
+        -10
+      ]
+    },
+    {
+      "name": "南通市",
+      "metric": "2020年·沪苏通/盐通",
+      "color": "green",
+      "offset": [
+        25,
+        -10
+      ]
+    }
+  ],
+  "logos": [
+    {
+      "name": "中国铁路",
+      "sub": "CHINA RAILWAY"
+    },
+    {
+      "name": "京沪高铁",
+      "sub": "BEIJING-SHANGHAI"
+    },
+    {
+      "name": "江苏铁投",
+      "sub": "JIANGSU RAILWAY"
+    }
+  ]
+}

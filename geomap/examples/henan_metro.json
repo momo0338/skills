@@ -1,0 +1,70 @@
+{
+  "province": "河南省",
+  "pill_text": "河南省",
+  "pill_bg": "#DDF32E",
+  "pill_color": "#0859A1",
+  "title": "已开通地铁/城铁的城市",
+  "watermark_text": "满爸爱生活",
+  "brand_stamp": "满爸爱生活",
+  "highlights": [
+    {
+      "name": "郑州市",
+      "metric": "地铁运营13条",
+      "color": "red",
+      "offset": [
+        0,
+        0
+      ]
+    },
+    {
+      "name": "洛阳市",
+      "metric": "地铁运营2条",
+      "color": "orange",
+      "offset": [
+        0,
+        0
+      ]
+    },
+    {
+      "name": "许昌市",
+      "metric": "地铁运营1条",
+      "color": "red",
+      "offset": [
+        0,
+        0
+      ]
+    },
+    {
+      "name": "焦作市",
+      "metric": "郑焦城际",
+      "color": "green",
+      "offset": [
+        0,
+        0
+      ]
+    },
+    {
+      "name": "开封市",
+      "metric": "郑开城际",
+      "color": "green",
+      "offset": [
+        0,
+        0
+      ]
+    }
+  ],
+  "logos": [
+    {
+      "name": "洛阳地铁",
+      "sub": "LUOYANG METRO"
+    },
+    {
+      "name": "郑州地铁",
+      "sub": "ZHENGZHOU METRO"
+    },
+    {
+      "name": "许昌轨道",
+      "sub": "XUCHANG METRO"
+    }
+  ]
+}
