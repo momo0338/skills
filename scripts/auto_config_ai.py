@@ -115,6 +115,20 @@ SKILL_DEPS = {
         "bins": ["python3"],
         "env": ["ZHIHU_ACCESS_SECRET"],
     },
+    "zhihu-global-search": {
+        "bins": ["python3"],
+        "env": ["ZHIHU_ACCESS_SECRET"],
+    },
+    "zhihu-hot": {
+        "bins": ["python3"],
+        "env": ["ZHIHU_ACCESS_SECRET"],
+    },
+    "zhihu-publish": {
+        "bins": ["node"],
+    },
+    "zhihu-save": {
+        "bins": ["opencli"],
+    },
     "jina-reader": {},
     "defuddle": {
         "bins": ["defuddle"],

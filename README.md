@@ -1,6 +1,6 @@
 # Momo Skills Core Library (AI Agent 技能库)
 
-> 包含 **37 个通用与专项 AI Agent 技能**，覆盖大模型自主浏览器操作、全站深度爬虫、网页正文提取、智能视频看懂抽帧、媒体音视频下载、万站 CLI 操作、抖音专项 CLI、抖音「我的」个人数据整理、抖音带货翻拍、抖音小店经营数据、千川投流决策、研发资源加速、网络代理管理、企业情报深度调研、微信公众号采集、本地视频语音转写、GitHub 仓库深度数据调研及公众号技术专栏自动化采写等场景。
+> 包含 **41 个通用与专项 AI Agent 技能**，覆盖大模型自主浏览器操作、全站深度爬虫、网页正文提取、智能视频看懂抽帧、媒体音视频下载、万站 CLI 操作、抖音专项 CLI、抖音「我的」个人数据整理、抖音带货翻拍、抖音小店经营数据、千川投流决策、研发资源加速、网络代理管理、企业情报深度调研、微信公众号采集、本地视频语音转写、GitHub 仓库深度数据调研及公众号技术专栏自动化采写等场景。
 
 ---
 
@@ -28,6 +28,10 @@
 | **[mp-search](./mp-search)** | `mp-search/` | 微信公众号文章极速检索与采集（原生官方短链、全维度互动数据与对比表格） | Python `requests`, 微信搜一搜 |
 | **[fengniao-search](./fengniao-search)** | `fengniao-search/` | 风鸟企业与风险情报检索（工商信息、司法风险、经营异常、股东背景等） | Node.js `tool.mjs`, 风鸟 API |
 | **[zhihu-search](./zhihu-search)** | `zhihu-search/` | 知乎内容搜索工具 | Python `zhihu-search.py`, 知乎 API |
+| **[zhihu-global-search](./zhihu-global-search)** | `zhihu-global-search/` | 知乎全网搜索工具 | Python `zhihu-global-search.py`, 知乎 API |
+| **[zhihu-hot](./zhihu-hot)** | `zhihu-hot/` | 知乎热榜获取工具 | Python `zhihu-hot.py`, 知乎 API |
+| **[zhihu-publish](./zhihu-publish)** | `zhihu-publish/` | 知乎专栏文章发布（Markdown→富文本、Edge 自动化、排版验证与链接回填） | Node.js, Edge, zhihu-automation-skill |
+| **[zhihu-save](./zhihu-save)** | `zhihu-save/` | 知乎文章保存至本地 vault（opencli 下载 + 文章分类 + frontmatter 生成） | `opencli`, 知乎文章 URL |
 | **[qibook-company-profile](./qibook-company-profile)** | `qibook-company-profile/` | 企书企业/人员组合查询工具 | Python `combined_query.py`, 企书 API |
 | **[qibook-company-wiki-deepresearch](./qibook-company-wiki-deepresearch)** | `qibook-company-wiki-deepresearch/` | 企书企业百科深度调研与结构化报告生成工具 | Python `skill_runner.py`, 企书 API |
 | **[analyze-viral-commerce-video](./analyze-viral-commerce-video)** | `analyze-viral-commerce-video/` | 带货视频证据化结构拆解（本地视频/链接/截图输入，抽帧+转写+宣称证据矩阵，输出结构化拆解报告） | Python `PIL`, `ffmpeg`, `whisper`(可选) |
