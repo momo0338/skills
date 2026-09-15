@@ -9,11 +9,25 @@ import sys
 import json
 import os
 
-def format_markdown_table(keyword: str, rank_type: str, items: list) -> str:
+def format_markdown_table(keyword: str, rank_type: str, items: list, channel: str = None) -> str:
+    is_opencli = (channel == "opencli") or (all(item.get("read_count") == "-" for item in items) if items else False)
+    
+    if is_opencli:
+        channel_desc = "搜狗微信开放检索（opencli 降级通道，搜狗不提供端内阅读量/点赞数）"
+        notice_line = "> ⚠️ **降级提示**：当前数据来自搜狗开放接口，搜狗不包含微信端内私有指标（阅读/点赞/在看/评论为 -），链接为搜狗临时跳转中继。如需真实互动数据请走微信端内搜一搜。"
+    else:
+        channel_desc = "微信客户端原生「搜一搜」"
+        notice_line = ""
+
     lines = [
         f"# 微信搜一搜「{keyword}」【{rank_type}】文章与全维度互动数据表",
-        "",
-        f"- **检索渠道**：微信桌面端内置「搜一搜」",
+        ""
+    ]
+    if notice_line:
+        lines.extend([notice_line, ""])
+        
+    lines.extend([
+        f"- **检索渠道**：{channel_desc}",
         f"- **检索关键词**：{keyword}",
         f"- **分类筛选**：文章",
         f"- **排序方式**：{rank_type}",
@@ -21,9 +35,9 @@ def format_markdown_table(keyword: str, rank_type: str, items: list) -> str:
         "",
         "---",
         "",
-        "| 序号 | 文章完整标题 | 发布公众号 | 发布时间 | 实测阅读量 | 点赞数 | 转发/分享数 | 收藏数 | 评论数 | 微信官方标准文章链接 |",
+        "| 序号 | 文章完整标题 | 发布公众号 | 发布时间 | 实测阅读量 | 点赞数 | 转发/分享数 | 收藏数 | 评论数 | 微信文章链接 |",
         "| :---: | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :--- |"
-    ]
+    ])
     
     for i, item in enumerate(items, 1):
         title = item.get("title", "")
@@ -35,7 +49,7 @@ def format_markdown_table(keyword: str, rank_type: str, items: list) -> str:
         collect_cnt = item.get("collect_count", 0)
         comment_cnt = item.get("comment_count", 0)
         url = item.get("mp_url", "")
-        link_md = f"[{url}]({url})" if url.startswith("https://mp.weixin.qq.com/s/") else url
+        link_md = f"[{url}]({url})" if url.startswith("https://mp.weixin.qq.com/s/") else (f"[查看链接]({url})" if url.startswith("http") else url)
         
         lines.append(f"| {i} | 《{title}》 | {account} | {pub_date} | **{read_cnt}** | {like_cnt:,} | {share_cnt:,} | {collect_cnt:,} | {comment_cnt:,} | {link_md} |")
         
@@ -52,8 +66,9 @@ def main():
     keyword = payload.get("keyword", "微信搜一搜")
     rank_type = payload.get("rank_type", "最热")
     items = payload.get("items", [])
+    channel = payload.get("channel")
     
-    md_content = format_markdown_table(keyword, rank_type, items)
+    md_content = format_markdown_table(keyword, rank_type, items, channel)
     
     if len(sys.argv) >= 3:
         out_path = sys.argv[2]
@@ -66,3 +81,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

@@ -15,3 +15,4 @@ dy-cli/outputs/
 .cortexkit/
 .mpkey
 *.key
+.mp_cookies.json
