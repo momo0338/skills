@@ -1,6 +1,6 @@
 ---
 name: gh-research
-version: 1.0.0
+version: 1.1.0
 description: 深度提取 GitHub 仓库实时多维度数据（实时 Stars/Forks/Release 版本/多语言分布/README 核心功能提炼），为技术文章创作和开源项目选品提供一手详实依据。
 homepage: https://github.com/zhugx/skills
 metadata: {"openclaw":{"emoji":"🔭","requires":{"bins":["python3", "gh"]}}}
@@ -10,7 +10,7 @@ metadata: {"openclaw":{"emoji":"🔭","requires":{"bins":["python3", "gh"]}}}
 
 ## 一、概述
 
-本技能专为开源项目研究、技术选型与文章采写打造。通过本机已鉴权的 GitHub CLI (`gh api`)，秒级抽取任意 GitHub 仓库的权威一手数据，彻底避免 AI 幻觉和陈旧数据。
+本技能专为开源项目研究、技术选型与文章采写打造。通过本机已鉴权的 GitHub CLI (`gh api`)，通过 ThreadPoolExecutor 并发机制秒级抽取任意 GitHub 仓库的权威一手数据，彻底避免 AI 幻觉、陈旧数据与串行网络超时。
 
 ---
 

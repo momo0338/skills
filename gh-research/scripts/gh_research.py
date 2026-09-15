@@ -14,6 +14,7 @@ import shutil
 import urllib.parse
 import argparse
 import base64
+from concurrent.futures import ThreadPoolExecutor
 
 GH_CLI_PATH = "/opt/homebrew/bin/gh"
 
@@ -121,8 +122,16 @@ def research_repo(repo_id: str) -> dict:
     if "_error" in meta:
         return {"error": f"API error: {meta['_error']}"}
         
-    # 获取语言分布
-    langs_data = run_gh_api(f"repos/{repo}/languages")
+    # 并发拉取语言分布、最新Release与README（3倍提速）
+    with ThreadPoolExecutor(max_workers=3) as executor:
+        f_langs = executor.submit(run_gh_api, f"repos/{repo}/languages")
+        f_release = executor.submit(run_gh_api, f"repos/{repo}/releases/latest")
+        f_readme = executor.submit(run_gh_api, f"repos/{repo}/readme")
+        
+        langs_data = f_langs.result()
+        release_data = f_release.result()
+        readme_resp = f_readme.result()
+
     total_bytes = sum(v for v in langs_data.values() if isinstance(v, int))
     languages_percent = {}
     if total_bytes > 0:
@@ -132,8 +141,6 @@ def research_repo(repo_id: str) -> dict:
                 if pct >= 1.0:
                     languages_percent[lang] = f"{pct}%"
 
-    # 获取最新 Release
-    release_data = run_gh_api(f"repos/{repo}/releases/latest")
     latest_release = {}
     if "_error" not in release_data:
         latest_release = {
@@ -154,9 +161,6 @@ def research_repo(repo_id: str) -> dict:
                 "html_url": f"https://github.com/{repo}/releases/tag/{tag0.get('name', '')}",
                 "body_excerpt": "滚动更新 Tag"
             }
-
-    # 获取 README 内容
-    readme_resp = run_gh_api(f"repos/{repo}/readme")
     readme_content = ""
     if "content" in readme_resp and readme_resp.get("encoding") == "base64":
         try:
