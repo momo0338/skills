@@ -1,20 +1,33 @@
 ---
 name: mp-publish
-description: 微信公众号文章草稿直推（HTML → 草稿箱）全链路自动化工具。支持单文件 HTML 图片自动转存微信 CDN、原生方言合规性校验（强制 section 替换 div、禁用 position、样式实体规范化）、自动生成长尾 SEO 摘要与一键直推微信公众平台 draft/add。
+description: 微信公众号内容中台（草稿 · 发布 · 数据分析 三模块一站式）。既支持排版稿（HTML + base64 内嵌图）一键直推草稿箱——图片自动转存微信 CDN、微信原生方言合规校验（section 替 div、禁 position、样式实体规范化）、长尾 SEO 摘要、服务端 draft/get 回读验收；也覆盖草稿增删改查与备份回滚、发布提交与状态跟踪、用户/图文/消息/接口四大类数据分析（21 个 datacube 接口，日期跨度自动分段）。触发词：公众号草稿、推草稿、draft、发布文章、freepublish、公众号数据分析、datacube、阅读量、涨粉数据、mp-publish。
 ---
 
-# 技能-微信公众号草稿直推（HTML → 草稿箱）
+# 技能-微信公众号内容中台（草稿 · 发布 · 数据分析 · HTML 直推）
 
-**沉淀时间**: 2026-09-04（镇江两馆文章实测全链路打通）
-**适用场景**: 把 vault 里排版好的单文件 HTML 文章（base64 内嵌图 + `<style>` 类样式）直接推送进微信公众号草稿箱，无需手工粘贴排版。
+**沉淀时间**: 2026-09-04（HTML 直推全链路打通）｜ 2026-09-16 扩展为三模块内容中台
+**适用场景**: 两条主线——
+① **排版稿直推草稿箱**：把 vault 里排版好的单文件 HTML 文章（base64 内嵌图 + `<style>` 类样式）直接推送进微信公众号草稿箱，无需手工粘贴排版；
+② **服务端接口作业**：草稿箱增删改查（draft/*）、发布提交与状态跟踪（freepublish/*）、用户/图文/消息/接口四类数据分析（datacube/*）。
+
+> ⚡ **先读 §十三「能力总览与权限现实」**：本账号（个人订阅号）的接口权限实测结论与脚本入口一览。
+> 一句话版：**草稿模块全部可用；发布模块与数据统计模块因账号类型限制全部不可用** ——
+> 别在这两块白花力气，§十三 已给出各自的替代路径。
 
 ---
 
 ## 一、凭据与前置
 
+
 - **凭据**：AppID/AppSecret **禁止明文写入本仓库**。运行前通过环境变量 `WX_APPID` / `WX_APPSECRET` 注入，或在 `~/.config/weixin/` 下放置 `appid` / `appsecret` 文件（与 IMA 凭证 `~/.config/ima/` 同款约定）；脚本启动时两者皆缺会退出报错。
 - **IP 白名单**：微信 `cgi-bin/token` 强校验出口 IP（40164 报错会带 `invalid ip x.x.x.x`）。家宽 IP 会变，变动后需在公众号后台「设置与开发 → 基本配置 → IP白名单」手动添加。**注意：沙箱内 curl 的出口 IP 就是白名单校验对象**。
 - **依赖**：`bs4`、`PIL`（均在 `~/.workbuddy/binaries/python/envs/default` venv 内已装）。
+- **access_token 获取（2026-09-16 升级）**：新脚本统一走 [`scripts/wx_common.py`](./scripts/wx_common.py) 的 `get_token()` ——
+  **优先用官方推荐的 `cgi-bin/stable_token`**（不经 `cgi-bin/token`，不会被其它系统把 token 顶掉），失败自动回退旧接口；
+  同时带**本地磁盘缓存**（`~/.cache/weixin/token_<appid 后8位>.json`，有效期扣 300s 安全边距），
+  避免高频调 token 接口触发频次限制。旧脚本（`wx_push_draft.py` / `wx_pipeline.py`）逻辑未动，行为不变。
+- **错误翻译**：`wx_common.py` 内置 `ERRCODE_HINTS`，把微信 errcode 译成「人话 + 处置建议」，
+  40164 会直接把「需添加的 IP」打出来。常见码见 §十四.1 的错误码对照表。
 
 ## 二、微信排版原生方言规范（强制遵循）
 
@@ -440,3 +453,318 @@ for i in range(12):
 print('12 slices saved to /tmp/slice_*.png')
 "
 ```
+
+---
+
+## 十三、能力总览与权限现实（2026-09-16 实测）
+
+本技能已从「HTML 直推草稿」单点工具，扩展为**草稿 / 发布 / 数据分析三模块内容中台**。
+新增三个 CLI + 一个共享底座，**原有 HTML 直推链路（`wx_prep_content.py` → `wx_dialect_check.py` → `wx_push_draft.py` → `wx_pipeline.py`）完全保留、逻辑未动**。
+
+### 13.1 脚本清单
+
+| 脚本 | 角色 | 覆盖能力 |
+|---|---|---|
+| [`scripts/wx_common.py`](./scripts/wx_common.py) | **共享底座**（新） | 凭据解析、`stable_token` 优先 + 磁盘缓存的 token、统一 HTTP、errcode 中文翻译、JSON/CSV 落盘 |
+| [`scripts/wx_draft.py`](./scripts/wx_draft.py) | **草稿模块 CLI**（新） | `list` `count` `get` `add` `update` `delete` `restore` `diff` `backup` `switch` `product-card` `selftest` |
+| [`scripts/wx_publish.py`](./scripts/wx_publish.py) | **发布模块 CLI**（新） | `submit` `status` `list` `getarticle` `delete` `selftest` |
+| [`scripts/wx_stats.py`](./scripts/wx_stats.py) | **数据分析 CLI**（新） | 21 个 datacube 接口 + `users` `daily` `list` `webplan` `selftest` |
+| `scripts/wx_prep_content.py` | 原有流水线 | HTML 预处理（抽图/CSS 内联/裁封面） |
+| `scripts/wx_dialect_check.py` | 原有流水线 | 微信原生方言合规校验 |
+| `scripts/wx_push_draft.py` | 原有流水线 | 上传图片/封面 → `draft/add` 或 `draft/update` |
+| `scripts/wx_pipeline.py` | 原有流水线 | 单命令一键直推（7 步闭环） |
+| `scripts/wx_dialect_test.py` | 原有工具 | 最小样本跑微信往返属性测试 |
+
+#### 13.1.1 新脚本的统一 CLI 约定
+
+三个新脚本（`wx_draft.py` / `wx_publish.py` / `wx_stats.py`）接口风格一致，记住这五条即可：
+
+- **`--json <path>`**：把原始返回写入 JSON 文件。**位置随意** —— 写在子命令前（`--json a.json list`）
+  或子命令后（`list --json a.json`）都行。`--json -` 表示打印到标准输出（排查时用）。
+  **不给 `--json` 时输出是全安静的**：命令只打印人类可读摘要，不会喷出大块原始 JSON。
+- **`--csv <path>`**（仅 `wx_stats.py`）：写 CSV，嵌套字段自动扁平化（`detail.read_user` → `read_user`，
+  `read_user_source[]` 序列化为 JSON 字符串）。用 `utf-8-sig` 编码，Excel 直接打开不乱码。
+- **`selftest`**：三个脚本都有。**养成"先探权限再干活"的习惯**，省去在无权限接口上试错的时间。
+- **所有 `delete` 类子命令默认只演练**（只备份 + 打印目标），必须显式 `--yes` 才真正执行。
+- **退出码约定**：`0` 成功 ｜ `1` 接口报错（会打印 errcode 中文解释）｜ `2` 凭据缺失 ｜ `130` 用户中断。
+
+### 13.2 权限实测表（关键结论，别踩空）
+
+本仓库主用账号为**个人订阅号**（AppID `wxa8f9****924f`）。2026-09-16 用 `selftest` 逐个实测：
+
+| 模块 | 接口 | 实测结果 | 说明 |
+|---|---|---|---|
+| **草稿** | `draft/count`、`draft/batchget`、`draft/get`、`draft/add`、`draft/update`、`draft/delete` | ✅ **可用**（实测草稿总数 49 篇） | 草稿箱能力不受账号类型限制，是当前最可靠的接口面 |
+| 草稿·商品卡片 | `/channels/ec/service/product/getcardinfo` | ❌ `-1 system error` | 需先开通带货/电商能力；本账号未开通 |
+| 草稿·开关 | `draft/switch` | ⚠️ 官方已废弃 | 草稿箱与发布功能已全量开放，无需设置开关。脚本保留只读探测 |
+| **发布** | `freepublish/batchget`（权限集 7 整体） | ❌ **48001 未授权** | 官方明确：2025 年 7 月起，个人主体账号、企业主体未认证账号被**回收发布接口权限** |
+| **数据** | 全部 21 个 `datacube/*` | ❌ **48001 未授权**（可用 0 / 未授权 21） | 数据接口「向所有**认证**公众号开发者开放」，个人订阅号无法认证 |
+
+**由此推出的作业原则**：
+1. **写文章 → 推草稿 → 后台人工群发**，这是当前唯一可全自动跑通的链路；
+2. **发布（freepublish）与数据（datacube）两步走接口**，在本账号上**必须**改走后台网页（用 ego-browser 携登录态，姿势沿用 §八）；
+3. 脚本层面能力已写全，**等账号类型变化（认证/企业主体）即可直接启用**，无需改代码。
+
+### 13.3 任务 → 命令 决策树
+
+```
+我要做什么？
+ ├─ 把排版好的 HTML 推进草稿箱 ────────→ wx_pipeline.py --html xxx-排版.html --update-auto   （§三）
+ ├─ 看草稿箱里有什么 ─────────────────→ wx_draft.py list / count
+ ├─ 取回某篇草稿正文 ─────────────────→ wx_draft.py get --media-id <ID>      （自动落备份+HTML）
+ ├─ 只改标题/摘要/封面，正文不动 ──────→ wx_draft.py update --media-id <ID> --digest "…"
+ ├─ 删草稿 ──────────────────────────→ wx_draft.py delete --media-id <ID>     （默认演练，--yes 才删）
+ ├─ 本地版和平台版对不上，想知道差在哪 → wx_draft.py diff --media-id <ID> --vs xxx-排版.html
+ ├─ 误删了想恢复 ────────────────────→ wx_draft.py restore --backup <备份JSON>
+ ├─ 发布/查看已发布列表 ─────────────→ wx_publish.py selftest（先探权限）；无权限走 §八 后台网页
+ ├─ 拉阅读/涨粉等数据 ───────────────→ wx_stats.py selftest（先探权限）；无权限走 wx_stats.py webplan
+ └─ 查某个接口的跨度上限/是否停维护 ──→ wx_stats.py list
+```
+
+---
+
+## 十四、草稿模块全能力手册（draft/*）
+
+### 14.1 接口矩阵（官方草稿管理 7 个 + 商品卡片 1 个）
+
+| 接口 | 路径 | 备注 |
+|---|---|---|
+| 新增草稿 | `POST /cgi-bin/draft/add` | body `{"articles":[article]}` —— **articles 是数组** |
+| 更新草稿 | `POST /cgi-bin/draft/update` | body `{"media_id","index","articles":{…}}` —— **articles 是对象**（与 add 相反，易错点） |
+| 获取草稿详情 | `POST /cgi-bin/draft/get` | body `{"media_id"}`；返回 `news_item[]` |
+| 获取草稿列表 | `POST /cgi-bin/draft/batchget` | body `{"offset","count"(1-20),"no_content"(0/1)}` |
+| 获取草稿总数 | `GET /cgi-bin/draft/count` | 返回 `total_count`，只计数不返回内容 |
+| 删除草稿 | `POST /cgi-bin/draft/delete` | body `{"media_id"}`；**不可撤销、无回收站** |
+| 草稿箱开关 | `POST /cgi-bin/draft/switch` | **已废弃**；`&checkonly=1` 为只查状态 |
+| 商品卡片 DOM | `POST /channels/ec/service/product/getcardinfo` | body `{"product_id","article_type","card_type"}`；返回 `product_key` 或 `DOM` |
+
+**article 字段限制（本地已前置校验，见 `wx_draft.py::validate_article`）**：
+`title` ≤32 字 ｜ `author` ≤16 字 ｜ `digest` ≤120 字 ｜ `content` <2 万字符且 <1M（⚠️ 实测 26843 字符可通过，故超限只告警不阻断）
+`article_type` 为 `news`（图文消息）时 `thumb_media_id` 必填；为 `newspic`（图片消息）时用 `image_info.image_list[].image_media_id`（≤20 张，首张即封面），且正文只支持纯文本与商品标签（商品 ≤50 个）。
+`cover_info.crop_percent_list[].ratio`：图文消息仅支持 `2.35_1`/`1_1`；图片消息支持 `1_1`/`16_9`/`2.35_1`。
+
+**高频错误码**：`40007` media_id 无效（草稿已被删）｜`40114` index 越界｜`41039` content_source_url 不合法｜`45166` content 不合法｜`47001` 格式错误（必须 JSON body）｜`53404/53405/53406` 带货相关。
+
+### 14.2 CLI 用法
+
+```bash
+PY=/Users/zhugx/.workbuddy/binaries/python/envs/default/bin/python3
+D=/Users/zhugx/src/skills/mp-publish/scripts/wx_draft.py
+
+$PY $D selftest                                  # 能力自检（草稿数 / 权限）
+$PY $D count                                     # 草稿总数
+$PY $D list --count 20                           # 草稿列表（默认 no_content=1，快）
+$PY $D list --count 20 --with-content --json /tmp/drafts.json
+$PY $D get --media-id M9xxx                      # 详情 + 自动备份（JSON 与 HTML 双落盘）
+$PY $D backup --media-id M9xxx                   # 只拉档，不做任何写操作
+
+# 新增：从文件 / 参数 / 克隆已有草稿
+$PY $D add --title "标题" --content-file /tmp/wx_wechat_content.html \
+           --thumb-media-id <永久素材ID> --digest "≤120字摘要"
+$PY $D add --article-file /tmp/article.json --dry-run      # 先看 payload 再决定
+$PY $D add --from-draft M9xxx --index 0                    # 克隆为新草稿
+
+# 更新：默认「字段级合并」，只改你点名的字段，其余沿用平台当前版本
+$PY $D update --media-id M9xxx --digest "新的SEO摘要"
+$PY $D update --media-id M9xxx --thumb-media-id NEW_THUMB   # 只换封面
+$PY $D update --media-id M9xxx --title "新标题" --dry-run    # 先预览再执行
+
+# 删除 / 恢复 / 对比
+$PY $D delete --media-id M9xxx            # 演练：只备份，不删
+$PY $D delete --media-id M9xxx --yes      # 真删（先自动备份）
+$PY $D restore --backup ~/.cache/weixin/draft_backups/pre-delete_M9xxx_*.json
+$PY $D diff --media-id M9xxx --vs "待发布/xxx-排版.html"
+```
+
+**备份落在哪**：`~/.cache/weixin/draft_backups/`，命名 `<用途>_<media_id>_<时间戳>.json|_idxN.html`。
+用途标签：`get` / `manual` / `dryrun` / `pre-delete` / `pre-update` / `post-update`。
+
+### 14.3 三条安全护栏（对应 §十一⑧ 的历史事故，已工程化）
+
+1. **删除不可逆 → 默认演练**：`delete` 不带 `--yes` 只做备份并打印目标，不执行删除。
+   微信官方明确「草稿删除后不可恢复、无回收站」，被删的 media_id 再 `draft/get` 返回 `40007`。
+2. **回写丢手改 → 字段级合并**：`update` 默认行为是「先 `draft/get` 拉平台版 → 只覆盖你显式指定的字段 → 回写」，
+   因此**用户在后台的手工改动不会丢**。整篇覆盖必须显式加 `--replace-all`，否则脚本直接拒绝执行。
+   写前自动备份（`pre-update`），写后自动回读验收（`post-update` + 打印 `style=`/空 style 计数）。
+3. **回写被清空样式 → 自动解码实体**：`draft/get` 读回的内容里，微信会把裸 `'` 规范化成 `&#39;`；
+   原样回写会让微信把该 `style` 整段清空成 `style=""`（§三'' 的铁律）。脚本在**所有写路径**
+   （`add` / `update` / `restore`）统一调用 `decode_style_entities()`，把真实 `style="…"` 属性内的
+   `&#39;` `&#34;` `&quot;` `&amp;` 解码回裸字符后再提交。
+
+### 14.4 商品卡片（带货账号才可用）
+
+```bash
+$PY $D product-card --product-id 1000000000 --article-type news --card-type 0 --save-dom /tmp/card.html
+```
+- 卡片类型：`0` 大卡 ｜ `1` 小卡 ｜ `2` 文字链接 ｜ `3` 条卡
+- **支持范围**：图文消息（news）支持大卡/小卡/文字链接；图片消息（newspic）支持小卡/文字链接/条卡
+- 用法：图文消息拿到的 `DOM` **贴进 content 即插入卡片**；图片消息等类型用 `product_key`，
+  写到 article 的 `product_info.footer_product_info.product_key`（文末插入商品）
+- 本账号实测 `-1 system error`：**未开通带货能力**，需先在后台开通电商/带货
+
+---
+
+## 十五、发布模块全能力手册（freepublish/*）
+
+### 15.1 接口矩阵与状态机
+
+| 接口 | 路径 | 关键点 |
+|---|---|---|
+| 发布草稿 | `POST /cgi-bin/freepublish/submit` | body `{"media_id"}`；返回 `publish_id`、`msg_data_id` |
+| 发布状态查询 | `POST /cgi-bin/freepublish/get` | body `{"publish_id"}`；返回 `publish_status`、`article_id`、`article_detail` |
+| 获取已发布列表 | `POST /cgi-bin/freepublish/batchget` | body `{"offset","count"(1-20),"no_content"}`；返回 `article_id` 与 `news_item[]` |
+| 获取已发布图文 | `POST /cgi-bin/freepublish/getarticle` | body `{"article_id"}`；返回 `news_item[]`（含正文、`thumb_url`、`is_deleted`） |
+| 删除已发布文章 | `POST /cgi-bin/freepublish/delete` | body `{"article_id","index"}`；`index` 不填/填 0 = **删全部文章**，**不可逆** |
+
+**`publish_status` 状态机（`wx_publish.py status` 会译成中文）**：
+
+| 值 | 含义 | 该做什么 |
+|---|---|---|
+| 0 | 成功 | 记下 `article_detail.item[].article_url`（永久链接） |
+| 1 | 发布中 | 用 `--wait` 轮询到终态，别急着下结论 |
+| 2 | 原创失败 | 看 `fail_idx`，到后台处理该篇原创声明后重发 |
+| 3 | 常规失败 | 同上 |
+| 4 | 平台审核不通过 | 看 `fail_idx`，内容整改后重发 |
+| 5 | 成功后用户删除所有文章 | 已发布内容被删 |
+| 6 | 成功后系统封禁所有文章 | 内容被平台封禁 |
+
+**易错点**：`submit` 返回 `errcode=0` **只代表任务提交成功**，不代表已发布完成 —— 仍可能因原创声明失败、
+平台审核不通过而最终失败。官方还会向后台配置的开发者 URL 推送 `PUBLISHJOBFINISH` 事件
+（XML，含 `publish_id`/`publish_status`/`article_id`/`fail_idx`），可用于异步回调，不必死轮询。
+`submit` 的常见报错：`53503` 草稿未通过发布检查 ｜ `53504` 需前往公众平台官网使用草稿 ｜ `53505` 请手动保存成功后再发表。
+
+### 15.2 CLI 用法
+
+```bash
+P=/Users/zhugx/src/skills/mp-publish/scripts/wx_publish.py
+
+$PY $P selftest                                   # 先探权限（本账号会得到 48001）
+$PY $P submit --media-id M9xxx                    # 提交发布，拿到 publish_id
+$PY $P status --publish-id 100000001 --wait       # 轮询到终态（默认 5s 间隔、最长 120s）
+$PY $P list --count 20                            # 已发布列表
+$PY $P list --count 20 --search 遛娃              # 关键词本地过滤
+$PY $P getarticle --article-id ARTICLE_ID --save-html
+$PY $P delete --article-id ARTICLE_ID             # 演练（只备份）
+$PY $P delete --article-id ARTICLE_ID --yes       # 真删
+```
+备份落在 `~/.cache/weixin/publish_backups/`。
+
+### 15.3 本账号无权限时的替代路径
+
+本账号 `freepublish/batchget` 实测 **48001**，意味着 `submit/status/getarticle/delete` 一并不通（权限集 7 整体授予）。
+**发布与"查已发布"改走后台网页**，姿势见 §八（ego-browser 扫码 + 同源 fetch）。
+另外注意 §八 已实测的两条补充：`cgi-bin/material/get_materialcount` 的 `news_count` 为 0（群发图文**不会**自动进永久素材库），
+所以「枚举已发布文章」只能靠后台「内容与互动 → 发表记录」。
+
+---
+
+## 十六、数据分析模块全能力手册（datacube/*）
+
+### 16.1 21 个接口与跨度上限
+
+**用户数据（2）** —— 属「用户管理」权限
+| 接口 | 路径 | 跨度 | 关键返回字段 |
+|---|---|---|---|
+| `getusersummary` | `/datacube/getusersummary` | ≤7 天 | `ref_date` `user_source`(渠道) `new_user` `cancel_user` |
+| `getusercumulate` | `/datacube/getusercumulate` | ≤7 天 | `ref_date` `cumulate_user` |
+
+`user_source` 渠道取值：`0` 其他合计 ｜`1` 公众号搜索 ｜`17` 名片分享 ｜`30` 扫描二维码 ｜`57` 文章内账号名称 ｜`100` 微信广告 ｜`161` 他人转载 ｜`149` 小程序关注 ｜`200` 视频号 ｜`201` 直播。
+
+**图文数据（10）** —— 属「群发与通知」权限。★ = 官方已停止维护
+| 接口 | 路径 | 跨度 | 备注 |
+|---|---|---|---|
+| ★`getarticlesummary` | `/datacube/getarticlesummary` | 1 天 | 某天被阅读过的**群发**文章当日数据 |
+| ★`getuserread` | `/datacube/getuserread` | 1 天 | 含 `user_source` 区分渠道与全部；原文页阅读/收藏只给「全部」 |
+| ★`getuserreadhour` | `/datacube/getuserreadhour` | 1 天 | 带 `ref_hour` |
+| ★`getusershare` | `/datacube/getusershare` | 1 天 | `share_scene`：1 好友转发 / 2 朋友圈 / 255 其他 |
+| ★`getusersharehour` | `/datacube/getusersharehour` | 1 天 | 带 `ref_hour` |
+| ★`getarticletotal` | `/datacube/getarticletotal` | 1 天 | 群发日起**累计**总量，最多统计发表后 7 天；`details[]` 按 `stat_date` 展开 |
+| `getarticleread` | `/datacube/getarticleread` | 1 天 | 发表内容每日阅读；`detail.read_user_source[]` 含场景（全部/公众号消息/聊天会话/朋友圈/公众号主页/其他/推荐/搜一搜） |
+| `getarticleshare` | `/datacube/getarticleshare` | 1 天 | 发表内容每日分享；`detail.share_user` |
+| `getbizsummary` | `/datacube/getbizsummary` | **≤30 天** | 汇总概览：阅读/分享/爱心赞/拇指赞/留言/收藏/跳转原文/发布篇数 |
+| `getarticletotaldetail` | `/datacube/getarticletotaldetail` | 1 天 | 逐篇详情：含**赞赏金额、阅读后关注、阅读送达率、阅读完成率、平均阅读时长、跳出位置分布** |
+
+**消息数据（7）** —— 属「消息管理」权限
+| 接口 | 路径 | 跨度 |
+|---|---|---|
+| `getupstreammsg` | `/datacube/getupstreammsg` | <7 天 |
+| `getupstreammsgweek` | `/datacube/getupstreammsgweek` | **必须同一天** |
+| `getupstreammsgmonth` | `/datacube/getupstreammsgmonth` | **必须同一天** |
+| `getupstreammsghour` | `/datacube/getupstreammsghour` | 1 天 |
+| `getupstreammsgdist` | `/datacube/getupstreammsgdist` | ≤15 天 |
+| `getupstreammsgdistweek` | `/datacube/getupstreammsgdistweek` | ≤15 天 |
+| `getupstreammsgdistmonth` | `/datacube/getupstreammsgdistmonth` | ≤15 天 |
+
+`msg_type`：1 文字 / 2 图片 / 3 语音 / 4 视频 / 6 第三方应用消息（链接消息）。
+`count_interval`（发送量分布）：0 =「0」/ 1 =「1-5」/ 2 =「6-10」/ 3 =「10 次以上」。
+周/月数据的 `ref_date` 是**周期首日**（当月 1 日或周一），且**必须在该周期结束后**才能取到。
+
+**接口数据（2）** —— 属对应权限集（被动回复相关）
+| 接口 | 路径 | 跨度 | 关键字段 |
+|---|---|---|---|
+| `getinterfacesummary` | `/datacube/getinterfacesummary` | ≤30 天 | `callback_count` `fail_count` `total_time_cost` `max_time_cost` |
+| `getinterfacesummaryhour` | `/datacube/getinterfacesummaryhour` | 1 天 | 同上 + `ref_hour` |
+
+**广告分析**：官方独立说明页（`…/analysis_data/ad/Ad_Analysis`），无独立接口清单，按需查阅。
+
+### 16.2 CLI 用法
+
+```bash
+S=/Users/zhugx/src/skills/mp-publish/scripts/wx_stats.py
+
+$PY $S list                                       # 21 个接口 × 跨度 × 维护状态总览
+$PY $S selftest                                   # 逐接口权限自检（本账号：21 个全 48001）
+$PY $S webplan                                    # 无权限时的后台网页替代路径
+
+$PY $S fetch getusersummary --days 7              # 最近 7 天用户增减（自动按 7 天分段）
+$PY $S fetch getbizsummary --begin 2026-09-01 --end 2026-09-15    # ≤30 天
+$PY $S fetch getuserread --date 2026-09-15 --csv /tmp/read.csv
+$PY $S fetch getarticletotaldetail --date 2026-09-15 --json /tmp/d.json
+$PY $S users --days 30                            # 用户增减+累计联合报表（含净增）
+$PY $S daily                                      # 昨日核心指标一览（用户+发表内容+消息）
+```
+
+**自动分段与自适应降级**：脚本按注册表里的跨度上限自动切段逐段拉取并合并；
+若仍收到 `61501`/`61500`（跨度超限），会把分段跨度**自动减半重试**（打印「[降级]」提示），无需人工干预。
+`--span N` 可手动指定分段跨度。
+
+### 16.3 官方注意事项（务必内化）
+
+1. 数据仅存 **2014-12-01 之后**；更早日期即使有值也是不可信脏数据。
+2. **每天 8 点后**查询前一天数据才是完整的（否则 `61503 data not ready`）。
+3. **阅读量总和 < 3 的图文不会被统计** —— 小号数据为空是正常现象，不是脚本 bug。
+4. 「发表内容」新接口族（`getarticleread`/`getarticleshare`/`getbizsummary`/`getarticletotaldetail`）数据**起始 2025-11-01**，更早日期无效。
+5. 数据可能延迟，返回体的 **`is_delay=false` 才表示已是最新**。
+6. 官方要求开发者**自行落库缓存**（既提速也降低微信侧接口损耗）—— 建议把 `--json/--csv` 产物归档。
+7. `getarticletotal` 的 `details[]` 里，每天对应的是**到该日为止的累计量**，不是当日增量。
+8. `getarticlesummary`（当日增量）与 `getarticletotal`（发表起累计，最多 7 天）语义不同，别混用。
+
+### 16.4 本账号无权限时的替代路径
+
+21 个接口实测全部 `48001`（数据接口「向所有**认证**公众号开发者开放」，个人订阅号无法认证）。
+**数据并非拿不到，只是入口换成后台网页**：
+
+- 用户数据 → 后台「数据 → 用户分析 → 用户增长 / 用户属性」
+- 图文数据 → 后台「数据 → 内容分析 → 单篇图文数据 / 内容汇总」
+- 消息数据 → 后台「数据 → 消息分析」（部分账号无此模块）
+- 接口数据 → 后台「数据 → 接口分析」（需先配置服务器地址）
+
+抓取姿势沿用 §八：ego-browser 扫码登录 → 进「数据」板块选区间 → 同源 fetch 后台自身 JSON 或读 DOM 表格 → 落盘 JSON/CSV。
+`wx_stats.py webplan` 会把这套对照表直接打印出来（含菜单导航语义，后台菜单以账号实际可见项为准）。
+
+---
+
+## 十七、三模块作业安全规程（红线汇总）
+
+引用并覆盖 §十一⑧ 的立规，扩展为三模块通用：
+
+1. **动任何已有草稿之前，先拉档**：`wx_draft.py get/backup` 会存 JSON + HTML；写操作（`update`/`delete`）自动加备份。
+2. **能 `update` 就不 `delete`+`add`**：`delete` 不可逆、无回收站，且会丢掉用户在后台的手工改动。
+3. **删除类操作一律两步走**：`wx_draft.py delete`、`wx_publish.py delete` 默认只演练；必须显式 `--yes` 才执行。
+4. **平台版 ≠ 本地版时，先怀疑"用户在后台改过"**：用 `wx_draft.py diff` 定位差异，**停下来问，绝不覆盖**。
+5. **推送前必过方言校验**：`wx_dialect_check.py` 不通过不推（`wx_pipeline.py` 已内置硬拦截）。
+6. **推送后必做服务端回读验收**：`draft/get` 比对 ①各标签计数 ②`style=` 总数 ③纯文本一致性，并断言 `style=""` 计数为 0。
+7. **发布（freepublish/submit）是面向全部关注者的动作**：即便某天接口权限恢复，也必须先人工在后台预览确认，
+   绝不把 `submit` 放进无人值守的流水线。
+8. **凭据永不入库**：只用环境变量或 `~/.config/weixin/`；`wx_common.py` 打印凭据来源时只显示 AppID 前 6 后 4 位。
+
