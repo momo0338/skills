@@ -147,7 +147,7 @@ $PY /Users/zhugx/src/skills/mp-publish/scripts/wx_pipeline.py \
 
 # 指定账号（例：招聘稿推「码上职业」）—— --profile 必须显式带上
 $PY /Users/zhugx/src/skills/mp-publish/scripts/wx_pipeline.py \
-    --html "6招聘/2027年校园招聘/待发布/xx-排版.html" \
+    --html "码上职业/2027年校园招聘/待发布/xx-排版.html" \
     --profile mashang \
     --update-auto
 
