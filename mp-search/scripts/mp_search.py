@@ -148,12 +148,27 @@ def search_via_opencli(keyword: str, limit: int, rank_type: str):
 def search_via_wechat(keyword: str, limit: int, sort_mode: str):
     """原生通道：尝试通过微信公众平台超链接搜索或微信搜一搜端内检索"""
     cookie_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".mp_cookies.json")
+    token_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".mp_token")
     if os.path.exists(cookie_file):
         try:
             with open(cookie_file, "r", encoding="utf-8") as f:
                 data = json.load(f)
-            token = data.get("token")
-            cookies = data.get("cookies", [])
+            token = None
+            cookies = []
+            if isinstance(data, dict):
+                token = data.get("token")
+                cookies = data.get("cookies", [])
+            elif isinstance(data, list):
+                cookies = data
+                for c in cookies:
+                    if c.get("name") == "token":
+                        token = c.get("value")
+                        break
+            
+            if not token and os.path.exists(token_file):
+                with open(token_file, "r", encoding="utf-8") as tf:
+                    token = tf.read().strip()
+
             if token and cookies:
                 import urllib.request
                 import urllib.parse

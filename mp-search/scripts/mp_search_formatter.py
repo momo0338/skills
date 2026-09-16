@@ -13,14 +13,14 @@ def format_markdown_table(keyword: str, rank_type: str, items: list, channel: st
     is_opencli = (channel == "opencli") or (all(item.get("read_count") == "-" for item in items) if items else False)
     
     if is_opencli:
-        channel_desc = "搜狗微信开放检索（opencli 降级通道，搜狗不提供端内阅读量/点赞数）"
-        notice_line = "> ⚠️ **降级提示**：当前数据来自搜狗开放接口，搜狗不包含微信端内私有指标（阅读/点赞/在看/评论为 -），链接为搜狗临时跳转中继。如需真实互动数据请走微信端内搜一搜。"
+        channel_desc = "搜狗微信开放检索（opencli 降级通道，聚焦爆点切入与长尾选题）"
+        notice_line = "> 💡 **降级通道提示**：当前通过搜狗开放接口检索，重点展示文章切入角度与摘要。端内私有数据（精确阅读/点赞）请使用通道 A（微信桌面端搜一搜）。"
     else:
-        channel_desc = "微信客户端原生「搜一搜」"
+        channel_desc = "微信客户端原生「搜一搜」（含端内互动指标）"
         notice_line = ""
 
     lines = [
-        f"# 微信搜一搜「{keyword}」【{rank_type}】文章与全维度互动数据表",
+        f"# 微信搜一搜「{keyword}」【{rank_type}】文章对标数据表",
         ""
     ]
     if notice_line:
@@ -34,24 +34,39 @@ def format_markdown_table(keyword: str, rank_type: str, items: list, channel: st
         f"- **采集条数**：Top {len(items)}",
         "",
         "---",
-        "",
-        "| 序号 | 文章完整标题 | 发布公众号 | 发布时间 | 实测阅读量 | 点赞数 | 转发/分享数 | 收藏数 | 评论数 | 微信文章链接 |",
-        "| :---: | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :--- |"
+        ""
     ])
     
-    for i, item in enumerate(items, 1):
-        title = item.get("title", "")
-        account = item.get("account", "")
-        pub_date = item.get("publish_date", "")
-        read_cnt = item.get("read_count", "-")
-        like_cnt = item.get("like_count", 0)
-        share_cnt = item.get("share_count", 0)
-        collect_cnt = item.get("collect_count", 0)
-        comment_cnt = item.get("comment_count", 0)
-        url = item.get("mp_url", "")
-        link_md = f"[{url}]({url})" if url.startswith("https://mp.weixin.qq.com/s/") else (f"[查看链接]({url})" if url.startswith("http") else url)
-        
-        lines.append(f"| {i} | 《{title}》 | {account} | {pub_date} | **{read_cnt}** | {like_cnt:,} | {share_cnt:,} | {collect_cnt:,} | {comment_cnt:,} | {link_md} |")
+    if is_opencli:
+        lines.extend([
+            "| 序号 | 文章完整标题 | 发布公众号 | 发布时间 | 核心摘要 / 爆点切入 | 来源链接 |",
+            "| :---: | :--- | :--- | :---: | :--- | :--- |"
+        ])
+        for i, item in enumerate(items, 1):
+            title = item.get("title", "")
+            account = item.get("account", "-")
+            pub_date = item.get("publish_date", "-")
+            summary = item.get("summary", "").replace("|", "/")
+            url = item.get("mp_url", "")
+            link_md = f"[查看原文]({url})" if url.startswith("http") else "-"
+            lines.append(f"| {i} | 《{title}》 | {account} | {pub_date} | {summary[:60]} | {link_md} |")
+    else:
+        lines.extend([
+            "| 序号 | 文章完整标题 | 发布公众号 | 发布时间 | 实测阅读量 | 点赞数 | 转发/分享数 | 收藏数 | 评论数 | 微信官方链接 |",
+            "| :---: | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :--- |"
+        ])
+        for i, item in enumerate(items, 1):
+            title = item.get("title", "")
+            account = item.get("account", "-")
+            pub_date = item.get("publish_date", "-")
+            read_cnt = item.get("read_count", "-")
+            like_cnt = item.get("like_count", 0)
+            share_cnt = item.get("share_count", 0)
+            collect_cnt = item.get("collect_count", 0)
+            comment_cnt = item.get("comment_count", 0)
+            url = item.get("mp_url", "")
+            link_md = f"[{url}]({url})" if url.startswith("https://mp.weixin.qq.com/s/") else (f"[查看链接]({url})" if url.startswith("http") else url)
+            lines.append(f"| {i} | 《{title}》 | {account} | {pub_date} | **{read_cnt}** | {like_cnt:,} | {share_cnt:,} | {collect_cnt:,} | {comment_cnt:,} | {link_md} |")
         
     return "\n".join(lines)
 
