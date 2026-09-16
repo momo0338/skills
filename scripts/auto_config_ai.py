@@ -165,7 +165,6 @@ SKILL_DEPS = {
             "pip": "pip install requests",
         },
     },
-    "mp-hot": {},
     "mp-search": {},
     "gh-research": {
         "bins": ["gh"],

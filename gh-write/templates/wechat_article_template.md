@@ -37,18 +37,9 @@ stars: {STARS}
 ### 3. {FEATURE_3_TITLE}
 {FEATURE_3_BODY}
 
-## 微信生态观察：大家都在讨论它什么？
+## 核心架构拆解与同行盲区避坑
 
-通过微信「搜一搜」对该项目相关的**【最热】爆款推文**与**【最新】时效推文**进行双维度采样对比：
-
-### 1. 微信搜一搜双维度热度与舆情总表
-
-{WECHAT_ECOSYSTEM_TABLE}
-
-### 2. 读者真实反馈与高频踩坑点提炼
-- **读者最高频叫好点**：{USER_PRAISE_POINTS}
-- **实际部署与使用踩坑点**：{USER_PITFALL_POINTS}
-- **本文差异化补充**：{OUR_DIFFERENTIATION}
+{DEEP_DIVE_INSIGHTS}
 
 ## 极速实操：5分钟本地部署与上手体验
 
@@ -70,3 +61,12 @@ stars: {STARS}
 - **项目总结**：{SUMMARY_VERDICT}
 
 *关注「满宝看未来」，每周带你深度拆解一个真正能落地的 GitHub 宝藏开源项目！*
+
+<!-- benchmark:start -->
+<details>
+<summary>📊 微信搜一搜爆款对标数据（内部研发备查，排版发布自动忽略）</summary>
+
+{WECHAT_ECOSYSTEM_TABLE}
+
+</details>
+<!-- benchmark:end -->

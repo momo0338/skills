@@ -24,7 +24,6 @@
 | **[firecrawl](./firecrawl)** | `firecrawl/` | LLM 原生全站爬虫（整站递归 Crawl、站点地图 Map 发现、反爬绕过与 JSON Schema 结构化提取） | Python `firecrawl-py`, HTTP API, `FIRECRAWL_API_KEY` |
 | **[lux](./lux)** | `lux/` | 多平台视频下载 CLI（YouTube、Bilibili、抖音、TikTok 等） | Homebrew `lux`, `ffmpeg` |
 | **[mptext-api](./mptext-api)** | `mptext-api/` | 微信公众号 API 工具（支持公众号搜索、文章列表获取、多格式/批量下载） | Python `requests`, mptext.top API |
-| **[mp-hot](./mp-hot)** | `mp-hot/` | 微信公众号「搜一搜」热门文章与全维度互动数据自动化检索、阅读与归档 | Python `requests`, 微信搜一搜 |
 | **[mp-search](./mp-search)** | `mp-search/` | 微信公众号文章极速检索与采集（原生官方短链、全维度互动数据与对比表格） | Python `requests`, 微信搜一搜 |
 | **[fengniao-search](./fengniao-search)** | `fengniao-search/` | 风鸟企业与风险情报检索（工商信息、司法风险、经营异常、股东背景等） | Node.js `tool.mjs`, 风鸟 API |
 | **[zhihu-search](./zhihu-search)** | `zhihu-search/` | 知乎内容搜索工具 | Python `zhihu-search.py`, 知乎 API |
