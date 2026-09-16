@@ -84,3 +84,24 @@ python3 scripts/mp_search.py format data.json -o report.md
 
 - **日常快速调研 / gh-write 技术专栏对标**：直接使用 `python3 scripts/mp_search.py search "<关键词>" -s hot/new -o ...`，秒级产出近期公众讨论热点与标题模式；
 - **深度竞品拆解 / 真实阅读量审计**：在具备桌面微信的环境中，通过桌面端搜一搜进入文章底部采样阅读量、点赞数，点击「••• -> 复制链接」获取标准短链，最后由 `mp_search.py format` 汇总出具交付级报告。
+
+---
+
+## 四、⚠️ 通道可用性现状（2026-09-16 实测，先看这条再决定用哪条）
+
+| 通道 | 状态 | 说明 |
+|---|---|---|
+| A 微信桌面端搜一搜 | ❌ 多数环境不可用 | 依赖 `微信 (窗口)`，**只有 ChatGPT / Antigravity 环境能调**；WorkBuddy / Codex 下报"未就绪"并自动降级 |
+| B 公众平台超链接接口 | ⚠️ 需扫码 | 依赖后台登录态，登录过期即失效 |
+| C 搜狗开放检索（`opencli weixin search`） | ❌ **当前超时不可用** | 实测 `TIMEOUT: weixin/search timed out after 60s`，exit 69 / 75 / 137；`OPENCLI_BROWSER_COMMAND_TIMEOUT=200` 调大后仍被终止。**命令本身在 PATH 里，不是"找不到命令"问题** |
+
+**由此推出的作业原则**：
+1. **不要因为通道失效就跳过"爆款对标"这一步**——见 `guide-write` §0.3 的合规替代方案：
+   **用本号后台「发表记录」的真实互动数据做同题材对标**（可信度与可比性都高于搜狗降级数据），
+   再用 `WebSearch` 补公开渠道的套路观察；**正文对标块里如实写明降级原因与缺失指标**。
+2. 需要端内真实互动数据时，**先出「对标采集清单」交给朱总在 ChatGPT / Antigravity 环境跑**，回传后用 `format` 渲染。
+3. 复测命令（判定通道是否恢复）：
+   ```bash
+   OPENCLI_BROWSER_COMMAND_TIMEOUT=200 /usr/local/bin/opencli weixin search "测试词" --limit 3
+   # 返回 ok:true 即恢复；TIMEOUT 则仍不可用
+   ```
