@@ -328,6 +328,76 @@ EOF
 - 「微信快捷登录」按钮在 iframe 内，必须用 `click('@ref')` 的 ref 方式点，按坐标点会落空（getBoundingClientRect 返回 0）。
 - 落地 base64 用 `re.search(r"data:image/\w+;base64,...")` 解码成 PNG 再 `present_files` 展示；校验真伪可看灰度唯一值数（真二维码=2 个值）。
 
+### 八.1 快路：后台内部 JSON 接口，一次拿全量含指标（2026-09-16 实测打通，优先用）
+
+**别再逐页读 DOM。** 发表记录页背后的接口可直接取 JSON，**两跳解析**（`publish_page` 和 `publish_info` 都是字符串化的 JSON，要二次 `json.loads`）：
+
+```
+GET /cgi-bin/appmsgpublish?sub=list&begin=<0,20,...>&count=20&token=<token>&lang=zh_CN&f=json&ajax=1
+```
+
+- `token` 从登录后任意后台页 URL 的 `?token=` 取（如 `/cgi-bin/home?...&token=693200168`）。
+- 返回 `publish_page`（JSON 字符串）→ `total_count` / `publish_count`（未通知）/ `masssend_count`（已通知）/ `publish_list[]`。
+- 每条 `publish_list[i].publish_info`（JSON 字符串）→ `appmsg_info[]` 为文章数组（多图文会有多条）。
+- **分页**：148 条 = 8 页，`begin` 步进 20，逐页取后合并。
+- **时间字段分两处（坑）**：已通知记录在 `sent_info.time`；**未通知（发表不推送）记录没有 `sent_info`，时间在 `appmsg_info[0].line_info.send_time`**。只读前者会让 11 条未通知记录全部没有日期。
+
+**`appmsg_info[]` 的可用字段（远超页面展示）**：
+`title` `content_url`（永久短链）`digest` `read_num` `like_num` `share_num` `old_like_num` `comment_num`
+`moment_like_num` `is_deleted` `modify_status` `copyright_status`（100 = 原创）`appmsg_album_info.title`（所属合集）`cover`。
+
+**指标口径以页面 DOM 类名为准，别猜**（本次实测对照）：
+
+| 页面列 | DOM 类名 | 接口字段 |
+|---|---|---|
+| 阅读人数 | `appmsg-view` | `read_num` |
+| 点赞人数 | `appmsg-like` | `like_num` |
+| 分享人数 | `appmsg-share` | `share_num` |
+| 在看人数 | `appmsg-haokan` | `old_like_num` |
+| 留言条数 | `appmsg-comment` | `comment_num` |
+| 划线人数 | `appmsg-underline` | 该接口未返回 |
+
+**取数脚本骨架**（全程在 ego-browser 会话内同源 fetch，逐页 `cliLog` 出来再由外部 Python 解析）：
+
+```js
+for (let p = 0; p < 8; p++) {
+  const r = await js(String.raw`(async () => {
+    const url = '/cgi-bin/appmsgpublish?sub=list&begin=${p*20}&count=20&token=TOKEN&lang=zh_CN&f=json&ajax=1';
+    return await (await fetch(url, {credentials:'include'})).text();
+  })()`)
+  cliLog('@@@PAGE_' + p + '@@@'); cliLog(String(r))
+  await new Promise(r => setTimeout(r, 700))   // 别打太密
+}
+```
+
+**原始响应务必落盘归档**（官方要求开发者自行缓存）：`~/.cache/weixin/publish_records/<账号>_发表记录_<日期>.json`。
+
+**与本地 vault 稿件对账（2026-09-16 实测的可行解）**：本地工作标题与发布标题**经常被彻底改写**（为打开率），所以标题精确匹配召回极差、关键词匹配噪声极大。可行做法是**最长公共子串 + 泛词剥离**，并且**只追求精度**：
+
+- 对「本地文件名（去分隔符）」与「线上标题 + digest」求最长公共子串（`difflib.SequenceMatcher`）；
+- 片段长度 ≥ 6 个汉字，**且**剥离泛词（`南京/遛娃/博物馆/攻略/指南/大学/公园/校区/全国/免费/打卡/带娃/亲子/景区/盘点/名单/汇总/推荐/系列/周末/全`）后仍剩 ≥ 4 字，才算同篇；
+- 泛词剥离这层不能省：否则 `南京夫子庙`（5 字）、`南京师范大学`（6 字）、`博物馆南京` 这类"地名 + 通用词"片段会把不相干的两篇判成同篇。
+- **已知漏配**：`南京大学生免费景区全攻略`→`南京大学生免费游玩全攻略`（因"大学"被当泛词剥离后只剩 1 字）。**结论只能当线索，判定"本地稿是否已发"必须以线上权威清单为准做人工比对**——不要把它写成"未发布"。
+- **"大学/大学生"这类词必须在剥泛词前保护**：`GENERIC` 里有 `大学`，会把 `南京大学生免费` 打碎成 `生` 从而漏配；先替换成占位符再剥。`PROTECT = ('大学生','中学生','小学生','幼儿园','动物园','植物园','科技馆')`。
+- **本地正文不能并进比对文本**（实测否决）：本地稿正文与线上 digest 共享大量样板文本（开放时间 `9:00-17:00,16:30停止入馆`、`门票30元`、`闭馆法定节假日除外`、`2026年`），最长公共子串会优先命中这些噪声，把 36 篇里的 28 篇误判成"已发"。**只用文件名**。另外要**先剔除数字片段**（`[0-9]+`）再算特征字数，否则 `2026年`、`90017001630` 都会通过。
+
+**落地工具（vault 内，可直接复用）**：`03-工作记录/满爸爱生活/工具/发表记录勾稽.py`
+
+```bash
+PY=/Users/zhugx/.workbuddy/binaries/python/envs/default/bin/python3
+T="/Users/zhugx/codeup/obsidian/03-工作记录/满爸爱生活/工具/发表记录勾稽.py"
+$PY $T            # dry-run：出勾稽报告（高置信已发 / 需人工判断 / 线上已发但本地未归档）
+$PY $T --index    # 额外生成《已发文章索引》（线上全量 + 本地归档状态 + 阅读 30 强）
+$PY $T --apply    # 对高置信条目执行 git mv 归档（幂等，跑第二次得 0 条）
+```
+
+- 数据源默认取 `~/.cache/weixin/publish_records/` 里最新一份 JSON，**先跑 §八.1 的取数脚本刷新缓存**再勾稽。
+- 算法抓不到的那批"标题被彻底改写"的稿件，人工核实 digest 后写进脚本里的 `CONFIRMED` 白名单（`{本地稿名: (线上标题特征词, 归档去向目录)}`），会并入高置信一起归档。**只加已人工核实 digest 的条目。**
+- 归档走 `git mv`；**未纳入版本控制的文件 `git mv` 会直接拒绝**（`fatal: not under version control`）→ 需退回 `shutil.move` + `git add`。
+- 归档参数拼路径的坑：去向要拼**完整相对路径** `03-工作记录/满爸爱生活/<分区>/<文件名>`，只写分区名会报 `No such file or directory`。
+
+**实测口径（2026-09-16，满爸爱生活）**：线上 150 篇；`待发布/` 36 篇里 **11 篇其实已发**（4 篇算法命中 + 7 篇人工核实），已归档到分区目录；剩余 25 篇的反向核查方式是**拿它们的场所专名去线上标题里搜**（美龄宫/方山/猿人洞/非遗馆/阳山/四星级/徐达/瘦西湖/李文忠/13太保/朱然/采石矶 等全部 0 命中 = 确实未发）。**专名零命中比"标题不相似"更能证明未发**，这一步别省。
+
 ---
 
 ## 九、从别人文章里搬"二维码/海报"进自己正文（2026-09-11 实测）
@@ -353,6 +423,48 @@ urls = re.findall(r'data-src="([^"]+)"', seg)
 
 **④ 纯海报是竖图，不会自动当封面**
 prep 的封面貌似只挑横图，竖版海报会提示"无横图候选，跳过封面生成"——仍需自备 `--cover`。
+
+---
+
+## 九.B 文章内链：往期推荐自动插入（2026-09-16 实测）
+
+**结论先行**：正文里链接到**本号已发文章**的内链**不会被剥**（外链 `<a href>` 才会被剥）。朱总在后台编辑器手工加的 3 条内链，`draft/get` 读回结构完整。规范写法（编辑器生成的原样模板）：
+
+```html
+<a class="normal_text_link mp_article_text_link" target="_blank" style=""
+   href="https://mp.weixin.qq.com/s?__biz=<本号biz>&amp;mid=<素材appmsgid>&amp;idx=<itemidx>&amp;sn=<服务端哈希>&amp;scene=21#wechat_redirect"
+   textvalue="<文章标题>" data-itemshowtype="0" linktype="text" data-linktype="2"><文章标题></a>
+```
+
+配套的往期条目结构（标题行 + 链接行）：
+
+```html
+<section style="padding:14px 0;border-bottom:1px dashed #DCE7DD;">
+  <p style="margin:0 0 5px;font-size:15.5px;font-weight:800;color:#1B5E20;">🏛 <栏目名></p>
+  <p style="margin:0;font-size:15px;line-height:1.85;color:#555;"><a ...同上...>文章标题</a></p>
+</section>
+```
+
+**参数获取路径（2026-09-16 实测）**：
+
+| 参数 | 来源 | 说明 |
+|---|---|---|
+| `__biz` | 本号固定值（MzE5MTA3NDM3NQ==，base64 解出 uin 3191074375） | 一次取得，永久复用；三篇内链实测一致 |
+| `mid` | **不是**发表记录里的 msgid（那是群发 id 1000000xxx）；是素材层 appmsgid（2247484xxx） | 缓存里没有，需解析 |
+| `idx` | 发表记录 `itemidx` | 单图文恒为 1 |
+| `sn` | 服务端哈希，**不可本地计算** | 必须解析真实 URL |
+
+**sn 的获取**：解析短链（`发表记录 content_url`）拿 302 落地 URL。
+⚠️ 沙箱 `curl -I` 会被微信反爬拦成 `wappoc_appmsgcaptcha` 验证码跳转，**拿不到参数**；
+用 **ego-browser（走家宽真实 IP）**打开短链后读 `location.href`，即可得到含 `__biz/mid/idx/sn` 的长链。
+
+**两个前置（做完才算全自动）**：
+1. `wx_dialect_check.py` 现在禁一切 `<a href>`，会拦掉内链 → 需放行 `class` 含 `mp_article_text_link` 或 `data-linktype="2"` 的标签（外链照拦）。
+2. **API 推送的内链是否真机存活未实测**（编辑器加的已实证存活）→ 首次自动插入后必须真机预览确认一次。
+
+**当前工作流（朱总 2026-09-16 定）**：内链这一步**留在后台编辑器做**（编辑器选"文章链接"30 秒搞定、markup 保真），
+推草稿时往期条目先以纯文本占位，推送后在编辑器里逐条替换为内链。
+自动化方案等上面两个前置完成后再切换。
 
 ---
 
