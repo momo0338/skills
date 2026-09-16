@@ -29,6 +29,132 @@ CRED_DIR = os.path.expanduser("~/.config/weixin")
 CACHE_DIR = os.path.expanduser("~/.cache/weixin")
 TOKEN_SAFETY_MARGIN = 300   # token 剩余有效期低于该秒数即视为过期，提前刷新
 
+# --------------------------------------------------------------------------- #
+# 多账号（profile）目录约定
+# --------------------------------------------------------------------------- #
+#   ~/.config/weixin/
+#     appid / appsecret          # 遗留默认账号（= profiles.json 的 default），保持向后兼容
+#     profiles.json              # {"default": "<alias>", "profiles": {alias: {name, appid, author}}}
+#     profiles/<alias>/appsecret # 各账号密钥独立落盘（chmod 600），不进 profiles.json
+#
+#   ~/.cache/weixin/
+#     token_<appid后8位>.json    # token 缓存天然按 appid 隔离
+#     profiles/<alias>/draft_backups/   # 草稿备份按账号隔离（media_id 是账号内唯一，混放会误判）
+PROFILES_FILE = os.path.join(CRED_DIR, "profiles.json")
+PROFILES_SUBDIR = "profiles"
+
+# 当前进程生效的账号别名。"" 表示走遗留的 ~/.config/weixin/appid|appsecret
+_ACTIVE_PROFILE = None
+
+
+def set_profile(alias):
+    """设置当前进程的账号别名，并写回环境变量（子进程自动继承）。
+
+    alias 为空/None 时清除，回落到遗留默认凭据。
+    """
+    global _ACTIVE_PROFILE
+    alias = (alias or "").strip()
+    _ACTIVE_PROFILE = alias
+    if alias:
+        os.environ["WX_PROFILE"] = alias
+    else:
+        os.environ.pop("WX_PROFILE", None)
+    return alias
+
+
+def active_profile():
+    """返回当前生效的账号别名（显式设置 > 环境变量 > profiles.json 的 default）。"""
+    if _ACTIVE_PROFILE:
+        return _ACTIVE_PROFILE
+    env = (os.environ.get("WX_PROFILE") or "").strip()
+    if env:
+        return env
+    return read_profiles_meta().get("default", "") or ""
+
+
+def _read_json(path):
+    try:
+        with open(path, encoding="utf-8") as f:
+            return json.load(f)
+    except (FileNotFoundError, PermissionError, json.JSONDecodeError):
+        return {}
+
+
+def read_profiles_meta():
+    """读取 profiles.json（缺失返回 {}）。"""
+    d = _read_json(PROFILES_FILE)
+    if not isinstance(d, dict):
+        return {}
+    d.setdefault("profiles", {})
+    if not isinstance(d["profiles"], dict):
+        d["profiles"] = {}
+    return d
+
+
+def write_profiles_meta(meta):
+    os.makedirs(CRED_DIR, exist_ok=True)
+    with open(PROFILES_FILE, "w", encoding="utf-8") as f:
+        json.dump(meta, f, ensure_ascii=False, indent=2)
+    os.chmod(PROFILES_FILE, 0o600)
+
+
+def list_profiles():
+    """返回 {alias: {"name":…, "appid":…, "author":…, "secret_path":…}}。
+
+    同时把遗留默认凭据（~/.config/weixin/appid）作为一个特殊别名 "default" 暴露，
+    方便 wx_account.py 直接列出/迁移。
+    """
+    meta = read_profiles_meta()
+    out = dict(meta.get("profiles") or {})
+    legacy_appid = _read_cred_file(os.path.join(CRED_DIR, "appid"))
+    if legacy_appid:
+        out.setdefault("default", {
+            "name": "遗留默认账号（~/.config/weixin/appid）",
+            "appid": legacy_appid,
+            "author": "",
+            "legacy": True,
+        })
+    return out
+
+
+def _profile_dir(alias):
+    return os.path.join(CRED_DIR, PROFILES_SUBDIR, alias)
+
+
+def profile_cache_dir(alias=None):
+    """账号专属缓存目录。遗留默认账号落在 ~/.cache/weixin/legacy_default。"""
+    alias = alias if alias is not None else active_profile()
+    key = alias or "legacy_default"
+    return os.path.join(CACHE_DIR, PROFILES_SUBDIR, key)
+
+
+def run_dir(create=True):
+    """流水线中间产物目录（zj_wechat_content.html / zj_imgmap.json / zj_cover.jpg 等）。
+
+    默认 /tmp（保持历史行为）。wx_pipeline.py 会按账号设 WX_RUN_DIR=/tmp/wxrun_<alias>，
+    避免两个账号的流水线并发时**封面与正文串号**。
+    """
+    d = os.environ.get("WX_RUN_DIR") or "/tmp"
+    if create:
+        os.makedirs(d, exist_ok=True)
+    return d
+
+
+def profile_data_dir(alias=None):
+    """账号专属数据目录（草稿备份等持久产物）。
+
+    特例：若该 profile 的 appid 与遗留 ~/.config/weixin/appid 一致（即同一个号，只是
+    换了个别名来引用），沿用遗留路径 ~/.cache/weixin/，避免历史备份「换名字就找不到」。
+    """
+    alias = alias if alias is not None else active_profile()
+    if not alias or alias == "default":
+        return CACHE_DIR
+    appid, _s, _src = resolve_creds(alias, quiet=True)
+    legacy_appid = _read_cred_file(os.path.join(CRED_DIR, "appid"))
+    if appid and legacy_appid and appid == legacy_appid:
+        return CACHE_DIR
+    return os.path.join(CACHE_DIR, PROFILES_SUBDIR, alias)
+
 
 # --------------------------------------------------------------------------- #
 # 错误翻译表
@@ -58,6 +184,19 @@ ERRCODE_HINTS = {
     61503:  "指定日期数据尚未生成：每天 8 点后才可查询前一天数据",
     88000:  "without comment privilege：该账号无留言/评论权限",
 }
+
+
+# 可重试的「伪失败」错误码：这类错误既可能是永久性的，也可能是服务端短暂未同步，
+# 重试成本低而漏用代价高，故做有限次重试（最终仍失败时抛同一个错，不掩盖真问题）。
+#   40007 invalid media_id —— 2026-09-16 多账号实测，确认有三种成因：
+#         ① 没传 thumb_media_id（本账号实测：草稿必须带封面素材，缺了就是 40007）→ 永久失败
+#         ② media_id 属于**另一个公众号**（跨账号串联残留 payload 所致）→ 永久失败
+#         ③ 素材刚 add_material 上传、draft 服务尚未同步 → 数秒后自愈
+#         ②③ 都是「重试或修正后能过」的，故纳入重试；重试耗尽仍抛原错，不掩盖 ①。
+#         ⚠️ 关键：重试只治 ③。② 必须在源头消除（payload 落盘/读取用同一变量，
+#            见 wx_push_draft.py 的 PAYLOAD_FILE）。40164/48001 等一律不重试。
+#   -1    系统繁忙
+RETRYABLE_ERRCODES = (40007, -1)
 
 
 class WxApiError(Exception):
@@ -92,19 +231,65 @@ def _read_cred_file(path):
         return ""
 
 
-def load_wx_creds(quiet=False):
-    """环境变量优先，回退 ~/.config/weixin/。缺失则退出（exit code 2）。"""
-    appid = os.environ.get("WX_APPID") or _read_cred_file(os.path.join(CRED_DIR, "appid"))
-    secret = os.environ.get("WX_APPSECRET") or _read_cred_file(os.path.join(CRED_DIR, "appsecret"))
+def resolve_creds(profile=None, quiet=True):
+    """按账号别名解析 (appid, secret, source)。找不到返回 ("", "", "")，不退出。
+
+    解析优先级（高 → 低）：
+      1. 环境变量 WX_APPID / WX_APPSECRET（整对覆盖，用于临时/一次性调用）
+      2. profiles.json + profiles/<alias>/appsecret
+      3. 遗留 ~/.config/weixin/appid|appsecret
+    """
+    alias = profile if profile is not None else active_profile()
+    appid = os.environ.get("WX_APPID") or ""
+    secret = os.environ.get("WX_APPSECRET") or ""
+    if appid and secret:
+        return appid, secret, "环境变量"
+
+    meta = read_profiles_meta()
+    entry = (meta.get("profiles") or {}).get(alias) or {}
+    if entry:
+        appid = appid or entry.get("appid", "")
+        secret = secret or _read_cred_file(os.path.join(_profile_dir(alias), "appsecret"))
+        if appid and secret:
+            return appid, secret, f"profile:{alias}"
+    elif alias and alias != "default":
+        # 未登记在 profiles.json，但也许有裸目录
+        appid = appid or _read_cred_file(os.path.join(_profile_dir(alias), "appid"))
+        secret = secret or _read_cred_file(os.path.join(_profile_dir(alias), "appsecret"))
+        if appid and secret:
+            return appid, secret, f"profile:{alias}(未登记)"
+
+    if not alias or alias == "default":
+        appid = appid or _read_cred_file(os.path.join(CRED_DIR, "appid"))
+        secret = secret or _read_cred_file(os.path.join(CRED_DIR, "appsecret"))
+        if appid and secret:
+            return appid, secret, "legacy:" + CRED_DIR
+    return "", "", ""
+
+
+def load_wx_creds(quiet=False, profile=None):
+    """环境变量 / profile / 遗留文件，三路解析。缺失则退出（exit code 2）。"""
+    appid, secret, src = resolve_creds(profile, quiet=quiet)
     if not appid or not secret:
+        alias = profile if profile is not None else active_profile()
+        hint = f"（当前 profile=<{alias}>）" if alias else ""
+        avail = ", ".join(sorted(list_profiles().keys())) or "（无）"
         sys.stderr.write(
-            "⚠️ 未配置微信凭据：请设置环境变量 WX_APPID/WX_APPSECRET，"
-            "或在 ~/.config/weixin/ 下放置 appid / appsecret 文件\n"
+            f"⚠️ 未配置微信凭据{hint}：请设置环境变量 WX_APPID/WX_APPSECRET，"
+            f"或在 ~/.config/weixin/ 下放置 appid / appsecret 文件；"
+            f"多账号可用 wx_account.py add <alias> 登记。已登记账号: {avail}\n"
         )
         sys.exit(2)
     if not quiet:
-        print(f"[cred] AppID={appid[:6]}****{appid[-4:]} 凭据来源={'环境变量' if os.environ.get('WX_APPID') else CRED_DIR}")
+        print(f"[cred] profile={active_profile() or '-'} AppID={appid[:6]}****{appid[-4:]} 来源={src}")
     return appid, secret
+
+
+def load_wx_author(default="满爸爱生活"):
+    """取账号默认作者名（profiles.json 的 author 字段），未配置则用 default。"""
+    alias = active_profile()
+    entry = (read_profiles_meta().get("profiles") or {}).get(alias) or {}
+    return entry.get("author") or default
 
 
 # --------------------------------------------------------------------------- #
@@ -121,7 +306,7 @@ def curl_json(url, payload=None, method=None, timeout=60):
     cmd = ["curl", "-s", "--max-time", str(timeout)]
     tmp = None
     if payload is not None:
-        tmp = os.path.join(CACHE_DIR, "_payload.tmp")
+        tmp = os.path.join(CACHE_DIR, f"_payload_{os.getpid()}.tmp")
         os.makedirs(CACHE_DIR, exist_ok=True)
         with open(tmp, "w", encoding="utf-8") as f:
             json.dump(payload, f, ensure_ascii=False)
@@ -189,11 +374,13 @@ def fetch_token(appid, secret, force_refresh=False):
     return d["access_token"], int(d.get("expires_in") or 7200), "cgi-bin/token"
 
 
-def get_token(appid=None, secret=None, force_refresh=False, quiet=True):
-    appid = appid or os.environ.get("WX_APPID") or _read_cred_file(os.path.join(CRED_DIR, "appid"))
-    secret = secret or os.environ.get("WX_APPSECRET") or _read_cred_file(os.path.join(CRED_DIR, "appsecret"))
+def get_token(appid=None, secret=None, force_refresh=False, quiet=True, profile=None):
+    if not (appid and secret):
+        _a, _s, _ = resolve_creds(profile, quiet=quiet)
+        appid = appid or _a
+        secret = secret or _s
     if not appid or not secret:
-        load_wx_creds(quiet=False)   # 复用其报错与退出逻辑
+        load_wx_creds(quiet=False, profile=profile)   # 复用其报错与退出逻辑
     if not force_refresh:
         cached = read_cached_token(appid)
         if cached:
@@ -233,6 +420,26 @@ def api_call(path, payload=None, method=None, token=None, appid=None, secret=Non
                             timeout, retry - 1, quiet)
         raise WxApiError(ec, data.get("errmsg", ""), raw=data, path=path)
     return data
+
+
+def api_call_retry(path, payload=None, method=None, tries=3, delay=2.5, **kw):
+    """带「伪失败」重试的 api_call。
+
+    仅对 RETRYABLE_ERRCODES（40007 / -1）重试，退避 delay*1, delay*2 …；
+    其它错误（含 40164、48001）立即抛出不浪费等待。最后一次仍失败则原样抛错。
+    """
+    last = None
+    for i in range(max(1, tries)):
+        try:
+            return api_call(path, payload, method, **kw)
+        except WxApiError as e:
+            last = e
+            if e.errcode not in RETRYABLE_ERRCODES or i == tries - 1:
+                raise
+            wait = delay * (i + 1)
+            print(f"[retry] {e.errcode} {e.errmsg[:60]} —— {wait:.1f}s 后重试 ({i+1}/{tries-1})")
+            time.sleep(wait)
+    raise last
 
 
 def probe_permission(path, payload=None):

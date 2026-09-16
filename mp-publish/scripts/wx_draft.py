@@ -40,10 +40,16 @@ import unicodedata
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from wx_common import (  # noqa: E402
-    WxApiError, api_call, die, dump_json, load_wx_creds, get_token,
+    WxApiError, api_call, api_call_retry, die, dump_json, load_wx_creds, get_token,
+    active_profile, profile_data_dir, set_profile,
 )
 
-BACKUP_DIR = os.path.expanduser("~/.cache/weixin/draft_backups")
+
+def backup_root():
+    """草稿备份目录（按账号隔离：media_id 只在账号内唯一，跨号混放会导致误恢复）。"""
+    return os.path.join(profile_data_dir(), "draft_backups")
+
+
 MAX_CONTENT_CHARS = 20000   # 官方口径；实测 26843 字符可通过，超限只告警不阻断
 MAX_TITLE_CHARS = 32
 MAX_AUTHOR_CHARS = 16
@@ -110,9 +116,10 @@ def validate_article(a):
 
 def backup_draft(media_id, news, save_html=False, tag="backup"):
     """把平台当前版本完整存档。任何写操作前都应先跑这个。"""
-    os.makedirs(BACKUP_DIR, exist_ok=True)
+    backup_dir = backup_root()
+    os.makedirs(backup_dir, exist_ok=True)
     ts = time.strftime("%Y%m%d-%H%M%S")
-    base = os.path.join(BACKUP_DIR, f"{tag}_{media_id}_{ts}")
+    base = os.path.join(backup_dir, f"{tag}_{media_id}_{ts}")
     with open(base + ".json", "w", encoding="utf-8") as f:
         json.dump(news, f, ensure_ascii=False, indent=2)
     made = [base + ".json"]
@@ -234,7 +241,8 @@ def cmd_add(args):
         print("[dry-run] 将提交 draft/add 的 payload：")
         print(json.dumps({"articles": [art]}, ensure_ascii=False)[:2000])
         return None
-    r = api_call("/cgi-bin/draft/add", {"articles": [art]})
+    # 40007 可能是「素材刚上传尚未同步」，用带重试版本（见 wx_common.RETRYABLE_ERRCODES）
+    r = api_call_retry("/cgi-bin/draft/add", {"articles": [art]})
     print(f"[add] 新增草稿成功！media_id = {r.get('media_id')}")
     print(">>> 请到公众号后台「内容与互动-草稿箱」确认排版/图片/摘要")
     dump_json(r, args.json)
@@ -320,7 +328,7 @@ def cmd_update(args):
 
     payload = {"media_id": args.media_id, "index": args.index, "articles": merged}
     try:
-        r = api_call("/cgi-bin/draft/update", payload)
+        r = api_call_retry("/cgi-bin/draft/update", payload)
     except WxApiError as e:
         print(f"[FAIL] draft/update 失败: {e}")
         if e.hint():
@@ -377,11 +385,11 @@ def cmd_restore(args):
         print(f"[dry-run] 将从备份重建草稿: {art.get('title')}")
         return None
     if args.media_id:
-        r = api_call("/cgi-bin/draft/update",
-                     {"media_id": args.media_id, "index": args.index, "articles": art})
+        r = api_call_retry("/cgi-bin/draft/update",
+                           {"media_id": args.media_id, "index": args.index, "articles": art})
         print(f"[restore] 已回写到 {args.media_id}（errcode={r.get('errcode')}）")
     else:
-        r = api_call("/cgi-bin/draft/add", {"articles": [art]})
+        r = api_call_retry("/cgi-bin/draft/add", {"articles": [art]})
         print(f"[restore] 已重建为新草稿 media_id = {r.get('media_id')}"
               f"（注意：与原 media_id 不同，原 ID 不可复活）")
     dump_json(r, args.json)
@@ -501,6 +509,10 @@ def build_parser():
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--json", default=argparse.SUPPRESS,
                         help="把原始返回写入该 JSON 文件；用 - 打印到标准输出")
+    # 多账号：--profile <alias> 优先于环境变量 WX_PROFILE 与 profiles.json 的 default。
+    # default=SUPPRESS 同样避免子命令层级互相覆盖。
+    common.add_argument("--profile", default=argparse.SUPPRESS,
+                        help="指定公众号账号别名（见 wx_account.py list）；缺省走 WX_PROFILE 或默认账号")
 
     p = argparse.ArgumentParser(
         prog="wx_draft.py",
@@ -606,9 +618,15 @@ def main():
     p = build_parser()
     args = p.parse_args()
     # parents 里用了 SUPPRESS，未指定时属性不存在，这里统一补默认值
-    for _k, _dv in (("json", ""), ("csv", "")):
+    for _k, _dv in (("json", ""), ("csv", ""), ("profile", "")):
         if not hasattr(args, _k):
             setattr(args, _k, _dv)
+    # 账号选择必须在任何凭据/token 读取之前生效（并写回环境变量，子进程继承）。
+    # ⚠️ 只有显式传了 --profile 才覆盖；未传时保留环境变量 WX_PROFILE 的语义，
+    #    否则 set_profile("") 会把 WX_PROFILE 清掉，导致 shell 层切换失效。
+    _profile_arg = getattr(args, "profile", "") or ""
+    if _profile_arg:
+        set_profile(_profile_arg)
     if not getattr(args, "cmd", None):
         p.print_help()
         return

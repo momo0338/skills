@@ -16,39 +16,40 @@
 前置: wx_prep_content.py 已产出 --content-file(含{{IMGn}}占位)/--imgmap/--cover
 流程: access_token -> media/uploadimg(正文图) -> 回填URL -> add_material(封面) -> draft/add|update
 """
-import json, os, re, subprocess, sys, argparse, unicodedata
+import json, os, re, subprocess, sys, argparse, time, unicodedata
 
-def _read_cred_file(p):
-    try:
-        with open(p, encoding="utf-8") as f:
-            return f.read().strip()
-    except FileNotFoundError:
-        return ""
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from wx_common import (  # noqa: E402
+    active_profile, get_token, load_wx_author, load_wx_creds, run_dir, set_profile,
+)
 
-def load_wx_creds():
-    """从环境变量或 ~/.config/weixin/ 文件读取 AppID/AppSecret，绝不硬编码到仓库。"""
-    appid = os.environ.get("WX_APPID") or _read_cred_file(os.path.expanduser("~/.config/weixin/appid"))
-    secret = os.environ.get("WX_APPSECRET") or _read_cred_file(os.path.expanduser("~/.config/weixin/appsecret"))
-    if not appid or not secret:
-        sys.stderr.write("⚠️ 未配置微信凭据：请设置环境变量 WX_APPID/WX_APPSECRET，"
-                         "或在 ~/.config/weixin/ 下放置 appid / appsecret 文件\n")
-        sys.exit(2)
-    return appid, secret
-
-APPID, SECRET = load_wx_creds()
 MAX_DIGEST = 120  # 微信摘要上限（字符）
 
 ap = argparse.ArgumentParser()
+ap.add_argument("--profile", default="",
+                help="公众号账号别名（见 wx_account.py list）；缺省走 WX_PROFILE 或默认账号")
 ap.add_argument("--title", required=True)
-ap.add_argument("--author", default="满爸爱生活")
+ap.add_argument("--author", default="", help="作者名；缺省取该账号 profiles.json 的 author")
 ap.add_argument("--digest", default="", help="SEO 摘要，≤%d 字符；为空则自动生成" % MAX_DIGEST)
-ap.add_argument("--content-file", default="/tmp/zj_wechat_content.html")
-ap.add_argument("--imgmap", default="/tmp/zj_imgmap.json")
-ap.add_argument("--cover", default="/tmp/zj_cover.jpg")
+ap.add_argument("--content-file", default="", help="缺省 $WX_RUN_DIR/zj_wechat_content.html")
+ap.add_argument("--imgmap", default="", help="缺省 $WX_RUN_DIR/zj_imgmap.json")
+ap.add_argument("--cover", default="", help="缺省 $WX_RUN_DIR/zj_cover.jpg")
 ap.add_argument("--source-url", default="", help="原文链接/活动页地址，正文禁<a>时靠它外链")
 ap.add_argument("--update-media-id", default="",
                 help="就地更新已有草稿（draft/update，不新增草稿）；留空则新建（draft/add）")
 args = ap.parse_args()
+
+# 账号选择必须早于任何凭据读取；只有显式传了 --profile 才覆盖 WX_PROFILE 的语义。
+if args.profile:
+    set_profile(args.profile)
+APPID, SECRET = load_wx_creds(quiet=True)
+args.author = args.author or load_wx_author("满爸爱生活")
+
+RUN_DIR = run_dir()
+args.content_file = args.content_file or os.path.join(RUN_DIR, "zj_wechat_content.html")
+args.imgmap = args.imgmap or os.path.join(RUN_DIR, "zj_imgmap.json")
+args.cover = args.cover or os.path.join(RUN_DIR, "zj_cover.jpg")
+print(f"[cred] 目标账号 profile={active_profile() or '(默认)'} AppID={APPID[:6]}****{APPID[-4:]}")
 
 def ccount(s):
     """中英混排字符数（微信按字数计，英数每字符算1）"""
@@ -64,6 +65,71 @@ def curl_json(url, extra=None):
     except Exception:
         print("[ERR] 非JSON响应:", r.stdout[:300], r.stderr[:200])
         sys.exit(1)
+
+TOKEN_ERRCODES = (40001, 40014, 42001)
+
+def wx_api(path, extra=None, tries=2):
+    """带 token 自愈的请求：path 支持自带 query（如 '...add_material?type=image'）。
+
+    40001/40014/42001 均为「token 失效」——常见于稳定 token 被其它系统顶掉，或本机
+    磁盘缓存过期。此时强制刷新 token 重试一次；其它错误原样返回交调用方判断。
+    本脚本的 uploadimg / add_material / draft.* 三处全走这里，避免某一处漏掉自愈。
+    """
+    global T
+    last = {}
+    for i in range(max(1, tries)):
+        sep = "&" if "?" in path else "?"
+        last = curl_json(f"https://api.weixin.qq.com{path}{sep}access_token={T}", extra=extra)
+        if last.get("errcode") in TOKEN_ERRCODES and i < tries - 1:
+            print(f"[retry] {last.get('errcode')} token 失效，强制刷新后重试…")
+            T = get_token(APPID, SECRET, force_refresh=True)
+            continue
+        return last
+    return last
+
+# 草稿写操作的 payload 落盘路径：**必须与 curl 实际读取的路径是同一个变量**。
+# 2026-09-16 踩坑记录：曾出现「payload 写到按账号隔离的新路径、curl 仍读硬编码 /tmp 旧路径」，
+# 结果把上一个账号残留的 payload 发出去 → 40007 invalid media_id（封面 media_id 属于另一个号）。
+# 多账号下这种串稿是静默的，必须靠单一变量消除。
+PAYLOAD_FILE = os.path.join(RUN_DIR, "wx_draft_payload.json")
+DRAFT_RETRY_ERRCODES = (40007, -1)   # 40007 亦可能是「素材刚上传未同步」，重试一次成本极低
+
+def draft_write(action, payload, tries=3, delay=2.5, done=""):
+    """提交 draft/add 或 draft/update：落盘 -> 发送 -> 校验 -> 失败重试。
+
+    action: "add" | "update"
+    """
+    with open(PAYLOAD_FILE, "w", encoding="utf-8") as f:
+        json.dump(payload, f, ensure_ascii=False)
+    last = {}
+    for i in range(tries):
+        last = wx_api(f"/cgi-bin/draft/{action}",
+                      extra=["--data-binary", "@" + PAYLOAD_FILE,
+                             "-H", "Content-Type: application/json; charset=utf-8"])
+        ok = ("media_id" in last) if action == "add" else (last.get("errcode") == 0)
+        if ok:
+            if action == "add":
+                print(f"[5] 草稿推送成功! draft media_id: {last['media_id']}")
+            else:
+                print(f"[5] {done}")
+            print(">>> 请在公众号后台「内容与互动-草稿箱」查看确认排版与图片、摘要")
+            return last
+        if last.get("errcode") in DRAFT_RETRY_ERRCODES and i < tries - 1:
+            wait = delay * (i + 1)
+            print(f"[retry] draft/{action} 返回 {last.get('errcode')} {last.get('errmsg','')[:60]}"
+                  f" —— {wait:.1f}s 后重试 ({i+1}/{tries-1})")
+            time.sleep(wait)
+            continue
+        break
+    print(f"[FAIL] draft/{action} 失败:", last)
+    # 40007 的高频真因是 thumb_media_id 缺失或不属于本账号，直接把线索打出来
+    if last.get("errcode") == 40007:
+        print(">>> 40007 排查顺序：① 本账号 thumb_media_id 是否为空（草稿必须有封面素材）；")
+        print("    ② 该媒体素材是否属于当前账号（跨账号 media_id 一律无效）；")
+        print("    ③ 素材刚 add_material 上传、尚未同步 —— 等几秒重试即可。")
+        print(f"    本次发送的 thumb_media_id: {payload.get('articles',[{}])[0].get('thumb_media_id','(空)')}")
+        print(f"    实际发送的 payload 文件: {PAYLOAD_FILE}")
+    sys.exit(1)
 
 # ---------- 摘要（digest）解析：显式 > 自动 ----------
 def resolve_digest():
@@ -87,23 +153,22 @@ assert ccount(DIGEST) <= MAX_DIGEST, "摘要超 120 字符"
 if digest_src.startswith("自动"):
     print(">>> 建议: 按 SEO 摘要规范（SKILL.md「摘要规范」）手动写 --digest 以最大化长尾流量")
 
-# ---------- 1. access_token ----------
-tok = curl_json(f"https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid={APPID}&secret={SECRET}")
-if "access_token" not in tok:
-    print("[FAIL] 获取 token 失败:", tok)
-    if tok.get("errcode") == 40164:
-        m = re.search(r"invalid ip ([\d.]+)", tok.get("errmsg", ""))
-        print(f">>> 请在公众号后台「设置与开发-基本配置-IP白名单」添加: {m.group(1) if m else '见errmsg'}")
+# ---------- 1. access_token（走 wx_common：stable_token 优先 + 按 appid 磁盘缓存） ----------
+try:
+    T = get_token(APPID, SECRET)
+except Exception as _e:  # WxApiError 等
+    print("[FAIL] 获取 token 失败:", _e)
     sys.exit(1)
-T = tok["access_token"]
+if not T:
+    print("[FAIL] 获取 token 失败（返回空）")
+    sys.exit(1)
 print("[1] access_token 获取成功")
 
 # ---------- 2. 上传正文图片 ----------
 imgmap = json.load(open(args.imgmap))
 urls = {}
 for im in imgmap:
-    r = curl_json(f"https://api.weixin.qq.com/cgi-bin/media/uploadimg?access_token={T}",
-                  extra=["-F", "media=@" + im["path"]])
+    r = wx_api("/cgi-bin/media/uploadimg", extra=["-F", "media=@" + im["path"]])
     if "url" not in r:
         print(f"[FAIL] 图{im['idx']} 上传失败:", r); sys.exit(1)
     urls["{{IMG%d}}" % im["idx"]] = r["url"]
@@ -135,7 +200,7 @@ if _n_empty:
 print(f"[3] 正文组装完成 {len(content)} 字符")
 
 # ---------- 4. 封面 ----------
-cov = curl_json(f"https://api.weixin.qq.com/cgi-bin/material/add_material?access_token={T}&type=image",
+cov = wx_api("/cgi-bin/material/add_material?type=image",
                 extra=["-F", "media=@" + args.cover])
 if "media_id" not in cov:
     print("[FAIL] 封面上传失败:", cov); sys.exit(1)
@@ -156,25 +221,8 @@ article = {
 if args.update_media_id:
     # 就地增量更新：不删旧稿、不新增草稿（2026-09-14 立规，优先 update）
     payload = {"media_id": args.update_media_id, "index": 0, "articles": article}
-    open("/tmp/wx_draft_payload.json", "w", encoding="utf-8").write(json.dumps(payload, ensure_ascii=False))
-    r = curl_json(f"https://api.weixin.qq.com/cgi-bin/draft/update?access_token={T}",
-                  extra=["--data-binary", "@/tmp/wx_draft_payload.json",
-                         "-H", "Content-Type: application/json; charset=utf-8"])
-    if r.get("errcode") == 0:
-        print(f"[5] 草稿就地更新成功! draft media_id: {args.update_media_id}")
-        print(">>> 请在公众号后台「内容与互动-草稿箱」确认排版与图片、摘要")
-    else:
-        print("[FAIL] draft/update 失败:", r)
-        sys.exit(1)
+    r = draft_write("update", payload,
+                    done=f"草稿就地更新成功! draft media_id: {args.update_media_id}")
 else:
     payload = {"articles": [article]}
-    open("/tmp/wx_draft_payload.json", "w", encoding="utf-8").write(json.dumps(payload, ensure_ascii=False))
-    r = curl_json(f"https://api.weixin.qq.com/cgi-bin/draft/add?access_token={T}",
-                  extra=["--data-binary", "@/tmp/wx_draft_payload.json",
-                         "-H", "Content-Type: application/json; charset=utf-8"])
-    if "media_id" in r:
-        print(f"[5] 草稿推送成功! draft media_id: {r['media_id']}")
-        print(">>> 请在公众号后台「内容与互动-草稿箱」查看确认排版与图片、摘要")
-    else:
-        print("[FAIL] draft/add 失败:", r)
-        sys.exit(1)
+    r = draft_write("add", payload)

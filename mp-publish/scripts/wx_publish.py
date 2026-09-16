@@ -35,9 +35,18 @@ import sys
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from wx_common import WxApiError, api_call, die, dump_json, load_wx_creds  # noqa: E402
+from wx_common import (  # noqa: E402
+    WxApiError, api_call, die, dump_json, load_wx_creds,
+    profile_data_dir, set_profile,
+)
 
-BACKUP_DIR = os.path.expanduser("~/.cache/weixin/publish_backups")
+def backup_root():
+    """发布稿备份目录（按账号隔离，避免跨号混放）。"""
+    return os.path.join(profile_data_dir(), "publish_backups")
+
+
+# 兼容旧引用：模块加载时按当前账号解析一次（脚本内所有写操作都先 set_profile）
+BACKUP_DIR = backup_root()
 
 PUBLISH_STATUS = {
     0: "成功",
@@ -254,6 +263,10 @@ def build_parser():
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--json", default=argparse.SUPPRESS,
                         help="把原始返回写入该 JSON 文件；用 - 打印到标准输出")
+    # 多账号：--profile <alias> 优先于环境变量 WX_PROFILE 与 profiles.json 的 default。
+    # default=SUPPRESS 同样避免子命令层级互相覆盖。
+    common.add_argument("--profile", default=argparse.SUPPRESS,
+                        help="指定公众号账号别名（见 wx_account.py list）；缺省走 WX_PROFILE 或默认账号")
 
     p = argparse.ArgumentParser(
         prog="wx_publish.py",
@@ -303,9 +316,15 @@ def main():
     p = build_parser()
     args = p.parse_args()
     # parents 里用了 SUPPRESS，未指定时属性不存在，这里统一补默认值
-    for _k, _dv in (("json", ""), ("csv", "")):
+    for _k, _dv in (("json", ""), ("csv", ""), ("profile", "")):
         if not hasattr(args, _k):
             setattr(args, _k, _dv)
+    # 账号选择必须在任何凭据/token 读取之前生效（并写回环境变量，子进程继承）。
+    # ⚠️ 只有显式传了 --profile 才覆盖；未传时保留环境变量 WX_PROFILE 的语义，
+    #    否则 set_profile("") 会把 WX_PROFILE 清掉，导致 shell 层切换失效。
+    _profile_arg = getattr(args, "profile", "") or ""
+    if _profile_arg:
+        set_profile(_profile_arg)
     if not getattr(args, "cmd", None):
         p.print_help()
         return

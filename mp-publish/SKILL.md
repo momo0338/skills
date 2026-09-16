@@ -1,6 +1,6 @@
 ---
 name: mp-publish
-description: 微信公众号内容中台（草稿 · 发布 · 数据分析 三模块一站式）。既支持排版稿（HTML + base64 内嵌图）一键直推草稿箱——图片自动转存微信 CDN、微信原生方言合规校验（section 替 div、禁 position、样式实体规范化）、长尾 SEO 摘要、服务端 draft/get 回读验收；也覆盖草稿增删改查与备份回滚、发布提交与状态跟踪、用户/图文/消息/接口四大类数据分析（21 个 datacube 接口，日期跨度自动分段）。触发词：公众号草稿、推草稿、draft、发布文章、freepublish、公众号数据分析、datacube、阅读量、涨粉数据、mp-publish。
+description: 微信公众号内容中台（多账号 · 草稿 · 发布 · 数据分析 四模块一站式）。支持多公众号切换（profile：manba=满爸爱生活 / mashang=码上职业，可用 wx_account.py 增删与权限探测），既支持排版稿（HTML + base64 内嵌图）一键直推草稿箱——图片自动转存微信 CDN、微信原生方言合规校验（section 替 div、禁 position、样式实体规范化）、长尾 SEO 摘要、服务端 draft/get 回读硬校验；也覆盖草稿增删改查与备份回滚、发布提交与状态跟踪、用户/图文/消息/接口四大类数据分析（21 个 datacube 接口）。触发词：公众号草稿、推草稿、draft、发布文章、freepublish、公众号数据分析、datacube、阅读量、涨粉数据、多账号、profile、账号切换、mp-publish。
 ---
 
 # 技能-微信公众号内容中台（草稿 · 发布 · 数据分析 · HTML 直推）
@@ -20,14 +20,99 @@ description: 微信公众号内容中台（草稿 · 发布 · 数据分析 三�
 
 
 - **凭据**：AppID/AppSecret **禁止明文写入本仓库**。运行前通过环境变量 `WX_APPID` / `WX_APPSECRET` 注入，或在 `~/.config/weixin/` 下放置 `appid` / `appsecret` 文件（与 IMA 凭证 `~/.config/ima/` 同款约定）；脚本启动时两者皆缺会退出报错。
-- **IP 白名单**：微信 `cgi-bin/token` 强校验出口 IP（40164 报错会带 `invalid ip x.x.x.x`）。家宽 IP 会变，变动后需在公众号后台「设置与开发 → 基本配置 → IP白名单」手动添加。**注意：沙箱内 curl 的出口 IP 就是白名单校验对象**。
+- **多账号（profile）**：本技能支持多个公众号。**具体见 §一.B**——招聘类内容固定推 `mashang`(码上职业)，其余推默认账号。
+- **IP 白名单**：微信 `cgi-bin/token` 强校验出口 IP（40164 报错会带 `invalid ip x.x.x.x`）。家宽 IP 会变，变动后需在公众号后台「设置与开发 → 基本配置 → IP白名单」手动添加。**注意：沙箱内 curl 的出口 IP 就是白名单校验对象**。**每个账号各自维护自己的白名单**，新账号首次接入必查。
 - **依赖**：`bs4`、`PIL`（均在 `~/.workbuddy/binaries/python/envs/default` venv 内已装）。
 - **access_token 获取（2026-09-16 升级）**：新脚本统一走 [`scripts/wx_common.py`](./scripts/wx_common.py) 的 `get_token()` ——
   **优先用官方推荐的 `cgi-bin/stable_token`**（不经 `cgi-bin/token`，不会被其它系统把 token 顶掉），失败自动回退旧接口；
   同时带**本地磁盘缓存**（`~/.cache/weixin/token_<appid 后8位>.json`，有效期扣 300s 安全边距），
-  避免高频调 token 接口触发频次限制。旧脚本（`wx_push_draft.py` / `wx_pipeline.py`）逻辑未动，行为不变。
+  避免高频调 token 接口触发频次限制。缓存天然按 appid 隔离，多账号互不干扰。
+- **⚠️ 别手工调 `cgi-bin/token` 调试**：非 stable 的 `cgi-bin/token` 会**顶掉**已发出的 stable_token，
+  导致后续脚本手里的 token 变成 40001 invalid credential。要验证凭据请用 `wx_account.py check <alias>`（它自己管 token）。
 - **错误翻译**：`wx_common.py` 内置 `ERRCODE_HINTS`，把微信 errcode 译成「人话 + 处置建议」，
   40164 会直接把「需添加的 IP」打出来。常见码见 §十四.1 的错误码对照表。
+
+## 一.B 多账号（profile）机制与新增公众号
+
+**一个 AppID/AppSecret = 一个公众号 = 一个 profile 别名。** 全部脚本（`wx_draft` / `wx_publish` / `wx_stats` /
+`wx_pipeline` / `wx_push_draft`）共用同一套账号解析规则：
+
+```
+命令行 --profile <alias>   >   环境变量 WX_PROFILE   >   profiles.json 的 default
+>   遗留 ~/.config/weixin/appid|appsecret（向后兼容，永不破坏）
+```
+
+### 磁盘约定
+
+```
+~/.config/weixin/
+  appid / appsecret            遗留默认账号（保持原样，不动）
+  profiles.json                {"default": alias, "profiles": {alias: {name, appid, author}}}
+  profiles/<alias>/appid       各账号 AppID
+  profiles/<alias>/appsecret   各账号密钥（chmod 600，**不进 profiles.json**）
+
+~/.cache/weixin/
+  token_<appid后8位>.json      token 缓存（按 appid 天然隔离）
+  draft_backups/              遗留默认账号的草稿备份（路径保持原样，历史备份不失联）
+  publish_backups/
+  profiles/<alias>/…          其它账号的备份目录（按账号隔离）
+/tmp/wxrun_<alias>/            流水线中间产物（zj_*.html / zj_imgmap.json / zj_cover.jpg / wx_draft_payload.json）
+```
+
+### 当前已登记账号
+
+| alias | 名称 | 用途 |
+|---|---|---|
+| `manba` | 满爸爱生活 | **默认账号**。遛娃 / 探店 / 攻略 / 教育 等全部常规内容 |
+| `mashang` | 码上职业 | **招聘专栏专用**（A 线校招 + B 线事业编），见 `job-write` 技能 |
+
+### 新增一个公众号（3 步）
+
+```bash
+cd ~/src/skills/mp-publish/scripts
+PY=/usr/local/bin/python3
+
+# 1) 登记账号（--secret 不传则交互式输入，避免进 shell history）
+$PY wx_account.py add <alias> --name "公众号名" --appid wxXXXXXXXXXXXXXXXX --author "公众号名"
+#    可选 --set-default 同时设为默认
+
+# 2) 自检：验证 token 可取 + 探测接口权限矩阵
+$PY wx_account.py check <alias>
+
+# 3) 到该号后台「设置与开发 → 基本配置 → IP白名单」加入 check 报出的出口 IP（40164 时）
+```
+
+### 常用命令
+
+```bash
+$PY wx_account.py list                 # 列出所有账号 + 当前生效 profile
+$PY wx_account.py check [alias]        # token + 权限矩阵（草稿/素材/发布/统计）
+$PY wx_account.py env [alias]          # 打印 export 语句，供 shell source（一键切号）
+$PY wx_account.py use <alias>          # 改默认账号
+$PY wx_account.py rm <alias> [--purge] # 移除账号（--purge 连密钥/缓存一起删）
+
+# 三种切换姿势（任选）
+$PY wx_draft.py count --profile mashang        # 单次
+export WX_PROFILE=mashang                      # 整个 shell
+$PY wx_account.py use mashang                  # 改默认
+```
+
+### ⚠️ 多账号红线（2026-09-16 实测踩坑沉淀）
+
+1. **中间产物与 payload 必须按账号隔离，且"写入路径"与"读取路径"必须是同一个变量。**
+   真实事故：`wx_push_draft.py` 把 payload 写到按账号隔离的新路径，curl 却仍读硬编码的
+   `/tmp/wx_draft_payload.json`（上一账号的残留）→ 把**满爸爱生活的封面 media_id** 发给了码上职业
+   → `40007 invalid media_id`。若没有这个报错兜住，就会静默生成「A 号封面 + B 号正文」的串稿。
+   已收敛为单一变量 `PAYLOAD_FILE`，勿再出现第二个硬编码路径。
+2. **错误码 40007（invalid media_id）在本场景有三种成因**，排查顺序见 §十四.1：
+   ① 没传 `thumb_media_id`（草稿必须有封面素材）；② media_id 属于另一个账号；③ 素材刚上传未同步。
+   `wx_common.RETRYABLE_ERRCODES` 只对 ③ 有效；② 必须在源头消除。
+3. **token 是账号级的，跨账号绝不通用**；`cgi-bin/token` 会顶掉 stable_token（见 §一）。
+   `wx_push_draft.py` 的 uploadimg / add_material / draft.* 三处已统一走 `wx_api()`，遇 40001 自动刷新重试。
+4. **回读验收不得"假通过"**：`wx_pipeline.py` 的 STEP 4 会**重新取 token**（子进程可能已刷新过），
+   并对 正文长度 / section 容器 / 空 style / 残留 div 四项做**硬校验，任一不达标即 exit 1**。
+   历史版本在 draft/get 返回空时仍打印「✅ 验收通过」，属假绿灯，已修。
+
 
 ## 二、微信排版原生方言规范（强制遵循）
 
@@ -53,10 +138,25 @@ description: 微信公众号内容中台（草稿 · 发布 · 数据分析 三�
 将预处理、封面提取、方言校验、查重匹配、图片上传、草稿增量更新与服务端回读验收**全量收敛为单次命令执行**，杜绝多轮模型往返延迟：
 
 ```bash
-python3 /Users/zhugx/src/skills/mp-publish/scripts/wx_pipeline.py \
+PY=/usr/local/bin/python3
+
+# 默认账号（满爸爱生活）
+$PY /Users/zhugx/src/skills/mp-publish/scripts/wx_pipeline.py \
     --html "待发布/xxx-排版.html" \
     --update-auto
+
+# 指定账号（例：招聘稿推「码上职业」）—— --profile 必须显式带上
+$PY /Users/zhugx/src/skills/mp-publish/scripts/wx_pipeline.py \
+    --html "6招聘/2027年校园招聘/待发布/xx-排版.html" \
+    --profile mashang \
+    --update-auto
+
+# 整个 shell 内切号（之后所有脚本默认走它）
+export WX_PROFILE=mashang
 ```
+
+**作者名自动跟随账号**：`--author` 不传时取该账号 `profiles.json` 的 `author`
+（manba → 满爸爱生活；mashang → 码上职业），一般无需手动指定。
 
 **流水线在底层 15 秒内自动闭环完成以下 7 步**：
 1. **元数据全自动萃取**：自动从 HTML `<title>` 与同级 `*.md` 提取标题和 ≤120 字 SEO 摘要，自动寻找匹配同级 `*-封面.jpg`；
@@ -133,7 +233,9 @@ content = re.sub(r'style="([^"]*)"', decode_style, content)   # 只动真实 sty
 
 **摘要（digest）自动处理**：`--digest` 显式传则直接使用（超 120 自动截断）；**不传则自动从正文纯文本开头提炼**（保底不空白，会打印醒目提示）。命令示例：
 ```bash
-python wx_push_draft.py --title "..." --author "满爸爱生活" --digest "SEO摘要…" [--content-file …] [--imgmap …] [--cover …]
+# --profile 选号（不传走默认账号）；--author 不传则取该账号 profiles.json 的 author
+python wx_push_draft.py --title "..." --profile mashang --digest "SEO摘要…" [--content-file …] [--imgmap …] [--cover …]
+python wx_push_draft.py --title "..." --author "满爸爱生活" --digest "SEO摘要…"   # 默认账号
 ```
 
 **无图文章分支**（源 HTML 无 base64 内嵌图，如方孝孺墓文字稿）：
@@ -577,20 +679,23 @@ print('12 slices saved to /tmp/slice_*.png')
 
 | 脚本 | 角色 | 覆盖能力 |
 |---|---|---|
-| [`scripts/wx_common.py`](./scripts/wx_common.py) | **共享底座**（新） | 凭据解析、`stable_token` 优先 + 磁盘缓存的 token、统一 HTTP、errcode 中文翻译、JSON/CSV 落盘 |
+| [`scripts/wx_common.py`](./scripts/wx_common.py) | **共享底座**（新） | **多账号 profile 解析**、token（`stable_token` 优先 + 按 appid 磁盘缓存）、统一 HTTP、errcode 中文翻译、40007/-1 重试、JSON/CSV 落盘 |
+| [`scripts/wx_account.py`](./scripts/wx_account.py) | **多账号管理 CLI**（新） | `list` `add` `use` `rm` `env` `check`（token + 接口权限矩阵探测）——见 §一.B |
 | [`scripts/wx_draft.py`](./scripts/wx_draft.py) | **草稿模块 CLI**（新） | `list` `count` `get` `add` `update` `delete` `restore` `diff` `backup` `switch` `product-card` `selftest` |
 | [`scripts/wx_publish.py`](./scripts/wx_publish.py) | **发布模块 CLI**（新） | `submit` `status` `list` `getarticle` `delete` `selftest` |
 | [`scripts/wx_stats.py`](./scripts/wx_stats.py) | **数据分析 CLI**（新） | 21 个 datacube 接口 + `users` `daily` `list` `webplan` `selftest` |
-| `scripts/wx_prep_content.py` | 原有流水线 | HTML 预处理（抽图/CSS 内联/裁封面） |
+| `scripts/wx_prep_content.py` | 原有流水线 | HTML 预处理（抽图/CSS 内联/裁封面），输出到 `$WX_RUN_DIR`（默认 `/tmp`，按账号隔离） |
 | `scripts/wx_dialect_check.py` | 原有流水线 | 微信原生方言合规校验 |
-| `scripts/wx_push_draft.py` | 原有流水线 | 上传图片/封面 → `draft/add` 或 `draft/update` |
-| `scripts/wx_pipeline.py` | 原有流水线 | 单命令一键直推（7 步闭环） |
+| `scripts/wx_push_draft.py` | 原有流水线 | 上传图片/封面 → `draft/add` 或 `draft/update`（payload 按账号隔离 + token 自愈 + 40007 重试） |
+| `scripts/wx_pipeline.py` | 原有流水线 | 单命令一键直推（7 步闭环，`--profile` 选号，STEP 4 四项硬校验） |
 | `scripts/wx_dialect_test.py` | 原有工具 | 最小样本跑微信往返属性测试 |
 
 #### 13.1.1 新脚本的统一 CLI 约定
 
-三个新脚本（`wx_draft.py` / `wx_publish.py` / `wx_stats.py`）接口风格一致，记住这五条即可：
+四个新脚本（`wx_draft.py` / `wx_publish.py` / `wx_stats.py` / `wx_account.py`）接口风格一致，记住这六条即可：
 
+- **`--profile <alias>`**：**所有脚本通用**，选公众号账号（见 §一.B）。不传则依次回落到
+  `WX_PROFILE` 环境变量 → `profiles.json` 的 `default`。**招聘稿必须显式 `--profile mashang`。**
 - **`--json <path>`**：把原始返回写入 JSON 文件。**位置随意** —— 写在子命令前（`--json a.json list`）
   或子命令后（`list --json a.json`）都行。`--json -` 表示打印到标准输出（排查时用）。
   **不给 `--json` 时输出是全安静的**：命令只打印人类可读摘要，不会喷出大块原始 JSON。
@@ -621,8 +726,11 @@ print('12 slices saved to /tmp/slice_*.png')
 
 ```
 我要做什么？
- ├─ 把排版好的 HTML 推进草稿箱 ────────→ wx_pipeline.py --html xxx-排版.html --update-auto   （§三）
- ├─ 看草稿箱里有什么 ─────────────────→ wx_draft.py list / count
+ ├─ 给哪个号推？（默认 manba=满爸爱生活；招聘=mashang=码上职业）→ 命令加 --profile <alias> （§一.B）
+ ├─ 看有哪些号 / 某号权限对不对 ────────→ wx_account.py list / check [alias]
+ ├─ 新增一个公众号 ──────────────────→ wx_account.py add <alias> --name … --appid … （§一.B）
+ ├─ 把排版好的 HTML 推进草稿箱 ────────→ wx_pipeline.py --html xxx-排版.html --profile <alias> --update-auto   （§三）
+ ├─ 看草稿箱里有什么 ─────────────────→ wx_draft.py list / count [--profile <alias>]
  ├─ 取回某篇草稿正文 ─────────────────→ wx_draft.py get --media-id <ID>      （自动落备份+HTML）
  ├─ 只改标题/摘要/封面，正文不动 ──────→ wx_draft.py update --media-id <ID> --digest "…"
  ├─ 删草稿 ──────────────────────────→ wx_draft.py delete --media-id <ID>     （默认演练，--yes 才删）
@@ -655,7 +763,22 @@ print('12 slices saved to /tmp/slice_*.png')
 `article_type` 为 `news`（图文消息）时 `thumb_media_id` 必填；为 `newspic`（图片消息）时用 `image_info.image_list[].image_media_id`（≤20 张，首张即封面），且正文只支持纯文本与商品标签（商品 ≤50 个）。
 `cover_info.crop_percent_list[].ratio`：图文消息仅支持 `2.35_1`/`1_1`；图片消息支持 `1_1`/`16_9`/`2.35_1`。
 
-**高频错误码**：`40007` media_id 无效（草稿已被删）｜`40114` index 越界｜`41039` content_source_url 不合法｜`45166` content 不合法｜`47001` 格式错误（必须 JSON body）｜`53404/53405/53406` 带货相关。
+**高频错误码**：`40007` media_id 无效（三种成因，见下）｜`40114` index 越界｜`41039` content_source_url 不合法｜`45166` content 不合法｜`47001` 格式错误（必须 JSON body）｜`53404/53405/53406` 带货相关。
+
+**`40007 invalid media_id` 排查顺序（2026-09-16 多账号实测，别一上来就怀疑微信）**：
+
+| # | 成因 | 判定 | 处置 |
+|---|---|---|---|
+| ① | **没传 `thumb_media_id`** | 该账号发 `news` 型草稿**必须**带封面素材，缺了就是 40007（已实测复现） | 补 `--thumb-media-id`（或走流水线自动裁封面） |
+| ② | **media_id 属于另一个公众号** | 多账号场景最常见；根源是**中间产物/payload 跨账号串联**（见 §一.B 红线 1） | 立即清 `WX_RUN_DIR`；确认 payload 读写同一路径；**已删稿的 media_id 也归此类**（删除不可恢复、无回收站） |
+| ③ | **素材刚 `add_material` 上传，draft 服务未同步** | 同一 payload 隔几秒重发即成功 | `wx_common.RETRYABLE_ERRCODES` / `wx_push_draft.DRAFT_RETRY_ERRCODES` 已自动重试（2.5s → 5s） |
+
+`wx_push_draft.py` 在 40007 失败时会直接把**本次发送的 thumb_media_id 与 payload 文件路径**打出来，
+按上表逐项排除即可。**注意：重试只治 ③，② 必须在源头消除。**
+
+**`40001 invalid credential`**：token 被顶掉（别手工调 `cgi-bin/token`，见 §一）。
+`wx_push_draft.py` 的 uploadimg / add_material / draft.* 已统一走 `wx_api()` 自动刷新重试；
+`wx_draft/publish/stats` 走 `api_call` 的内置 40001 重试。
 
 ### 14.2 CLI 用法
 
