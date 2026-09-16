@@ -1,16 +1,21 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""镇江 HTML -> 微信公众号草稿正文预处理
-1. 抽取 10 张 base64 JPEG -> /tmp/zj_img_N.jpg（待上传微信素材）
+"""HTML -> 微信公众号草稿正文预处理
+1. 抽取 base64 图片 -> $WX_RUN_DIR/zj_img_N.jpg（默认 /tmp；按账号隔离，待上传微信素材）
 2. CSS 类样式全部内联（微信正文过滤 <style>），展开 var(--x)
 3. 时间轴 ::before 竖线伪元素 -> 真实 <span> 节点
 4. 图片 src 替换为 {{IMGn}} 占位符，上传后回填
-5. 用第一张实拍图裁 900x383 封面 -> /tmp/zj_cover.jpg
-输出: /tmp/zj_wechat_content.html + /tmp/zj_imgmap.json
+5. 用第一张实拍图裁 900x383 封面 -> $WX_RUN_DIR/zj_cover.jpg
+输出: $WX_RUN_DIR/zj_wechat_content.html + $WX_RUN_DIR/zj_imgmap.json
 """
-import re, json, io, base64, sys
+import re, json, io, base64, os, sys
 from bs4 import BeautifulSoup, NavigableString
 from PIL import Image
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from wx_common import run_dir  # noqa: E402
+
+RUN_DIR = run_dir()          # 默认 /tmp；wx_pipeline 会按账号注入 WX_RUN_DIR
 
 if len(sys.argv) < 2:
     sys.exit("用法: python wx_prep_content.py <源HTML路径>")
@@ -29,7 +34,7 @@ idx = 0
 def save_img(m):
     global idx
     ext = "jpg" if m.group(1) in ("jpeg", "jpg") else "png"
-    path = f"/tmp/zj_img_{idx}.{ext}"
+    path = os.path.join(RUN_DIR, f"zj_img_{idx}.{ext}")
     open(path, "wb").write(base64.b64decode(m.group(2)))
     imgmap.append({"idx": idx, "path": path, "mime": f"image/{'jpeg' if ext=='jpg' else ext}"})
     idx += 1
@@ -166,9 +171,9 @@ content = ('<section style="font-family:-apple-system,BlinkMacSystemFont,\'PingF
 for v in ("padding:20px 14px 36px", "padding:28px 20px 48px"):
     content = content.replace("max-width:677px;margin:0 auto;background:#fff;" + v,
                               "max-width:100%;background:#fff;padding:8px 0px 40px")
-open("/tmp/zj_wechat_content.html", "w", encoding="utf-8").write(content)
-print(f"[5] 正文输出 {len(content)} 字符 -> /tmp/zj_wechat_content.html")
-json.dump(imgmap, open("/tmp/zj_imgmap.json", "w"))
+open(os.path.join(RUN_DIR, "zj_wechat_content.html"), "w", encoding="utf-8").write(content)
+print(f"[5] 正文输出 {len(content)} 字符 -> {os.path.join(RUN_DIR, 'zj_wechat_content.html')}")
+json.dump(imgmap, open(os.path.join(RUN_DIR, "zj_imgmap.json"), "w"))
 
 # ---------- 6. 封面 900x383（2.35:1 微信头条封面；cover 模式永无黑框） ----------
 # 公众号封面规范：2.35:1 => 900x383（头条）；1:1 中心区为朋友圈/普通用户裁切安全区。
@@ -201,9 +206,9 @@ s = max(900.0 / w, 383.0 / h)                      # cover：至少一边充满�
 nw, nh = int(round(w * s)), int(round(h * s))
 im2 = im.resize((nw, nh), Image.LANCZOS)
 left, top = (nw - 900) // 2, (nh - 383) // 2       # 居中裁（主体落 1:1 中央安全区）
-im2.crop((left, top, left + 900, top + 383)).save("/tmp/zj_cover.jpg", quality=90)
+im2.crop((left, top, left + 900, top + 383)).save(os.path.join(RUN_DIR, "zj_cover.jpg"), quality=90)
 # 黑框自检：四边 6px 条带若平均亮度<12 且近零方差 -> 疑似黑边
-_cv = Image.open("/tmp/zj_cover.jpg").convert("L")
+_cv = Image.open(os.path.join(RUN_DIR, "zj_cover.jpg")).convert("L")
 def _edge_dark(region):
     hist = region.histogram()
     n = sum(hist)
@@ -213,7 +218,7 @@ def _edge_dark(region):
 for _name, _box in [("左右", (0, 0, 6, 383)), ("右", (894, 0, 900, 383)),
                     ("上", (0, 0, 900, 6)), ("下", (0, 377, 900, 383))]:
     if _edge_dark(_cv.crop(_box)):
-        print(f"[6][WARN] 封面{_name}边缘疑似黑框，请人工检查 /tmp/zj_cover.jpg 或换源图")
+        print(f"[6][WARN] 封面{_name}边缘疑似黑框，请人工检查 {os.path.join(RUN_DIR, 'zj_cover.jpg')} 或换源图")
 print(f"[6] 封面 900x383(2.35:1) cover 裁剪 -> /tmp/zj_cover.jpg "
       f"(源图 zj_img_{best['idx']} {w}x{h}, 裁前放大 s={s:.3f}, 裁窗 {(left,top)}~({left+900},{top+383}))")
 print("DONE")

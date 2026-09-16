@@ -61,6 +61,7 @@ import time
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from wx_common import (  # noqa: E402
     WxApiError, api_call, die, dump_json, human, load_wx_creds, write_csv,
+    set_profile,
 )
 
 DATA_EPOCH = dt.date(2014, 12, 1)       # 官方数据起始
@@ -576,6 +577,10 @@ def build_parser():
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--json", default=argparse.SUPPRESS,
                         help="把原始返回写入该 JSON 文件；用 - 打印到标准输出")
+    # 多账号：--profile <alias> 优先于环境变量 WX_PROFILE 与 profiles.json 的 default。
+    # default=SUPPRESS 同样避免子命令层级互相覆盖。
+    common.add_argument("--profile", default=argparse.SUPPRESS,
+                        help="指定公众号账号别名（见 wx_account.py list）；缺省走 WX_PROFILE 或默认账号")
     common.add_argument("--csv", default=argparse.SUPPRESS,
                         help="把数据写成 CSV（自动扁平化嵌套字段）")
 
@@ -622,9 +627,15 @@ def main():
     p = build_parser()
     args = p.parse_args()
     # parents 里用了 SUPPRESS，未指定时属性不存在，这里统一补默认值
-    for _k, _dv in (("json", ""), ("csv", "")):
+    for _k, _dv in (("json", ""), ("csv", ""), ("profile", "")):
         if not hasattr(args, _k):
             setattr(args, _k, _dv)
+    # 账号选择必须在任何凭据/token 读取之前生效（并写回环境变量，子进程继承）。
+    # ⚠️ 只有显式传了 --profile 才覆盖；未传时保留环境变量 WX_PROFILE 的语义，
+    #    否则 set_profile("") 会把 WX_PROFILE 清掉，导致 shell 层切换失效。
+    _profile_arg = getattr(args, "profile", "") or ""
+    if _profile_arg:
+        set_profile(_profile_arg)
     if not getattr(args, "cmd", None):
         p.print_help()
         return

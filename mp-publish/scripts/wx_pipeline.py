@@ -2,24 +2,12 @@
 import os, sys, re, json, time, argparse, unicodedata, subprocess
 from PIL import Image
 
-def _read_cred_file(p):
-    try:
-        with open(p, encoding="utf-8") as f:
-            return f.read().strip()
-    except FileNotFoundError:
-        return ""
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from wx_common import (  # noqa: E402
+    active_profile, get_token as _common_get_token, load_wx_author, load_wx_creds,
+    set_profile,
+)
 
-def load_wx_creds():
-    """从环境变量或 ~/.config/weixin/ 文件读取 AppID/AppSecret，绝不硬编码到仓库。"""
-    appid = os.environ.get("WX_APPID") or _read_cred_file(os.path.expanduser("~/.config/weixin/appid"))
-    secret = os.environ.get("WX_APPSECRET") or _read_cred_file(os.path.expanduser("~/.config/weixin/appsecret"))
-    if not appid or not secret:
-        sys.stderr.write("⚠️ 未配置微信凭据：请设置环境变量 WX_APPID/WX_APPSECRET，"
-                         "或在 ~/.config/weixin/ 下放置 appid / appsecret 文件\n")
-        sys.exit(2)
-    return appid, secret
-
-APPID, SECRET = load_wx_creds()
 MAX_DIGEST = 120
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -27,18 +15,29 @@ PREP_SCRIPT = os.path.join(SCRIPT_DIR, "wx_prep_content.py")
 CHECK_SCRIPT = os.path.join(SCRIPT_DIR, "wx_dialect_check.py")
 PUSH_SCRIPT = os.path.join(SCRIPT_DIR, "wx_push_draft.py")
 
+# 凭据在多账号解析之后才落地（见 main() 里的 set_profile），故先占位
+APPID, SECRET = "", ""
+
+
 def log(tag, msg):
     print(f"[{tag}] {msg}")
 
 def get_token():
+    return _common_get_token(APPID, SECRET)
+
+
+def _post_json(path, payload, token, timeout=20):
+    """POST JSON 到微信接口，返回解析后的 dict（网络/解析异常返回 {'errcode': -1, ...}）。"""
     clean_env = {k: v for k, v in os.environ.items() if 'proxy' not in k.lower()}
-    token_url = f"https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid={APPID}&secret={SECRET}"
-    r = subprocess.run(["curl", "-s", "--max-time", "15", token_url], env=clean_env, capture_output=True, text=True)
+    url = f"https://api.weixin.qq.com{path}?access_token={token}"
+    r = subprocess.run(["curl", "-s", "--max-time", str(timeout), "-X", "POST", url,
+                        "--data-binary", json.dumps(payload, ensure_ascii=False),
+                        "-H", "Content-Type: application/json; charset=utf-8"],
+                       env=clean_env, capture_output=True, text=True)
     try:
-        data = json.loads(r.stdout)
-        return data.get("access_token")
+        return json.loads(r.stdout)
     except Exception:
-        return None
+        return {"errcode": -1, "errmsg": f"非 JSON 响应: {(r.stdout or r.stderr)[:200]}"}
 
 def find_existing_draft(token, title):
     if not token or not title:
@@ -50,6 +49,10 @@ def find_existing_draft(token, title):
                          env=clean_env, capture_output=True, text=True)
     try:
         data = json.loads(req.stdout)
+        if data.get("errcode"):
+            log("WARN", f"draft/batchget 报错 {data.get('errcode')} {data.get('errmsg')[:60]}"
+                        f"（token 失效时请重跑，或直接指定 --update-media-id）")
+            return None, None
         clean_title = re.sub(r'[^\w\u4e00-\u9fa5]', '', title)
         for item in data.get("item", []):
             m_id = item.get("media_id")
@@ -123,15 +126,26 @@ def extract_meta_from_files(html_path):
 def main():
     parser = argparse.ArgumentParser(description="公众号文章一键自动化流水线 (Single-Call)")
     parser.add_argument("--html", required=True, help="源排版 HTML 文件路径")
+    parser.add_argument("--profile", default="",
+                        help="公众号账号别名（见 wx_account.py list）；缺省走 WX_PROFILE 或默认账号")
     parser.add_argument("--title", default="", help="文章标题（默认从 HTML/MD 自动提取）")
     parser.add_argument("--digest", default="", help="SEO 摘要（默认从同级 MD 自动提取）")
     parser.add_argument("--cover", default="", help="指定封面原图路径（默认自动匹配同级 *-封面.jpg）")
-    parser.add_argument("--author", default="满爸爱生活", help="作者名称")
+    parser.add_argument("--author", default="", help="作者名称（缺省取该账号 profiles.json 的 author）")
     parser.add_argument("--update-media-id", default="", help="指定就地更新的历史草稿 media_id")
     parser.add_argument("--update-auto", action="store_true", help="自动检测草稿箱同名/同主题草稿并执行就地更新")
     parser.add_argument("--source-url", default="", help="原文/官网/招聘站链接，写入草稿 content_source_url（发文后底部『阅读原文』跳转）")
     parser.add_argument("--delete-old-media-id", default="", help="需要清理的历史废弃草稿 media_id")
     args = parser.parse_args()
+
+    # —— 账号选择必须早于任何凭据/token 读取；set_profile 会把 WX_PROFILE 写回环境变量，
+    #    下面 spawn 的 wx_prep_content / wx_dialect_check / wx_push_draft 子进程自动继承同一账号。
+    #    只有显式传了 --profile 才覆盖，未传时保留环境变量 WX_PROFILE 的语义。
+    if args.profile:
+        set_profile(args.profile)
+    global APPID, SECRET
+    APPID, SECRET = load_wx_creds(quiet=True)
+    final_author = args.author or load_wx_author("满爸爱生活")
 
     html_path = os.path.abspath(args.html)
     if not os.path.exists(html_path):
@@ -147,10 +161,16 @@ def main():
         print("❌ 错误: 未能提取到文章标题，请通过 --title 显式指定")
         sys.exit(1)
 
+    # 中间产物按账号隔离，避免并发时封面/正文串号（默认 /tmp，此处显式指定）
+    os.environ["WX_RUN_DIR"] = os.path.join("/tmp", f"wxrun_{active_profile() or 'default'}")
+    os.makedirs(os.environ["WX_RUN_DIR"], exist_ok=True)
+
     print("=" * 60)
     print("🚀 启动微信公众号图文一键发布与验收流水线 (Single-Call)")
+    print(f"📌 目标账号: {active_profile() or '(默认/遗留)'}  AppID={APPID[:6]}****{APPID[-4:]}")
     print(f"📌 目标文件: {os.path.basename(html_path)}")
     print(f"📌 文章标题: {final_title}")
+    print(f"📌 作者名称: {final_author}")
     if final_digest:
         print(f"📌 SEO 摘要: {final_digest[:60]}... ({len(final_digest)}字)")
     if final_cover:
@@ -164,14 +184,14 @@ def main():
         sys.exit(1)
     print(res.stdout.strip())
 
-    cover_file = "/tmp/zj_cover.jpg"
+    cover_file = os.path.join(os.environ["WX_RUN_DIR"], "zj_cover.jpg")
     if final_cover and os.path.exists(final_cover):
         crop_to_cover(final_cover, cover_file)
     else:
         log("WARN", "未指定专用封面，使用 prep 默认提取的封面图")
 
     log("STEP 2", "执行微信排版原生方言合规校验 (wx_dialect_check.py)...")
-    content_file = "/tmp/zj_wechat_content.html"
+    content_file = os.path.join(os.environ["WX_RUN_DIR"], "zj_wechat_content.html")
     res = subprocess.run([sys.executable, CHECK_SCRIPT, content_file], capture_output=True, text=True)
     print(res.stdout.strip())
     if res.returncode != 0:
@@ -187,14 +207,15 @@ def main():
             target_update_id = found_id
             log("DISCOVER", f"匹配到已有草稿: media_id={found_id} (原标题: {found_title})，将自动就地增量更新！")
 
-    log("STEP 3", "执行推送 (wx_push_draft.py)...")
+    log("STEP 3", f"执行推送 (wx_push_draft.py, 账号={active_profile() or 'default'})...")
     push_cmd = [
         sys.executable, PUSH_SCRIPT,
+        "--profile", active_profile(),
         "--title", final_title,
-        "--author", args.author,
+        "--author", final_author,
         "--digest", final_digest,
         "--content-file", content_file,
-        "--imgmap", "/tmp/zj_imgmap.json",
+        "--imgmap", os.path.join(os.environ["WX_RUN_DIR"], "zj_imgmap.json"),
         "--cover", cover_file
     ]
     if target_update_id:
@@ -215,37 +236,65 @@ def main():
             resolved_media_id = m.group(1)
 
     log("STEP 4", f"执行服务端全量回读验收 (draft/get: {resolved_media_id})...")
-    if token and resolved_media_id:
-        clean_env = {k: v for k, v in os.environ.items() if 'proxy' not in k.lower()}
-        get_url = f"https://api.weixin.qq.com/cgi-bin/draft/get?access_token={token}"
-        get_res = subprocess.run(["curl", "-s", "--max-time", "15", "-X", "POST", get_url, "-d", json.dumps({"media_id": resolved_media_id})],
-                                 env=clean_env, capture_output=True, text=True)
-        try:
-            ret_data = json.loads(get_res.stdout)
-            news = ret_data.get("news_item", [{}])[0]
-            content = news.get("content", "")
-            img_count = content.count("<img")
-            section_count = content.count("<section")
-            empty_styles = content.count('style=""')
-            div_count = content.count("<div")
-            log("VERIFY", f"微信服务端确认: 标题='{news.get('title')}', 正文={len(content)}字符, 图片={img_count}张, 容器={section_count}个, 空样式={empty_styles}")
-            if empty_styles > 0:
-                log("WARN", f"检测到 {empty_styles} 处空样式，请检查原始排版！")
-            if div_count > 0:
-                log("WARN", f"检测到 {div_count} 处残留 div！")
-            log("VERIFY", "✅ draft/get 质量验收全部通过！")
-        except Exception as e:
-            log("WARN", f"回读解析异常: {e}")
+    if not resolved_media_id:
+        print("❌ 未能从推送输出解析出 draft media_id，无法回读验收")
+        sys.exit(1)
+    # ⚠️ 必须重新取 token：STEP 3 的子进程可能因 40001 刷新过 token，父进程手里的旧 token 已作废，
+    #    直接用旧 token 回读会拿到空结果，进而「假通过」。
+    verify_ok = False
+    for _attempt in range(2):
+        token = get_token()
+        if not token:
+            break
+        ret_data = _post_json("/cgi-bin/draft/get", {"media_id": resolved_media_id}, token)
+        if ret_data.get("errcode") in (40001, 40014, 42001):
+            print(f"[retry] 回读 token 失效（{ret_data.get('errcode')}），强制刷新后重试…")
+            continue
+        if ret_data.get("errcode"):
+            print(f"❌ draft/get 报错 {ret_data.get('errcode')} {ret_data.get('errmsg')}")
+            break
+        items = ret_data.get("news_item") or []
+        if not items:
+            print("❌ draft/get 未返回 news_item —— 无法确认内容已入库")
+            break
+        news = items[0]
+        content = news.get("content", "") or ""
+        img_count = content.count("<img")
+        section_count = content.count("<section")
+        empty_styles = content.count('style=""')
+        div_count = content.count("<div")
+        log("VERIFY", f"微信服务端确认: 标题='{news.get('title')}', 作者='{news.get('author')}', "
+                      f"正文={len(content)}字符, 图片={img_count}张, 容器={section_count}个, 空样式={empty_styles}")
+        # —— 硬性验收：任何一项不达标都判失败，绝不假通过 ——
+        problems = []
+        if len(content) < 200:
+            problems.append(f"正文仅 {len(content)} 字符，明显未入库")
+        if section_count == 0:
+            problems.append("正文无 <section> 容器")
+        if empty_styles > 0:
+            problems.append(f"{empty_styles} 处空 style（推送会丢样式）")
+        if div_count > 0:
+            problems.append(f"{div_count} 处残留 <div>（微信会溶解样式）")
+        if problems:
+            print("❌ draft/get 质量验收未通过：")
+            for p in problems:
+                print(f"    · {p}")
+            sys.exit(1)
+        log("VERIFY", f"✅ draft/get 质量验收通过（标题/正文/容器/样式四项硬校验）")
+        verify_ok = True
+        break
+    if not verify_ok:
+        print("❌ 服务端回读验收失败，草稿是否可用需人工到后台确认")
+        sys.exit(1)
 
-    if args.delete_old_media_id and token:
+    if args.delete_old_media_id:
         log("STEP 5", f"清理指定的历史旧草稿 ({args.delete_old_media_id})...")
-        del_url = f"https://api.weixin.qq.com/cgi-bin/draft/delete?access_token={token}"
-        del_res = subprocess.run(["curl", "-s", "--max-time", "15", "-X", "POST", del_url, "-d", json.dumps({"media_id": args.delete_old_media_id})],
-                                 env=clean_env, capture_output=True, text=True)
-        log("CLEAN", f"旧草稿删除结果: {del_res.stdout.strip()}")
+        del_res = _post_json("/cgi-bin/draft/delete", {"media_id": args.delete_old_media_id}, token)
+        log("CLEAN", f"旧草稿删除结果: {del_res}")
 
     print("=" * 60)
-    print("🎉 全流程一键发布与验收完成！耗时约 10-15 秒，草稿箱立即可见。")
+    print(f"🎉 全流程一键发布与验收完成！目标账号: {active_profile() or '(默认)'}")
+    print(">>> 请在公众号后台「内容与互动-草稿箱」确认排版、封面与摘要后手动群发。")
     print("=" * 60)
 
 if __name__ == "__main__":
