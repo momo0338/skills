@@ -74,6 +74,7 @@ WX_QUERIES = [
     "南京 校招",
     "江苏 事业单位 招聘 公告",
     "江苏 国企 招聘 2027",
+    "江苏 银行 2027 校园招聘 公告",  # 银行批次集中、文本型，09-16 银行专题补充
 ]
 
 # ── 官网源（通道 2）──────────────────────────────────────────────────
@@ -409,6 +410,8 @@ def main():
     ap.add_argument("--wx-engine", choices=["sogou", "opencli"], default="sogou",
                     help="公众号检索引擎：sogou=HTTP 直抓（默认，稳）；opencli=浏览器（易限流）")
     ap.add_argument("--wx-days", type=int, default=30, help="公众号结果只保留最近 N 天（默认 30，0=不限）")
+    ap.add_argument("--wx-query", action="append", default=[], metavar="关键词",
+                    help="临时追加检索关键词（可多次；默认组见 WX_QUERIES）")
     ap.add_argument("--state", default="", help="状态文件（记录已见标题）")
     ap.add_argument("--out", default="", help="报告输出 Markdown 路径")
     ap.add_argument("--all", action="store_true", help="忽略状态，输出全部命中")
@@ -423,7 +426,7 @@ def main():
     if args.mode in ("wx", "both"):
         if verbose:
             print(f"📡 通道 1 · 公众号检索（{args.wx_engine}）……", file=sys.stderr)
-        all_items += scan_wx(WX_QUERIES, engine=args.wx_engine, verbose=verbose, days=args.wx_days)
+        all_items += scan_wx(WX_QUERIES + list(args.wx_query), engine=args.wx_engine, verbose=verbose, days=args.wx_days)
     if args.mode in ("web", "both"):
         if verbose:
             print("🌐 通道 2 · 官网列表页巡检……", file=sys.stderr)
