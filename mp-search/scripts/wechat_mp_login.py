@@ -146,6 +146,46 @@ class WeChatMPClient:
 
         return None
 
+    # 通用启动参数：容器/沙箱环境必需
+    LAUNCH_ARGS = ["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"]
+
+    def _launch_usable_browser(self, headless: bool):
+        """启动一个"真能打开微信公众平台"的浏览器实例。
+
+        ⚠️ 踩坑记录（2026-09-16 实测）：
+        在 macOS + 容器沙箱环境下，Playwright **自带 Chromium**（chromium-1169 等）
+        渲染 mp.weixin.qq.com 会直接 `Page.goto: Page crashed`；加不加 `--no-sandbox`
+        都一样，浏览器本身能开 example.com，**只有微信站点崩**（属渲染进程被杀）。
+        而系统安装的 Chrome（`channel="chrome"`）完全正常。
+        故按 [系统 Chrome → 自带 Chromium] 顺序探测，返回第一个能成功导航微信的实例。
+        """
+        last_err = None
+        for kwargs in ({"channel": "chrome"}, {}):
+            tag = kwargs.get("channel", "bundled-chromium")
+            try:
+                browser = self.playwright.chromium.launch(
+                    headless=headless, args=self.LAUNCH_ARGS, **kwargs
+                )
+            except Exception as e:
+                last_err = e
+                print(f"⚠️  {tag} 启动失败: {str(e)[:100]}")
+                continue
+            # 启动成功 ≠ 能渲染微信，必须实测导航一次
+            try:
+                probe = browser.new_page()
+                probe.goto(MP_BASE_URL, wait_until="domcontentloaded", timeout=20000)
+                probe.close()
+                print(f"✅ 浏览器通道可用: {tag}")
+                return browser
+            except Exception as e:
+                last_err = e
+                print(f"⚠️  {tag} 导航微信失败: {str(e)[:100]}，尝试下一个通道")
+                try:
+                    browser.close()
+                except Exception:
+                    pass
+        raise RuntimeError(f"无可用浏览器通道（系统 Chrome 与自带 Chromium 均失败）: {last_err}")
+
     def login(self, headless: bool = False, timeout: int = 120) -> Dict[str, Any]:
         """扫码登录微信公众平台
         
@@ -166,9 +206,9 @@ class WeChatMPClient:
         print("=" * 60)
 
         try:
-            # 启动Playwright
+            # 启动Playwright（自动挑选可用浏览器通道，见 _launch_usable_browser）
             self.playwright = sync_playwright().start()
-            self.browser = self.playwright.chromium.launch(headless=headless)
+            self.browser = self._launch_usable_browser(headless)
             self.context = self.browser.new_context(
                 user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
                 viewport={"width": 1280, "height": 800}
