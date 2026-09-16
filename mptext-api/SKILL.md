@@ -1,20 +1,39 @@
 ---
 name: mptext-api
-description: 通过 mptext.top API 搜索微信公众号、获取文章列表、下载文章内容（支持 HTML/Markdown/Text/JSON 格式）、通过文章 URL 反查公众号信息。适用于微信公众号文章采集、内容提取、公众号分析等场景。
+description: 通过 mptext.top API 搜索微信公众号、获取文章列表、下载文章内容（支持 HTML/Markdown/Text/JSON 格式）、通过文章 URL 反查公众号信息。⚠️ 当前仅 `search-account` / `verify-key` 确认可用；`list-articles` 对所有 fakeid 返回 ret=200013（服务端会话失效、非本地 key 问题），且 down.mptext.top 被 Cloudflare 盾全域 403（须走 ego-browser 同源 fetch）。**下载类需求请改用 mp-search / scrapling，不要指望本技能。**
 ---
 
 # 微信公众号 API 工具 (mptext.top)
+
+> ## ⚠️ 当前可用范围（2026-09-15 核定，动手前必读）
+>
+> | 能力 | 状态 | 说明 |
+> |---|---|---|
+> | `verify-key` 验 key | ✅ 可用 | `code:0` |
+> | `search-account` 搜公众号 | ✅ 可用 | 返回 `{"base_resp":{"ret":0},"list":[...]}` |
+> | `list-articles` 取文章列表 | ❌ **不可用** | 对所有 fakeid 返回 `ret=200013`（0 篇），**mptext 服务端公众号会话失效，与本地 key 无关，无解** |
+> | 下载文章内容（HTML/MD/Text/JSON） | ❌ **不可用** | 依赖 `list-articles` 拿文章 ID；且 `down.mptext.top` 被 Cloudflare 盾全域 403（连首页都挑战），沙箱内 requests/curl 均被拦 |
+> | 文章 URL 反查公众号 | ❌ 不可用 | 同上链路 |
+>
+> **结论：本技能现在实际只剩"按关键词搜公众号"这一个能力。**
+> 需要**文章正文/列表/下载**时改用：`mp-search`（官方短链，WorkBuddy 内 `format` 可用）或 `scrapling` / `crawl4ai`（正文提取）。
+>
+> **唯一可用姿势（若确要调 mptext）**：用 ego-browser 打开 `https://down.mptext.top/`（本机浏览器已登录、过 CF）后，在页面上下文里 `fetch('/api/public/v1/...', { headers: { 'X-Auth-Key': <key> } })` 同源调用。Key 在 `scripts/.mpkey`。
+>
+> ⚠️ 另注：**响应格式与下文文档不符**——实际返回 `{"base_resp":{"ret":0,"err_msg":"ok"},"list":[...]}`（搜索）/ `article_list`（文章），不是 `{"code":..,"data":..}`。下文示例代码以此为准阅读。
 
 通过 RESTful API 快速操作微信公众号内容，支持搜索公众号、获取文章列表、下载文章内容等多种格式。
 
 ## 适用场景
 
-- 搜索微信公众号："搜索某个关键词的公众号"
-- 获取公众号文章列表："获取这个公众号的最新文章"
-- 下载文章内容："下载这篇文章为 Markdown 格式"
-- 批量下载文章："把这个公众号的文章全部下载下来"
-- 通过文章 URL 查找公众号："这篇文章是哪个公众号发的"
-- 需要多种输出格式：HTML、Markdown、纯文本、JSON
+> ⚠️ 以下场景**只有第 1 条现在真的能用**，其余 4 条受上表限制：
+>
+> - ✅ 搜索微信公众号："搜索某个关键词的公众号"
+> - ❌ 获取公众号文章列表："获取这个公众号的最新文章" → 改走 `mp-search`
+> - ❌ 下载文章内容："下载这篇文章为 Markdown 格式" → 改走 `scrapling` / `crawl4ai`
+> - ❌ 批量下载文章："把这个公众号的文章全部下载下来" → 改走 `mp-search`
+> - ❌ 通过文章 URL 查找公众号："这篇文章是哪个公众号发的"
+> - ❌ 需要多种输出格式：HTML、Markdown、纯文本、JSON
 
 ## 安装依赖
 
