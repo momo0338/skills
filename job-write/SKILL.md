@@ -1,7 +1,7 @@
 ---
 name: job-write
 version: 1.0.0
-description: 招聘/校招/招考类公众号图文专项采写与发布引擎，与 guide-write（场馆攻略类）严格区分。覆盖：从 ima 知识库或官方报名站/招考系统实拉岗位 → 要点提炼型原创汇编（非搬运）→ 微信原生方言排版（8段骨架+FAQ长尾块）→ 招聘风封面 → 一键推草稿并服务端验收。内建智联招考 SPA 接口逆向、SEO/长尾优化（标题带校招+问句FAQ+合集聚类）、合规红线（不搬运/来源声明/不声明原创/不复制别家二维码）、改标题防重复草稿等坑位。触发词：招聘文章、校招文章、招考文章、招聘专栏、校招专栏、招聘汇总、招聘发布、把招聘信息发公众号、job-write。
+description: 招聘/校招/招考类公众号图文专项采写与发布引擎，与 guide-write（场馆攻略类）严格区分。覆盖：信息源每日巡检（公众号搜狗检索 + 官网招聘专栏列表页双通道，免登录）→ 从 ima 知识库或官方报名站/招考系统实拉岗位 → 要点提炼型原创汇编（非搬运）→ 微信原生方言排版（8段骨架+FAQ长尾块）→ 招聘风封面 → 一键推草稿并服务端验收。内建智联招考 SPA 接口逆向、SEO/长尾优化（标题带校招+问句FAQ+合集聚类）、合规红线（不搬运/来源声明/不声明原创/不复制别家二维码）、改标题防重复草稿等坑位。触发词：招聘文章、校招文章、招考文章、招聘专栏、校招专栏、招聘汇总、招聘发布、把招聘信息发公众号、招聘信息巡检、job-write。
 metadata:
   agent_created: true
 ---
@@ -211,6 +211,58 @@ PIL 生成，**禁用 emoji**（PIL 不渲染彩色 emoji → 豆腐块）。字
 | 窄屏右侧被裁假象 | headless 最小窗宽≈500px | `body{width:390px;overflow:hidden}` + `--window-size=500` |
 | ima 取目录报 code:51 | `search_knowledge_base` limit>20 | limit 必须 ≤20，靠 next_cursor 翻页 |
 | 长尾差 | 内容做成图片 / 标题无校招 | 全程文字 HTML + 标题带校招 + FAQ 问句 + 合集 |
+
+---
+
+## 十三、信息源清单与每日巡检（配套脚本 `scripts/recruit_scan.py`）
+
+招聘是**强时效**品类，靠人工想起来去搜必然漏。本技能配一个**零依赖巡检脚本**，每天自动回答"今天新出了哪些招聘信息"。
+
+### 13.1 双通道设计（都是免登录）
+
+| 通道 | 手段 | 覆盖 | 速度 |
+|---|---|---|---|
+| `--mode wx` | **HTTP 直抓搜狗微信搜索页**并解析结果块（`--wx-engine sogou`，默认） | 全网公众号里的招聘文章，**能发现知识库里没有的新公告** | 秒级（4 组关键词约 15s） |
+| `--mode wx`（备选） | `--wx-engine opencli` 调 `opencli weixin search`（浏览器） | 同上 | 首次 ~60s；⚠️ **第 2 次起必被搜狗限流超时**，仅作备用 |
+| `--mode web` | urllib 抓政府人社网 / 招聘平台的**招聘专栏列表页** | 官方一手公告，最权威 | 秒级 |
+
+```bash
+/usr/local/bin/python3 scripts/recruit_scan.py --mode both --wx-days 30 \
+  --state "<vault>/6招聘/.scan-state.json" \
+  --out   "<vault>/6招聘/巡检记录/$(date +%F)-新增招聘.md"
+```
+
+- **去重靠状态文件**：见过的标题集合存在 `--state` 里（留最近 4000 条），只报**首次出现**的 → 每天跑、隔天跑都不重复刷屏。
+- **时效过滤 `--wx-days`（默认 30 天）必开**：⚠️ 搜狗按**相关度**排序，不加过滤会把 2016–2024 的陈旧文章当成新信息（实测「南京 校招」10 条命中里时效内 0 条，全是旧文）。
+- **首次建库**用 `--all` 忽略状态输出全部命中。
+- 搜狗结果里的链接是 `link?url=...` **跳转链**（有时效/反爬，正文解析不可靠）→ 只作"发现"，原文链接另行溯源。
+
+### 13.2 选源原则（决定报告质量的关键）
+
+- **要"招聘专栏列表页"，不要网站首页**。首页 90% 是无关政务新闻（退休公示、工伤送达…），噪音会淹没信号。
+- **靠 HIT / NOISE 两组正则做过滤**：HIT 命中「招聘/校招/招考/选聘/事业单位/编内/岗位表…」；NOISE 排除「退休/工伤/送达/职称评审/**表格/附件/考试大纲/专栏/导航**…」。
+- **排除栏目首页链接**：`/col/colNNN/index.html` 这类是导航页，不是公告。
+- 已实测好用的源（江苏）：省属事业单位公开招聘专栏 `jshrss.jiangsu.gov.cn/col/col93339/`、全省公办技工院校公开招聘 `col93485`、江苏人事人才公共服务网 `col57142`、南京市人社局 `rsj.nanjing.gov.cn`、泰州市人社局 `rsj.taizhou.gov.cn`、国聘 `iguopin.com`、国家能源集团 `zhaopin.chnenergy.com.cn`。
+- 巡检只做「**发现 + 登记**」，**不自动写稿、不自动推送**；岗位明细仍需进站取（`--source-url` 用官方源）。
+
+### 13.3 巡检链路的踩坑（换环境先看）
+
+| 现象 | 原因 | 解决 |
+|---|---|---|
+| `opencli: command not found` | 沙箱 PATH 无 opencli | 用**全路径** `/usr/local/bin/opencli` |
+| opencli 报 `unknown option '--timeout'` | 无此选项 | 用环境变量 `OPENCLI_BROWSER_COMMAND_TIMEOUT=240` |
+| opencli 第 2 次起 `Browser exec command timed out after 120s` | 搜狗对连续自动化检索限流 | **改 HTTP 直抓搜索页**（默认 `--wx-engine sogou`） |
+| 巡检报告混进 2016–2024 旧招聘文 | 搜狗按相关度排序，老文权重高 | 时效过滤 `--wx-days 30` |
+| `mp-search account` 报 `Page.goto: Page crashed` | Playwright **自带 Chromium** 在沙箱下渲染 mp.weixin.qq.com 必崩（浏览器本身能开 example.com，只微信站点崩，`--no-sandbox` 也无效） | 走系统 Chrome：`launch(channel="chrome")`，按 [系统 Chrome → 自带 Chromium] 顺序探测 |
+| urllib 抓政府网 `CERTIFICATE_VERIFY_FAILED` | 沙箱代理证书链问题（curl 正常） | 放宽 SSL 校验（只读公开页，`--verify-ssl` 可切回严格） |
+| `mp-search account` 要扫码 | 需**公众号管理员**扫码，无法无人值守 | 日常别用它；每周人工补一次号内全量列表 |
+
+### 13.4 落地位置（本项目）
+
+- 源清单与巡检机制文档：`6招聘/00-信息源清单与每日巡检.md`
+- 巡检报告：`6招聘/巡检记录/YYYY-MM-DD-新增招聘.md`
+- 去重状态：`6招聘/.scan-state.json`
+- 已配每日 09:00 自动化「招聘信息每日巡检」。
 
 ---
 
