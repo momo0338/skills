@@ -72,6 +72,9 @@ SKILL_DEPS = {
             "pip": "pip install dy-cli openpyxl",
         },
     },
+    "open-kimi-ppt": {
+        "bins": ["agent-browser"],
+    },
     "opencli": {
         "bins": ["opencli"],
         "npm": ["@jackwener/opencli"],
