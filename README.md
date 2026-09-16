@@ -1,6 +1,6 @@
 # Momo Skills Core Library (AI Agent 技能库)
 
-> 包含 **41 个通用与专项 AI Agent 技能**，覆盖大模型自主浏览器操作、全站深度爬虫、网页正文提取、智能视频看懂抽帧、媒体音视频下载、万站 CLI 操作、抖音专项 CLI、抖音「我的」个人数据整理、抖音带货翻拍、抖音小店经营数据、千川投流决策、研发资源加速、网络代理管理、企业情报深度调研、微信公众号采集、本地视频语音转写、GitHub 仓库深度数据调研及公众号技术专栏自动化采写等场景。
+> 包含 **42 个通用与专项 AI Agent 技能**，覆盖大模型自主浏览器操作、全站深度爬虫、网页正文提取、智能视频看懂抽帧、媒体音视频下载、万站 CLI 操作、抖音专项 CLI、抖音「我的」个人数据整理、抖音带货翻拍、抖音小店经营数据、千川投流决策、研发资源加速、网络代理管理、企业情报深度调研、微信公众号采集、本地视频语音转写、GitHub 仓库深度数据调研及公众号技术专栏自动化采写等场景。
 
 ---
 
@@ -45,8 +45,9 @@
 | **[github-cli](./github-cli)** | `github-cli/` | 基于 gh CLI 的 GitHub 仓库数据提取（issue/PR/release/workflow/API） | `gh` (GitHub CLI) |
 | **[guide-write](./guide-write)** | `guide-write/` | 通用场馆攻略采写（公园/景区/博物馆/高校，五步骨架 + 长尾标题 + 去 AI 味） | Python `PIL`（EXIF 提取，可选 pillow-heif） |
 | **[ima-skill](./ima-skill)** | `ima-skill/` | IMA 知识库/笔记 OpenAPI 技能（笔记管理、知识库上传/搜索/订阅） | IMA OpenAPI, `~/.config/ima/` 凭证 |
+| **[job-write](./job-write)** | `job-write/` | 招聘/校招/招考类公众号图文专项采写（实拉岗位→要点提炼型原创汇编→原生方言排版→招聘风封面→推草稿并服务端验收，内建招考站接口取数与合规红线） | `mp-html`, `mp-publish`, Python `PIL` |
 | **[mp-html](./mp-html)** | `mp-html/` | 微信公众号原生方言排版规范与组件库（强制 section、禁 position、对话气泡/引言框/斑马纹表格） | HTML/CSS（无外部依赖） |
-| **[mp-publish](./mp-publish)** | `mp-publish/` | 微信公众号草稿直推（HTML→微信 CDN 转存→draft/add，原生方言校验 + 长尾 SEO） | Python `requests`, 微信草稿 API, WX_APPID/WX_APPSECRET |
+| **[mp-publish](./mp-publish)** | `mp-publish/` | 微信公众号内容中台（草稿·发布·数据分析三模块）：排版稿直推草稿箱（HTML→微信 CDN 转存→draft/add，原生方言校验 + 长尾 SEO）+ 草稿增删改查与备份回滚 + 发布提交与状态跟踪 + 用户/图文/消息/接口四类数据分析（21 个 datacube 接口，跨度自动分段） | Python（标准库）, `curl`, 微信草稿·发布·数据 API, WX_APPID/WX_APPSECRET |
 | **[mp-save](./mp-save)** | `mp-save/` | 公众号文章保存至本地 vault（opencli 下载） | `opencli`, 微信文章 URL |
 | **[open-kimi-ppt](./open-kimi-ppt)** | `open-kimi-ppt/` | 演示文稿（PPT/PPTX）创建、编辑、复刻与导出（Moonshot PPTD 中间格式 + 浏览器端 PPTX writer，交付 PPTD 项目文件夹与内嵌字体的 .pptx） | Python 3（标准库）, `agent-browser` |
 
