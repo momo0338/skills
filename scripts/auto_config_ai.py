@@ -406,40 +406,76 @@ def _safe_subprocess_run(cmd, **kwargs):
     return subprocess.run(cmd, **kwargs)
 
 
-def get_pip_packages():
-    """获取已安装的 pip 包列表"""
+PIP_INTERPRETER_CANDIDATES = [
+    "python3",
+    "python",
+    "py",
+    os.path.expanduser("~/.workbuddy/binaries/python/envs/default/bin/python3"),
+    "/usr/local/bin/python3",
+    "/opt/homebrew/bin/python3",
+]
+
+
+def _pip_list_by(interpreter):
+    """取单个解释器已安装的包名集合（已归一化）；解释器不可用则返回空集。"""
     try:
-        for py in ["python3", "python", "py"]:
-            try:
-                result = _safe_subprocess_run(
-                    [py, "-m", "pip", "list", "--format=json"],
-                    timeout=10,
-                )
-                if result.returncode == 0:
-                    packages = json.loads(result.stdout)
-                    return {_canonical_package_name(p["name"]) for p in packages}
-            except (FileNotFoundError, subprocess.TimeoutExpired, json.JSONDecodeError, OSError):
-                continue
-        # 回退: pip list
         result = _safe_subprocess_run(
-            ["pip", "list", "--format=json"],
-            timeout=10,
+            [interpreter, "-m", "pip", "list", "--format=json"],
+            timeout=15,
         )
         if result.returncode == 0:
-            packages = json.loads(result.stdout)
-            return {_canonical_package_name(p["name"]) for p in packages}
-    except Exception:
+            names = {_canonical_package_name(p["name"]) for p in json.loads(result.stdout)}
+            return {n for n in names if n}
+    except (FileNotFoundError, subprocess.TimeoutExpired, json.JSONDecodeError, OSError):
         pass
     return set()
 
 
+def get_pip_packages():
+    """获取已安装的 pip 包列表（聚合多个解释器取并集）
+
+    本机技能依赖常分散在多个解释器里：PATH 中的 python3 可能只是 WorkBuddy 托管的
+    基础解释器（包极少），真正的依赖装在托管 venv 或系统 python3 中。
+    若像旧实现那样"第一个成功的解释器就返回"，会产生假阴性，
+    使 check_skill_deps 误报依赖缺失、auto_config 直接跳过该技能不建软链接。
+    """
+    packages = set()
+    seen = set()
+    for py in PIP_INTERPRETER_CANDIDATES:
+        real = shutil.which(py) or (py if os.path.isabs(py) and os.path.exists(py) else None)
+        if not real or real in seen:
+            continue
+        seen.add(real)
+        packages |= _pip_list_by(real)
+    if not packages:
+        # 回退: PATH 中的 pip list
+        try:
+            result = _safe_subprocess_run(
+                ["pip", "list", "--format=json"],
+                timeout=10,
+            )
+            if result.returncode == 0:
+                names = {_canonical_package_name(p["name"]) for p in json.loads(result.stdout)}
+                packages = {n for n in names if n}
+        except Exception:
+            pass
+    return packages
+
+
 def get_npm_global_packages():
-    """获取全局安装的 npm 包列表"""
+    """获取全局安装的 npm 包列表
+
+    注意：列表参数不能配 shell=True —— POSIX 下会被解释为
+    `/bin/sh -c npm list -g --json --depth=0`，于是真正执行的只有 `npm`（无参数），
+    只会打印帮助并返回码 1，导致全局包被整体漏判为"未安装"
+    （实测 @jackwener/opencli 明明已全局安装，却使 mp-save/zhihu-save 被跳过配置）。
+    """
     try:
+        npm_cmd = shutil.which("npm") or "npm"
         result = _safe_subprocess_run(
-            ["npm", "list", "-g", "--json", "--depth=0"],
-            shell=True,
-            timeout=10,
+            [npm_cmd, "list", "-g", "--json", "--depth=0"],
+            shell=(os.name == "nt"),   # Windows 下 npm 是 npm.cmd，交由 shell 解析
+            timeout=15,
         )
         if result.returncode == 0:
             data = json.loads(result.stdout)
@@ -605,11 +641,16 @@ def check_skill_deps(skill_name, skill_path, pip_pkgs, npm_pkgs):
     npm_bin_map = registry_deps.get("npm_bins", {})
 
     for p in all_pip:
-        # 如果该 pip 包仅用于提供某个已存在的 CLI 二进制，则视为已满足
-        provided_bins = [b for b, pkg in pip_bin_map.items() if pkg == p]
+        # 如果该 pip 包仅用于提供某个已存在的 CLI 二进制，则视为已满足。
+        # 注意：pip_bins 的值可能带 extras（如 "yt-dlp[default]"、"claude-real-video[fast]"），
+        # 与 pip 列表中的裸包名并不相等，必须归一化后再比较，否则该豁免永远不生效。
+        p_normalized = _canonical_package_name(p)
+        provided_bins = [
+            b for b, pkg in pip_bin_map.items()
+            if p_normalized and _canonical_package_name(pkg) == p_normalized
+        ]
         if provided_bins and all(command_exists(b) for b in provided_bins):
             continue
-        p_normalized = _canonical_package_name(p)
         if p_normalized not in pip_pkgs:
             missing["pip"].append(p)
 
