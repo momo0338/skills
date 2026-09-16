@@ -48,6 +48,7 @@
 | **[mp-html](./mp-html)** | `mp-html/` | 微信公众号原生方言排版规范与组件库（强制 section、禁 position、对话气泡/引言框/斑马纹表格） | HTML/CSS（无外部依赖） |
 | **[mp-publish](./mp-publish)** | `mp-publish/` | 微信公众号草稿直推（HTML→微信 CDN 转存→draft/add，原生方言校验 + 长尾 SEO） | Python `requests`, 微信草稿 API, WX_APPID/WX_APPSECRET |
 | **[mp-save](./mp-save)** | `mp-save/` | 公众号文章保存至本地 vault（opencli 下载） | `opencli`, 微信文章 URL |
+| **[open-kimi-ppt](./open-kimi-ppt)** | `open-kimi-ppt/` | 演示文稿（PPT/PPTX）创建、编辑、复刻与导出（Moonshot PPTD 中间格式 + 浏览器端 PPTX writer，交付 PPTD 项目文件夹与内嵌字体的 .pptx） | Python 3（标准库）, `agent-browser` |
 
 ---
 
