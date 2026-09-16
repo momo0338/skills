@@ -129,6 +129,7 @@ def main():
     parser.add_argument("--author", default="满爸爱生活", help="作者名称")
     parser.add_argument("--update-media-id", default="", help="指定就地更新的历史草稿 media_id")
     parser.add_argument("--update-auto", action="store_true", help="自动检测草稿箱同名/同主题草稿并执行就地更新")
+    parser.add_argument("--source-url", default="", help="原文/官网/招聘站链接，写入草稿 content_source_url（发文后底部『阅读原文』跳转）")
     parser.add_argument("--delete-old-media-id", default="", help="需要清理的历史废弃草稿 media_id")
     args = parser.parse_args()
 
@@ -198,6 +199,8 @@ def main():
     ]
     if target_update_id:
         push_cmd.extend(["--update-media-id", target_update_id])
+    if args.source_url:
+        push_cmd.extend(["--source-url", args.source_url])
 
     res = subprocess.run(push_cmd, capture_output=True, text=True)
     print(res.stdout.strip())
