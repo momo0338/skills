@@ -68,6 +68,13 @@ def find_existing_draft(token, title):
 
 def crop_to_cover(src_path, out_path):
     im = Image.open(src_path)
+    # ⚠️ 封面原图可能是 RGBA（带透明通道的 PNG），JPEG 不支持 alpha，
+    # 直接 save 会抛 `OSError: cannot write mode RGBA as JPEG` → 必须先合成白底。
+    if im.mode != "RGB":
+        rgba = im.convert("RGBA")
+        bg = Image.new("RGB", rgba.size, (255, 255, 255))
+        bg.paste(rgba, mask=rgba.split()[3])
+        im = bg
     w, h = im.size
     target_w, target_h = 900, 383
     scale = max(target_w / w, target_h / h)
@@ -93,7 +100,11 @@ def extract_meta_from_files(html_path):
     base_name = os.path.basename(html_path).replace("-排版.html", "").replace(".html", "")
     possible_mds = [
         os.path.join(dir_name, base_name + ".md"),
-        os.path.join(dir_name, base_name.replace("-发布版", "") + ".md")
+        os.path.join(dir_name, base_name.replace("-发布版", "") + ".md"),
+        # ⚠️ 招聘专栏约定命名 `NN-单位-源稿.md`（job-write §十），比 `NN-单位.md` 更常见：
+        # 不认这个后缀会导致 SEO 摘要提取不到、静默回退成"正文开头兜底"（实测踩过）。
+        os.path.join(dir_name, base_name + "-源稿.md"),
+        os.path.join(dir_name, base_name.replace("-源稿", "") + "-源稿.md"),
     ]
     for md_p in possible_mds:
         if os.path.exists(md_p):
