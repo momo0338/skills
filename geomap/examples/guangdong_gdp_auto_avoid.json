@@ -1,0 +1,113 @@
+{
+  "theme": "city_night",
+  "region": "广东省",
+  "title": "2025广东地市GDP大盘",
+  "subtitle": "大湾区核心引擎 · 万亿工业大省",
+  "bg_city": "guangzhou",
+  "kpis": [
+    {
+      "label": "全省GDP",
+      "value": "14.16万亿"
+    },
+    {
+      "label": "常住人口",
+      "value": "1.27亿"
+    },
+    {
+      "label": "万亿城市",
+      "value": "4座"
+    }
+  ],
+  "tiers": {
+    "tier1": {
+      "color": "#E5161C",
+      "valClass": "yellow"
+    },
+    "tier2": {
+      "color": "#199889",
+      "valClass": "white"
+    },
+    "tier3": {
+      "color": "#922761",
+      "valClass": "white"
+    }
+  },
+  "cities": [
+    {
+      "name": "深圳市",
+      "tier": "tier1",
+      "value": "36800亿"
+    },
+    {
+      "name": "广州市",
+      "tier": "tier1",
+      "value": "31500亿"
+    },
+    {
+      "name": "佛山市",
+      "tier": "tier1",
+      "value": "13400亿"
+    },
+    {
+      "name": "东莞市",
+      "tier": "tier1",
+      "value": "12000亿"
+    },
+    {
+      "name": "惠州市",
+      "tier": "tier2",
+      "value": "5900亿"
+    },
+    {
+      "name": "珠海市",
+      "tier": "tier2",
+      "value": "4400亿"
+    },
+    {
+      "name": "茂名市",
+      "tier": "tier2",
+      "value": "4000亿"
+    },
+    {
+      "name": "江门市",
+      "tier": "tier2",
+      "value": "4100亿"
+    },
+    {
+      "name": "湛江市",
+      "tier": "tier2",
+      "value": "3900亿"
+    },
+    {
+      "name": "中山市",
+      "tier": "tier2",
+      "value": "4000亿"
+    },
+    {
+      "name": "汕头市",
+      "tier": "tier3",
+      "value": "3200亿"
+    },
+    {
+      "name": "肇庆市",
+      "tier": "tier3",
+      "value": "2900亿"
+    },
+    {
+      "name": "清远市",
+      "tier": "tier3",
+      "value": "2200亿"
+    },
+    {
+      "name": "韶关市",
+      "tier": "tier3",
+      "value": "1700亿"
+    },
+    {
+      "name": "梅州市",
+      "tier": "tier3",
+      "value": "1500亿"
+    }
+  ],
+  "watermark_text": "@满爸爱生活"
+}

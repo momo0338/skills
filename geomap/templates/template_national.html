@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>__TITLE__</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      width: 1080px;
+      height: 1920px;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background: __BG_COLOR__;
+      font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      position: relative;
+    }
+
+    /* 顶部标题横幅 */
+    .top-banner {
+      position: absolute;
+      top: 90px;
+      left: 0;
+      width: 1080px;
+      height: 120px;
+      background: __BANNER_BG__;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 6px 18px rgba(0, 50, 150, 0.15);
+      z-index: 20;
+    }
+    .banner-title {
+      font-size: 64px;
+      font-weight: 900;
+      color: #FFFFFF;
+      letter-spacing: 6px;
+    }
+
+    /* 中部全国地图主画板 */
+    .map-container {
+      position: absolute;
+      top: 230px;
+      left: 10px;
+      width: 1060px;
+      height: 1350px;
+      z-index: 5;
+    }
+    #map-svg {
+      width: 100%;
+      height: 100%;
+      overflow: visible;
+      filter: drop-shadow(0 12px 28px rgba(0, 60, 160, 0.22));
+    }
+    path.prov-polygon {
+      stroke: #A8C4EB;
+      stroke-width: 1.4px;
+      stroke-linejoin: round;
+      stroke-linecap: round;
+      fill: #FFFFFF;
+    }
+    path.prov-polygon.highlight {
+      stroke: rgba(255, 255, 255, 0.45);
+      stroke-width: 1.4px;
+    }
+
+    /* 南海诸岛标准插框 (支持右下角或左下角) */
+    .south-sea-box {
+      position: absolute;
+      top: 1240px;
+      right: 60px;
+      width: 210px;
+      height: 290px;
+      background: #FFFFFF;
+      border: 3px solid #0056CC;
+      border-radius: 16px;
+      box-shadow: 0 8px 22px rgba(0, 50, 150, 0.18);
+      overflow: hidden;
+      z-index: 10;
+      display: flex;
+      flex-direction: column;
+    }
+    .south-sea-box.pos-left {
+      left: 70px;
+      right: auto;
+      top: 1220px;
+    }
+    .south-sea-header {
+      background: #0056CC;
+      color: #FFFFFF;
+      font-size: 19px;
+      font-weight: 900;
+      text-align: center;
+      padding: 3px 0;
+      letter-spacing: 2px;
+    }
+    #south-sea-svg {
+      flex: 1;
+      width: 100%;
+      background: #EBF3FD;
+    }
+    .ten-dash-line {
+      stroke: #0056CC;
+      stroke-width: 2.2px;
+      stroke-dasharray: 6 3;
+      fill: none;
+    }
+
+    /* 标注文字层 */
+    .map-labels {
+      position: absolute;
+      top: 0; left: 0; width: 100%; height: 100%;
+      pointer-events: none;
+      z-index: 15;
+    }
+    .prov-label {
+      position: absolute;
+      transform: translate(-50%, -50%);
+      text-align: center;
+      white-space: nowrap;
+      pointer-events: none;
+    }
+    .prov-label.plain {
+      font-size: 24px;
+      font-weight: 700;
+      color: #4A5568;
+      letter-spacing: 0.5px;
+    }
+    .prov-label.highlight {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .hl-name {
+      font-size: 27px;
+      font-weight: 900;
+      color: #FFFFFF;
+      line-height: 1.1;
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+    }
+    .hl-val {
+      font-size: 31px;
+      font-weight: 900;
+      color: #FFFFFF;
+      line-height: 1.1;
+      margin-top: 2px;
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+    }
+
+    /* 上海专属引线与右侧深蓝字 */
+    .shanghai-box {
+      position: absolute;
+      pointer-events: none;
+      z-index: 25;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .sh-lines {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .sh-line {
+      width: 24px;
+      height: 2px;
+      background: #0056CC;
+    }
+    .sh-text {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      font-weight: 900;
+      color: #0056CC;
+      line-height: 1.1;
+    }
+    .sh-val { font-size: 29px; }
+    .sh-name { font-size: 25px; }
+
+    /* 底部品牌印章与说明 */
+    .footer-area {
+      position: absolute;
+      top: 1610px;
+      left: 0;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+      z-index: 10;
+    }
+    .stamp-box {
+      border: 3.5px solid #0056CC;
+      border-radius: 14px;
+      padding: 6px 26px;
+      font-size: 34px;
+      font-weight: 900;
+      color: #0056CC;
+      letter-spacing: 4px;
+      background: #FFFFFF;
+      box-shadow: 0 4px 14px rgba(0, 50, 150, 0.12);
+    }
+    .date-note {
+      font-size: 28px;
+      font-weight: 900;
+      color: #0056CC;
+      letter-spacing: 1.5px;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="top-banner">
+    <div class="banner-title">__MAIN_TITLE__</div>
+  </div>
+
+  <div class="map-container">
+    <svg id="map-svg">
+      <g id="map-g"></g>
+    </svg>
+    <div class="map-labels" id="map-labels"></div>
+  </div>
+
+  <div class="south-sea-box" id="south-sea-card">
+    <div class="south-sea-header">南海诸岛</div>
+    <svg id="south-sea-svg">
+      <g id="south-sea-g"></g>
+    </svg>
+  </div>
+
+  <div class="footer-area" id="footer-area">
+    <div class="stamp-box" id="stamp-box">__BRAND_STAMP__</div>
+    <div class="date-note" id="date-note">__SUB_TITLE__</div>
+  </div>
+
+  <script>
+__D3_CODE__
+  </script>
+  <script>
+    const CONFIG = __CONFIG_JSON__;
+    const GEO_DATA = __GEO_JSON__;
+    const svgG = d3.select("#map-g");
+    const southSeaG = d3.select("#south-sea-g");
+    const labelsContainer = document.getElementById("map-labels");
+    const width = 1060;
+    const height = 1350;
+
+    // 根据配置调整南海小插框方位 (默认右下，可选 left)
+    const southSeaCard = document.getElementById("south-sea-card");
+    if (CONFIG.south_sea_position === "left") {
+      southSeaCard.className = "south-sea-box pos-left";
+    }
+
+    if (!CONFIG.brand_stamp && !CONFIG.watermark_text) {
+      const sb = document.getElementById("stamp-box");
+      if (sb) sb.style.display = "none";
+    }
+    if (!CONFIG.subtitle) {
+      const dn = document.getElementById("date-note");
+      if (dn) dn.style.display = "none";
+    }
+
+    const lon0 = 105.0;
+    const phi1 = 25.0 * Math.PI / 180.0;
+    const phi2 = 47.0 * Math.PI / 180.0;
+    const n = 0.5 * (Math.sin(phi1) + Math.sin(phi2));
+    const C = Math.cos(phi1)**2 + 2 * n * Math.sin(phi1);
+    const phi0 = 36.0 * Math.PI / 180.0;
+    const rho0 = Math.sqrt(C - 2 * n * Math.sin(phi0)) / n;
+
+    const albersScale = 1680;
+    const offsetX = width / 2 - 40;
+    const offsetY = height / 2 - 60;
+
+    const albersProj = d3.geoTransform({
+      point: function(lon, lat) {
+        const radLat = lat * Math.PI / 180.0;
+        const radLon = lon * Math.PI / 180.0;
+        const theta = n * (radLon - lon0 * Math.PI / 180.0);
+        const rho = Math.sqrt(Math.max(0, C - 2 * n * Math.sin(radLat))) / n;
+        const x = rho * Math.sin(theta) * albersScale + offsetX;
+        const y = (rho * Math.cos(theta) - rho0) * albersScale + offsetY;
+        this.stream.point(x, y);
+      }
+    });
+    const pathGenerator = d3.geoPath().projection(albersProj);
+
+    const ssBoxW = 210;
+    const ssBoxH = 260;
+    const ssScale = 650;
+    const ssLon0 = 114.5;
+    const ssLat0 = 13.0;
+
+    const ssProj = d3.geoTransform({
+      point: function(lon, lat) {
+        const radLat = lat * Math.PI / 180.0;
+        const radLon = lon * Math.PI / 180.0;
+        const theta = n * (radLon - ssLon0 * Math.PI / 180.0);
+        const rho = Math.sqrt(Math.max(0, C - 2 * n * Math.sin(radLat))) / n;
+        const rhoRef = Math.sqrt(Math.max(0, C - 2 * n * Math.sin(ssLat0 * Math.PI / 180.0))) / n;
+        const x = rho * Math.sin(theta) * ssScale + ssBoxW / 2;
+        const y = (rho * Math.cos(theta) - rhoRef) * ssScale + ssBoxH / 2 + 10;
+        this.stream.point(x, y);
+      }
+    });
+    const ssPathGenerator = d3.geoPath().projection(ssProj);
+
+    const tenDashCoords = [
+      [[122.5, 23.5], [123.0, 22.2]],
+      [[122.8, 20.8], [122.5, 19.5]],
+      [[121.5, 17.5], [121.0, 16.0]],
+      [[120.2, 13.8], [119.5, 12.5]],
+      [[118.0, 10.2], [117.0, 9.2]],
+      [[115.0, 5.8], [113.8, 4.8]],
+      [[112.0, 3.8], [110.2, 3.5]],
+      [[108.8, 5.2], [107.5, 6.8]],
+      [[108.0, 10.5], [108.5, 12.2]],
+      [[108.2, 15.5], [108.0, 17.2]]
+    ];
+
+    // 动态解析省份数据
+    const provDataMap = {};
+    (CONFIG.provinces || CONFIG.highlights || []).forEach(p => {
+      provDataMap[p.name] = p;
+      const sn = p.name.replace('省', '').replace('市', '').replace('自治区', '').replace('壮族', '').replace('回族', '').replace('维吾尔', '');
+      provDataMap[sn] = p;
+    });
+
+    const highlightColor = CONFIG.highlight_color || "#0056CC";
+    const defaultColor = CONFIG.default_city_color || "#FFFFFF";
+
+    const PLAIN_OFFSETS = {
+      "内蒙古自治区": [35, 0],
+      "河北省": [-25, 0],
+      "陕西省": [-15, 0],
+      "甘肃省": [-35, 0],
+      "宁夏回族自治区": [0, 0],
+      "青海省": [0, 0],
+      "新疆维吾尔自治区": [0, 0],
+      "西藏自治区": [0, 0],
+      "黑龙江省": [25, -15],
+      "吉林省": [25, 0],
+      "海南省": [0, 5],
+      "台湾省": [0, 0]
+    };
+
+    GEO_DATA.features.forEach(feature => {
+      const fullName = feature.properties.name || "";
+      if (fullName === "香港特别行政区" || fullName === "澳门特别行政区") return;
+
+      const shortName = fullName.replace('省', '').replace('市', '').replace('自治区', '').replace('壮族', '').replace('回族', '').replace('维吾尔', '').replace('特别行政区', '');
+      const p = provDataMap[fullName] || provDataMap[shortName];
+      const isHl = !!p;
+      const fillColor = isHl ? (p.color || highlightColor) : defaultColor;
+
+      svgG.append("path")
+        .datum(feature)
+        .attr("class", isHl ? "prov-polygon highlight" : "prov-polygon")
+        .attr("d", pathGenerator)
+        .attr("fill", fillColor);
+
+      if (['海南省', '广东省', '台湾省', '广西壮族自治区'].includes(fullName)) {
+        southSeaG.append("path")
+          .datum(feature)
+          .attr("d", ssPathGenerator)
+          .attr("fill", isHl ? (p.color || highlightColor) : "#FFFFFF")
+          .attr("stroke", "#0041A8")
+          .attr("stroke-width", "0.8px");
+      }
+
+      if (fullName === "上海市" && isHl) {
+        const c = pathGenerator.centroid(feature);
+        if (c && !isNaN(c[0])) {
+          const shBox = document.createElement("div");
+          shBox.className = "shanghai-box";
+          shBox.innerHTML = `
+            <div class="sh-lines">
+              <div class="sh-line"></div>
+              <div class="sh-line"></div>
+            </div>
+            <div class="sh-text">
+              <span class="sh-val">${p.value || p.metric || ""}</span>
+              <span class="sh-name">上海</span>
+            </div>
+          `;
+          shBox.style.left = (c[0] + 12) + "px";
+          shBox.style.top = (c[1] - 10) + "px";
+          labelsContainer.appendChild(shBox);
+        }
+      } else {
+        const centroid = pathGenerator.centroid(feature);
+        if (centroid && !isNaN(centroid[0])) {
+          const off = (p && p.offset) || PLAIN_OFFSETS[fullName] || [0, 0];
+          let x = centroid[0] + off[0];
+          let y = centroid[1] + off[1];
+
+          const labelDiv = document.createElement("div");
+          if (isHl) {
+            labelDiv.className = "prov-label highlight";
+            labelDiv.innerHTML = '<div class="hl-name">' + shortName + '</div>' +
+                                 '<div class="hl-val">' + (p.value || p.metric || "") + '</div>';
+          } else {
+            labelDiv.className = "prov-label plain";
+            labelDiv.innerHTML = shortName;
+          }
+
+          labelDiv.style.left = x + "px";
+          labelDiv.style.top = y + "px";
+          labelsContainer.appendChild(labelDiv);
+        }
+      }
+    });
+
+    tenDashCoords.forEach(line => {
+      const geoLine = { type: "Feature", geometry: { type: "LineString", coordinates: line } };
+      southSeaG.append("path")
+        .datum(geoLine)
+        .attr("class", "ten-dash-line")
+        .attr("d", ssPathGenerator);
+    });
+
+    const markReady = () => { window.__RENDER_READY__ = true; };
+    if (document.fonts && document.fonts.ready) {
+      document.fonts.ready.then(() => requestAnimationFrame(() => requestAnimationFrame(markReady)));
+    } else {
+      requestAnimationFrame(() => requestAnimationFrame(markReady));
+    }
+  </script>
+</body>
+</html>
+

@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>__TITLE__</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      width: 1080px;
+      height: 1920px;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background: __BG_COLOR__;
+      font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      position: relative;
+    }
+
+    /* 顶部标题区 */
+    .header-area {
+      position: absolute;
+      top: 140px;
+      left: 0;
+      width: 100%;
+      text-align: center;
+      z-index: 10;
+    }
+    .main-title {
+      font-size: 76px;
+      font-weight: 900;
+      color: #172434;
+      line-height: 1.18;
+      letter-spacing: 2px;
+    }
+    .sub-title {
+      font-size: 32px;
+      font-weight: 700;
+      color: #6C7A89;
+      margin-top: 16px;
+      letter-spacing: 1px;
+    }
+
+    /* 中部地图画板 */
+    .map-container {
+      position: absolute;
+      top: 360px;
+      left: 50px;
+      width: 980px;
+      height: 1350px;
+      z-index: 5;
+    }
+    #map-svg {
+      width: 100%;
+      height: 100%;
+      overflow: visible;
+      filter: drop-shadow(0 15px 30px rgba(0, 0, 0, 0.25));
+    }
+    path.district-polygon {
+      stroke: #172434;
+      stroke-width: 3px;
+      stroke-linejoin: round;
+      stroke-linecap: round;
+    }
+
+    /* 标注文字 */
+    .map-labels {
+      position: absolute;
+      top: 0; left: 0; width: 100%; height: 100%;
+      pointer-events: none;
+      z-index: 15;
+    }
+    .district-badge {
+      position: absolute;
+      transform: translate(-50%, -50%);
+      text-align: center;
+      white-space: nowrap;
+      pointer-events: none;
+    }
+    .dist-name {
+      font-size: 38px;
+      font-weight: 900;
+      color: #FFF220;
+      -webkit-text-stroke: 4px #000000;
+      paint-order: stroke fill;
+      line-height: 1.1;
+    }
+    .dist-val {
+      font-size: 40px;
+      font-weight: 900;
+      color: #FFFFFF;
+      -webkit-text-stroke: 4.5px #000000;
+      paint-order: stroke fill;
+      line-height: 1.1;
+      margin-top: 2px;
+    }
+    .dist-rate {
+      font-size: 34px;
+      font-weight: 900;
+      color: #FFF220;
+      -webkit-text-stroke: 4px #000000;
+      paint-order: stroke fill;
+      line-height: 1.1;
+      margin-top: 2px;
+    }
+
+    /* 底部备注 */
+    .footer-note {
+      position: absolute;
+      bottom: 120px;
+      left: 0;
+      width: 100%;
+      text-align: center;
+      font-size: 30px;
+      font-weight: 700;
+      color: #6C7A89;
+      letter-spacing: 1px;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="header-area">
+    <div class="main-title">__MAIN_TITLE__</div>
+    <div class="sub-title">__SUB_TITLE__</div>
+  </div>
+
+  <div class="map-container">
+    <svg id="map-svg">
+      <g id="map-g"></g>
+    </svg>
+    <div class="map-labels" id="map-labels"></div>
+  </div>
+
+  <div class="footer-note" id="footer-note">__FOOTER_NOTE__</div>
+
+  <script>
+__D3_CODE__
+  </script>
+  <script>
+    const CONFIG = __CONFIG_JSON__;
+    const GEO_DATA = __GEO_JSON__;
+    const svgG = d3.select("#map-g");
+    const labelsContainer = document.getElementById("map-labels");
+    const width = 980;
+    const height = 1350;
+
+    let minLon = Infinity, maxLon = -Infinity, minLat = Infinity, maxLat = -Infinity;
+    function extractCoords(coords) {
+      if (typeof coords[0] === "number") {
+        const [lon, lat] = coords;
+        if (lon < minLon) minLon = lon;
+        if (lon > maxLon) maxLon = lon;
+        if (lat < minLat) minLat = lat;
+        if (lat > maxLat) maxLat = lat;
+      } else {
+        coords.forEach(extractCoords);
+      }
+    }
+    GEO_DATA.features.forEach(f => extractCoords(f.geometry.coordinates));
+
+    const centerLon = (minLon + maxLon) / 2;
+    const centerLat = (minLat + maxLat) / 2;
+
+    function mercY(lat) {
+      const rad = lat * Math.PI / 180;
+      return Math.log(Math.tan(Math.PI / 4 + rad / 2));
+    }
+
+    const minMercY = mercY(minLat);
+    const maxMercY = mercY(maxLat);
+    const dMercY = maxMercY - minMercY;
+    const dLonRad = (maxLon - minLon) * Math.PI / 180;
+
+    const FIT = 0.94;
+    const scaleX = (width * FIT) / dLonRad;
+    const scaleY = (height * FIT) / dMercY;
+    const autoScale = Math.min(scaleX, scaleY);
+    const centerMercY = mercY(centerLat);
+
+    const projection = d3.geoTransform({
+      point: function(lon, lat) {
+        const x = (lon - centerLon) * (Math.PI / 180) * autoScale + width / 2;
+        const y = height / 2 - (mercY(lat) - centerMercY) * autoScale;
+        this.stream.point(x, y);
+      }
+    });
+
+    const pathGenerator = d3.geoPath().projection(projection);
+
+    const distMap = {};
+    (CONFIG.districts || []).forEach(d => {
+      distMap[d.name] = d;
+    });
+
+    GEO_DATA.features.forEach(feature => {
+      const name = feature.properties.name;
+      const d = distMap[name] || { color: "#C0C0C0", value: "-", rate: "-" };
+
+      svgG.append("path")
+        .datum(feature)
+        .attr("class", "district-polygon")
+        .attr("d", pathGenerator)
+        .attr("fill", d.color || "#C0C0C0");
+
+      const centroid = pathGenerator.centroid(feature);
+      if (centroid && !isNaN(centroid[0])) {
+        let x = centroid[0] + (d.offset ? d.offset[0] : 0);
+        let y = centroid[1] + (d.offset ? d.offset[1] : 0);
+
+        const badgeDiv = document.createElement("div");
+        badgeDiv.className = "district-badge";
+        badgeDiv.innerHTML = '<div class="dist-name">' + name + '</div>' +
+                             '<div class="dist-val">' + (d.value || "") + '</div>' +
+                             '<div class="dist-rate">' + (d.rate || "") + '</div>';
+
+        badgeDiv.style.left = x + "px";
+        badgeDiv.style.top = y + "px";
+        labelsContainer.appendChild(badgeDiv);
+      }
+    });
+
+    const markReady = () => { window.__RENDER_READY__ = true; };
+    if (document.fonts && document.fonts.ready) {
+      document.fonts.ready.then(() => requestAnimationFrame(() => requestAnimationFrame(markReady)));
+    } else {
+      requestAnimationFrame(() => requestAnimationFrame(markReady));
+    }
+  </script>
+</body>
+</html>
+

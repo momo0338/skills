@@ -1,0 +1,113 @@
+{
+  "theme": "official_standard",
+  "region": "江苏省",
+  "title": "江苏省地图",
+  "audit_no": "苏S(2026)86号",
+  "supervisor": "江苏省自然资源厅 监制",
+  "cities": [
+    {
+      "name": "南京市",
+      "color": "#DCF2E6",
+      "offset": [
+        -20,
+        0
+      ]
+    },
+    {
+      "name": "无锡市",
+      "color": "#E0F3EA",
+      "offset": [
+        10,
+        -20
+      ]
+    },
+    {
+      "name": "徐州市",
+      "color": "#DCF2E6",
+      "offset": [
+        0,
+        0
+      ]
+    },
+    {
+      "name": "常州市",
+      "color": "#FDECD2",
+      "offset": [
+        -20,
+        -10
+      ]
+    },
+    {
+      "name": "苏州市",
+      "color": "#F8DFEA",
+      "offset": [
+        40,
+        10
+      ]
+    },
+    {
+      "name": "南通市",
+      "color": "#FDECD2",
+      "offset": [
+        30,
+        0
+      ]
+    },
+    {
+      "name": "连云港市",
+      "color": "#FDECD2",
+      "offset": [
+        10,
+        0
+      ]
+    },
+    {
+      "name": "淮安市",
+      "color": "#F8DFEA",
+      "offset": [
+        -10,
+        0
+      ]
+    },
+    {
+      "name": "盐城市",
+      "color": "#FCF6DA",
+      "offset": [
+        25,
+        -15
+      ]
+    },
+    {
+      "name": "扬州市",
+      "color": "#FDECD2",
+      "offset": [
+        -15,
+        0
+      ]
+    },
+    {
+      "name": "镇江市",
+      "color": "#E2F0FA",
+      "offset": [
+        10,
+        -5
+      ]
+    },
+    {
+      "name": "泰州市",
+      "color": "#DCF2E6",
+      "offset": [
+        10,
+        5
+      ]
+    },
+    {
+      "name": "宿迁市",
+      "color": "#FCF6DA",
+      "offset": [
+        -25,
+        0
+      ]
+    }
+  ]
+}

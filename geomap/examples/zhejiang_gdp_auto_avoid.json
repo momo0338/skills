@@ -1,0 +1,93 @@
+{
+  "theme": "city_night",
+  "region": "浙江省",
+  "title": "2025浙江11市GDP大盘",
+  "subtitle": "民营经济先锋 · 共同富裕示范区",
+  "bg_city": "shanghai",
+  "kpis": [
+    {
+      "label": "全省GDP",
+      "value": "8.85万亿"
+    },
+    {
+      "label": "常住人口",
+      "value": "6627万"
+    },
+    {
+      "label": "人均GDP",
+      "value": "13.3万元"
+    }
+  ],
+  "tiers": {
+    "tier1": {
+      "color": "#E5161C",
+      "valClass": "yellow"
+    },
+    "tier2": {
+      "color": "#199889",
+      "valClass": "white"
+    },
+    "tier3": {
+      "color": "#922761",
+      "valClass": "white"
+    }
+  },
+  "cities": [
+    {
+      "name": "杭州市",
+      "tier": "tier1",
+      "value": "21800亿"
+    },
+    {
+      "name": "宁波市",
+      "tier": "tier1",
+      "value": "17800亿"
+    },
+    {
+      "name": "温州市",
+      "tier": "tier2",
+      "value": "9300亿"
+    },
+    {
+      "name": "绍兴市",
+      "tier": "tier2",
+      "value": "8100亿"
+    },
+    {
+      "name": "嘉兴市",
+      "tier": "tier2",
+      "value": "7500亿"
+    },
+    {
+      "name": "台州市",
+      "tier": "tier2",
+      "value": "6500亿"
+    },
+    {
+      "name": "金华市",
+      "tier": "tier2",
+      "value": "6400亿"
+    },
+    {
+      "name": "湖州市",
+      "tier": "tier3",
+      "value": "4200亿"
+    },
+    {
+      "name": "舟山市",
+      "tier": "tier3",
+      "value": "2300亿"
+    },
+    {
+      "name": "衢州市",
+      "tier": "tier3",
+      "value": "2200亿"
+    },
+    {
+      "name": "丽水市",
+      "tier": "tier3",
+      "value": "2100亿"
+    }
+  ],
+  "watermark_text": "@满爸爱生活"
+}
