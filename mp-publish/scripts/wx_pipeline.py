@@ -40,6 +40,13 @@ def _post_json(path, payload, token, timeout=20):
         return {"errcode": -1, "errmsg": f"非 JSON 响应: {(r.stdout or r.stderr)[:200]}"}
 
 def find_existing_draft(token, title):
+    """查重：命中返回 (media_id, 原标题)，未命中返回 (None, None)。
+
+    ⚠️ **查询失败必须与「未命中」区分开**（2026-09-17 实测踩坑）：
+    旧版把 draft/batchget 的瞬时失败也 `return None, None`，pipeline 便当"没有同名草稿"处理，
+    **静默新建一篇重复草稿**（同标题两篇并排躺在草稿箱）。现改为返回 `("__QUERY_FAILED__", 原因)`
+    由调用方中止流程，杜绝重稿。
+    """
     if not token or not title:
         return None, None
     clean_env = {k: v for k, v in os.environ.items() if 'proxy' not in k.lower()}
@@ -50,9 +57,7 @@ def find_existing_draft(token, title):
     try:
         data = json.loads(req.stdout)
         if data.get("errcode"):
-            log("WARN", f"draft/batchget 报错 {data.get('errcode')} {data.get('errmsg')[:60]}"
-                        f"（token 失效时请重跑，或直接指定 --update-media-id）")
-            return None, None
+            return "__QUERY_FAILED__", f"draft/batchget 报错 {data.get('errcode')} {str(data.get('errmsg'))[:60]}"
         clean_title = re.sub(r'[^\w\u4e00-\u9fa5]', '', title)
         for item in data.get("item", []):
             m_id = item.get("media_id")
@@ -63,7 +68,7 @@ def find_existing_draft(token, title):
                 if clean_title == clean_existing or clean_title in clean_existing or clean_existing in clean_title:
                     return m_id, existing_title
     except Exception as e:
-        log("WARN", f"查询已有草稿列表异常: {e}")
+        return "__QUERY_FAILED__", f"查询异常: {e}"
     return None, None
 
 def crop_to_cover(src_path, out_path):
@@ -114,7 +119,14 @@ def extract_meta_from_files(html_path):
                     m_title = re.search(r"^title:\s*(.*)$", md_text, re.M)
                     if m_title:
                         title = m_title.group(1).strip()
-                m_digest = re.search(r"> \*\*SEO 摘要\*\*[^\n]*\n>\s*([^\n]+)", md_text)
+                # ⚠️ 摘要有两种合法写法，旧正则只认「两行式」，导致**单行式静默回退成正文首段**（2026-09-17 实测踩坑）：
+                #   单行式：`> **SEO 摘要**（NNN字，无 emoji）：正文…`      ← 本专栏最常用
+                #   两行式：`> **SEO 摘要**（NNN字，无 emoji）：` + `> 正文…`
+                # 注意：分隔符必须锚在「**SEO 摘要**（…）」这一段之后，不能用贪婪的 `[^\n]*[：:]`
+                # ——摘要正文里常含 `16:00` 这类半角冒号，贪婪匹配会从那里截断（2026-09-17 实测）。
+                m_digest = re.search(r">[ \t]*\*\*SEO\s*摘要\*\*(?:（[^）]*）)?[：:][ \t]*(?=\S)([^\n]+)", md_text)
+                if not m_digest:
+                    m_digest = re.search(r">[ \t]*\*\*SEO\s*摘要\*\*[^\n]*\n>[ \t]*([^\n]+)", md_text)
                 if m_digest:
                     digest = m_digest.group(1).strip()
                 break
@@ -214,6 +226,10 @@ def main():
     if not target_update_id and args.update_auto and token:
         log("DISCOVER", "正在检测草稿箱是否存在同名已有草稿...")
         found_id, found_title = find_existing_draft(token, final_title)
+        if found_id == "__QUERY_FAILED__":
+            print(f"❌ 草稿查重失败（{found_title}）。为避免生成**重复草稿**，流水线已中止。")
+            print("   → 直接重跑即可；若已知旧稿 media_id，可用 --update-media-id 显式指定就地更新。")
+            sys.exit(1)
         if found_id:
             target_update_id = found_id
             log("DISCOVER", f"匹配到已有草稿: media_id={found_id} (原标题: {found_title})，将自动就地增量更新！")
