@@ -317,12 +317,17 @@ $PY /Users/zhugx/src/skills/mp-publish/scripts/wx_pipeline.py \
 |---|---|---|---|
 | `--mode wx` | **HTTP 直抓搜狗微信搜索页**并解析结果块（`--wx-engine sogou`，默认） | 全网公众号里的招聘文章，**能发现知识库里没有的新公告** | 秒级（4 组关键词约 15s） |
 | `--mode wx`（备选） | `--wx-engine opencli` 调 `opencli weixin search`（浏览器） | 同上 | 首次 ~60s；⚠️ **第 2 次起必被搜狗限流超时**，仅作备用 |
-| `--mode web` | urllib 抓政府人社网 / 招聘平台的**招聘专栏列表页** | 官方一手公告，最权威 | 秒级 |
+| `--mode web` | **三层管线**（2026-09-17 P1~P3）：①列表扫描 62 源（政府专栏/企业官网栏/hotjob）→ ②招考适配器 4 源（zkapi 直拉**岗位数组**）→ ③哨兵 25 源（SPA hash 变更告警） | 官方一手公告 + 岗位级增量 + SPA 变更探测 | ~1 分钟 |
 
 ```bash
+# 日常（09:00 自动化同款）；web 通道自动读 sources.yaml（P2 配置驱动）
 /usr/local/bin/python3 scripts/recruit_scan.py --mode both --wx-days 30 \
   --state "<vault>/码上职业/.scan-state.json" \
   --out   "<vault>/码上职业/巡检记录/$(date +%F)-新增招聘.md"
+# 分线扫 / 回退内置源 / 只重测死源
+python3 scripts/recruit_scan.py --mode web --line B   # 或 --line A
+python3 scripts/recruit_scan.py --mode web --no-sources
+python3 "<vault>/码上职业/工具/probe_sources.py" --only-failed
 ```
 
 - **去重靠状态文件**：见过的标题集合存在 `--state` 里（留最近 4000 条），只报**首次出现**的 → 每天跑、隔天跑都不重复刷屏。
@@ -330,13 +335,14 @@ $PY /Users/zhugx/src/skills/mp-publish/scripts/wx_pipeline.py \
 - **首次建库**用 `--all` 忽略状态输出全部命中。
 - 搜狗结果里的链接是 `link?url=...` **跳转链**（有时效/反爬，正文解析不可靠）→ 只作"发现"，原文链接另行溯源。
 
-### 13.2 选源原则（决定报告质量的关键）
+### 13.2 选源原则（P2 起配置驱动，源数据在 yaml 不在代码）
 
-- **要"招聘专栏列表页"，不要网站首页**。首页 90% 是无关政务新闻（退休公示、工伤送达…），噪音会淹没信号。
-- **靠 HIT / NOISE 两组正则做过滤**：HIT 命中「招聘/校招/招考/选聘/事业单位/编内/岗位表…」；NOISE 排除「退休/工伤/送达/职称评审/**表格/附件/考试大纲/专栏/导航**…」。
-- **排除栏目首页链接**：`/col/colNNN/index.html` 这类是导航页，不是公告。
-- 已实测好用的源（江苏）：省属事业单位公开招聘专栏 `jshrss.jiangsu.gov.cn/col/col93339/`、全省公办技工院校公开招聘 `col93485`、江苏人事人才公共服务网 `col57142`、南京市人社局 `rsj.nanjing.gov.cn`、泰州市人社局 `rsj.taizhou.gov.cn`、国聘 `iguopin.com`、国家能源集团 `zhaopin.chnenergy.com.cn`。
-- 巡检只做「**发现 + 登记**」，**不自动写稿、不自动推送**；岗位明细仍需进站取（`--source-url` 用官方源）。
+- **源清单唯一真源 = `<vault>/码上职业/工具/sources.yaml`**（153 行，由 `probe_sources.py` 生成/更新）：每行 `id/name/group/line(A|B)/tier/kind/url/enabled/probe`；**加源 = 加一行 + 重跑 probe**，不改代码。
+- **kind 分流**：`gov_list|gov_bm|self_list|hotjob` → 列表扫描；`zhaokao` → `recruit_adapters.scan_zhaokao`（智联招考三步法拉岗位数组）；`self_spa` → 哨兵；其余（beisen/moka/job51/chinahr/zhaopin_gen）→ 停用或待适配。
+- **要"招聘专栏列表页"，不要网站首页**；HIT/NOISE 正则过滤 + 排除栏目导航链接（同前）。
+- **源健康告警**：`sources-health.json` 记 last_ok_at / consecutive_fail / last_code；**连续失败 ≥3 在报告顶部列「🚨 源告警」**——防止"源坏了但报告显示无新增"的静默失效（最危险）。
+- **平台族结论（2026-09-17 实测，勿再走弯路）**：①**北森 `*.zhiye.com` 22 家大半已死**（Not Found/重定向他司，按届租用站点过期即漂）→ 只能靠公众号首发；②智联子站分三型：**招考型**（zkapi 通，附录 A）、**企业型**（前端 200 但 SPA → 哨兵）、**按届 403**（公告期人工核）；③银行站 legacy TLS 用 `/usr/bin/curl`（LibreSSL）可过。
+- 巡检只做「**发现 + 登记**」，不自动写稿、不自动推送；岗位明细：招考型已直拉，其余进站取（`--source-url` 用官方源）。
 
 ### 13.3 分拣方法（2026-09-16 首巡 43 条实测，报告出来的下一步怎么做）
 
@@ -374,12 +380,16 @@ $PY /Users/zhugx/src/skills/mp-publish/scripts/wx_pipeline.py \
 | `mp-search account` 报 `Page.goto: Page crashed` | Playwright **自带 Chromium** 在沙箱下渲染 mp.weixin.qq.com 必崩（浏览器本身能开 example.com，只微信站点崩，`--no-sandbox` 也无效） | 走系统 Chrome：`launch(channel="chrome")`，按 [系统 Chrome → 自带 Chromium] 顺序探测 |
 | urllib 抓政府网 `CERTIFICATE_VERIFY_FAILED` | 沙箱代理证书链问题（curl 正常） | 放宽 SSL 校验（只读公开页，`--verify-ssl` 可切回严格） |
 | `mp-search account` 要扫码 | 需**公众号管理员**扫码，无法无人值守 | 日常别用它；每周人工补一次号内全量列表 |
+| urllib 抓银行/企业站报 `UNSAFE_LEGACY_RENEGOTIATION` / `SSL_ERROR_SYSCALL` | TLS 指纹/旧重协商被拒（本机代理节点也会掐 TLS） | `fetch()` 已内置 **`/usr/bin/curl`（LibreSSL）兜底**；仍失败的源在本机关代理复核 `probe_sources.py --only-failed` |
+| `-w "%CURLCODE%{http_code}"` 解析恒为 0 | curl 把 `%CURLCODE%` 输出成 `%CURLCODE200`（**无尾 %**） | rfind 标记不要带尾 `%`（probe_sources.py 已修） |
+| 智联按届子站（`{品牌}{年份}.zhaopin.com`）403 | 届次站带反爬且过期即废 | 勿硬爬：公告首发看「江苏国资」公众号，拿到新址更新 yaml |
 
 ### 13.5 落地位置（本项目）
 
-- 源清单与巡检机制文档：`码上职业/00-信息源清单与每日巡检.md`
-- 巡检报告：`码上职业/巡检记录/YYYY-MM-DD-新增招聘.md`
-- 去重状态：`码上职业/.scan-state.json`
+- 源清单与巡检机制文档：`码上职业/00-信息源清单与每日巡检.md`（机制）；`码上职业/01-官方站点源总表.md`（全部源数据+平台族结论）
+- **源配置（唯一真源）**：`码上职业/工具/sources.yaml` ｜ 探活脚本：`码上职业/工具/probe_sources.py`
+- 巡检报告：`码上职业/巡检记录/YYYY-MM-DD-新增招聘.md`（探活报告同目录）
+- 去重状态：`码上职业/.scan-state.json` ｜ 源健康：同目录 `sources-health.json`
 - 已配每日 09:00 自动化「招聘信息每日巡检」（2026-09-16 迁址后重建，指向 `码上职业/`）。
 
 ---
