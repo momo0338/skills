@@ -208,6 +208,13 @@ $PY /Users/zhugx/src/skills/mp-publish/scripts/wx_pipeline.py \
 
 ## 九、合规红线（逐篇必查）
 
+- **回官方核硬信息（岗位/人数/学历/专业/截止日）——招聘站是 SPA 时，抓它的 API**：
+  - 南京银行：`job.njcb.com.cn` 是 Vue SPA → 抓 `static/js/app.*.js` 拿到 **`API_ROOT = //job.njcb.com.cn/recruit/api`** →
+    **`POST /school/getSchoolNotic`**（body `{}`，带 UA + Referer）直接返回**校招公告全文 HTML**（2026-09-17 实测 7096 字）；
+    另有 `/index/getMainInfo`（行简介）、`/notic/getNoticContent`（其他公告）、`/school/getSchoolContent`。
+  - 通用套路：**页面无正文 → 抓 JS bundle → grep `API_ROOT` 与 `'/xxx/yyy'` 形式的接口常量 → POST 探活**。
+  - 同类 CMS 可直接试同路径（苏皖多家银行官网/招聘站用同一套 huilan/eportal 模板）。
+
 - **不做原文搬运**：只提炼事实（单位、岗位、条件、时间、报名方式）+ 自己的解读整理。
 - ⛔ **不写页脚**（朱总 2026-09-16 立规）：**「来源行」「免责/版权声明」「下期预告」三类一律不加**，正文以社群 CTA（并排双码）结束。
   - 「信息来源：…｜整理：…」「官方源头：…｜招考政策以单位实时公告为准」→ 不加
