@@ -546,7 +546,7 @@ def build_parser():
     s.add_argument("--index", type=int, default=0)
     s.add_argument("--article-type", default="news", choices=["news", "newspic"])
     s.add_argument("--title", default="")
-    s.add_argument("--author", default="满爸爱生活")
+    s.add_argument("--author", default="")
     s.add_argument("--digest", default="", help="≤120 字；不填微信默认抓正文前 54 字")
     s.add_argument("--content-file", default="", help="正文 HTML 文件")
     s.add_argument("--thumb-media-id", default="", help="封面永久素材 ID")

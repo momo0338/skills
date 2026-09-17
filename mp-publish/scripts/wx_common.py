@@ -285,7 +285,7 @@ def load_wx_creds(quiet=False, profile=None):
     return appid, secret
 
 
-def load_wx_author(default="满爸爱生活"):
+def load_wx_author(default=""):
     """取账号默认作者名（profiles.json 的 author 字段），未配置则用 default。"""
     alias = active_profile()
     entry = (read_profiles_meta().get("profiles") or {}).get(alias) or {}

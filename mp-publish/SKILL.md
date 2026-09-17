@@ -155,8 +155,8 @@ $PY /Users/zhugx/src/skills/mp-publish/scripts/wx_pipeline.py \
 export WX_PROFILE=mashang
 ```
 
-**作者名自动跟随账号**：`--author` 不传时取该账号 `profiles.json` 的 `author`
-（manba → 满爸爱生活；mashang → 码上职业），一般无需手动指定。
+**作者默认不写**：`--author` 不传时 author 为空（不写入作者字段）；如需署名，显式 `--author "码上职业"` 等覆盖。
+（profiles.json 两号 author 已置空，旧「作者名自动跟随账号」行为已弃用，2026-09-17 改。）
 
 **流水线在底层 15 秒内自动闭环完成以下 7 步**：
 1. **元数据全自动萃取**：自动从 HTML `<title>` 与同级 `*.md` 提取标题和 ≤120 字 SEO 摘要，自动寻找匹配同级 `*-封面.jpg`；

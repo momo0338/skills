@@ -29,7 +29,7 @@ ap = argparse.ArgumentParser()
 ap.add_argument("--profile", default="",
                 help="公众号账号别名（见 wx_account.py list）；缺省走 WX_PROFILE 或默认账号")
 ap.add_argument("--title", required=True)
-ap.add_argument("--author", default="", help="作者名；缺省取该账号 profiles.json 的 author")
+ap.add_argument("--author", default="", help="作者名；缺省为空（不写作者），显式传则覆盖")
 ap.add_argument("--digest", default="", help="SEO 摘要，≤%d 字符；为空则自动生成" % MAX_DIGEST)
 ap.add_argument("--content-file", default="", help="缺省 $WX_RUN_DIR/zj_wechat_content.html")
 ap.add_argument("--imgmap", default="", help="缺省 $WX_RUN_DIR/zj_imgmap.json")
@@ -43,7 +43,7 @@ args = ap.parse_args()
 if args.profile:
     set_profile(args.profile)
 APPID, SECRET = load_wx_creds(quiet=True)
-args.author = args.author or load_wx_author("满爸爱生活")
+args.author = args.author or load_wx_author("")
 
 RUN_DIR = run_dir()
 args.content_file = args.content_file or os.path.join(RUN_DIR, "zj_wechat_content.html")
