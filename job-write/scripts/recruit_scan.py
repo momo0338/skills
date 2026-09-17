@@ -51,6 +51,11 @@ import sys
 import time
 import urllib.error
 import urllib.request
+
+# 巡检目标全为国内站：清掉会话/系统代理 env 直连（代理会掐部分企业站 TLS）
+for _k in ("http_proxy", "https_proxy", "HTTP_PROXY", "HTTPS_PROXY",
+           "all_proxy", "ALL_PROXY"):
+    os.environ.pop(_k, None)
 from html import unescape
 
 UA = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
