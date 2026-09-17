@@ -168,7 +168,7 @@ def main():
         set_profile(args.profile)
     global APPID, SECRET
     APPID, SECRET = load_wx_creds(quiet=True)
-    final_author = args.author or load_wx_author("满爸爱生活")
+    final_author = args.author or load_wx_author("")
 
     html_path = os.path.abspath(args.html)
     if not os.path.exists(html_path):
