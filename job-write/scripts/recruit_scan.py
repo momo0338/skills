@@ -396,6 +396,7 @@ def scan_web(sources, verbose=True, verify_ssl=False):
 # ══════════════════════════════════════════════════════════════════
 SCAN_KINDS = {"gov_list", "gov_bm", "self_list", "hotjob"}
 SENTINEL_KINDS = {"self_spa"}
+ADAPTER_KINDS = {"zhaokao"}      # P3：recruit_adapters.scan_zhaokao
 
 
 def load_sources_yaml(path):
@@ -416,14 +417,14 @@ def load_sources_yaml(path):
 
 
 def select_web_sources(yaml_path, line="all", verbose=True):
-    """从 yaml 选出本次要跑的源。返回 (scan_list, sentinel_list, skipped_count)。"""
+    """从 yaml 选出本次要跑的源。返回 (scan_list, sentinel_list, adapter_list, skipped)。"""
     rows = load_sources_yaml(yaml_path)
     if not rows:
         if verbose and yaml_path:
             print(f"  ⚠️  sources.yaml 不存在（{yaml_path}），回退内置 WEB_SOURCES", file=sys.stderr)
         return ([{"name": s["name"], "url": s["url"], "base": s["base"],
-                  "id": s["name"], "kind": "gov_list"} for s in WEB_SOURCES], [], 0)
-    scan, sentinel, skipped = [], [], 0
+                  "id": s["name"], "kind": "gov_list"} for s in WEB_SOURCES], [], [], 0)
+    scan, sentinel, adapter, skipped = [], [], [], 0
     for r in rows:
         if r.get("enabled") != "true":
             continue
@@ -437,9 +438,11 @@ def select_web_sources(yaml_path, line="all", verbose=True):
             scan.append(entry)
         elif kind in SENTINEL_KINDS:
             sentinel.append(entry)
+        elif kind in ADAPTER_KINDS:
+            adapter.append(entry)
         else:
             skipped += 1
-    return scan, sentinel, skipped
+    return scan, sentinel, adapter, skipped
 
 
 def load_health(path):
@@ -587,15 +590,29 @@ def main():
         if args.no_sources:
             web_sources = [{"id": s["name"], "name": s["name"], "url": s["url"],
                             "base": s["base"], "kind": "gov_list"} for s in WEB_SOURCES]
-            sentinels, skipped = [], 0
+            sentinels, adapters, skipped = [], [], 0
         else:
-            web_sources, sentinels, skipped = select_web_sources(
+            web_sources, sentinels, adapters, skipped = select_web_sources(
                 args.sources, line=args.line, verbose=verbose)
         if verbose:
             print(f"🌐 通道 2 · 官网列表页巡检（{len(web_sources)} 个列表源"
-                  f" + {len(sentinels)} 个哨兵，{skipped} 个待适配器跳过）……", file=sys.stderr)
+                  f" + {len(sentinels)} 个哨兵 + {len(adapters)} 个适配器，"
+                  f"{skipped} 个跳过）……", file=sys.stderr)
         web_items, statuses = scan_web(web_sources, verbose, verify_ssl=args.verify_ssl)
         all_items += web_items
+        # P3 适配器：智联招考型直接拉岗位数组
+        for entry in adapters:
+            try:
+                from recruit_adapters import scan_zhaokao
+                a_items, ok = scan_zhaokao(entry, verbose)
+            except Exception as e:
+                a_items, ok = [], False
+                if verbose:
+                    print(f"  ⚠️  [适配器·{entry['name']}] 异常：{str(e)[:60]}", file=sys.stderr)
+            all_items += a_items
+            statuses.append(("zhaokao::" + entry["id"], ok, 200 if ok else 0))
+            if verbose:
+                print(f"  · [适配器·{entry['name']}] 岗位 {len(a_items)} 条", file=sys.stderr)
         # 健康检查：连续失败 ≥3 → 告警（防"源静默失效"）
         for sid, ok, code in statuses:
             update_health(health, "web::" + sid, ok, code)
