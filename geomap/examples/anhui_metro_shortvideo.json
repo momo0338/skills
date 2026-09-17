@@ -1,0 +1,50 @@
+{
+  "theme": "short_video",
+  "region": "安徽省",
+  "header_lines": [
+    "2026年",
+    "安徽省已开通",
+    "轨道交通的城市"
+  ],
+  "bg_style": "linear-gradient(135deg, #362955 0%, #463467 35%, #5e365b 70%, #75414d 100%)",
+  "default_city_color": "#1EA0E6",
+  "highlights": [
+    {
+      "name": "合肥市",
+      "metric": "运营275.5公里",
+      "color": "#E51818",
+      "offset": [
+        15,
+        30
+      ]
+    },
+    {
+      "name": "滁州市",
+      "metric": "运营44.86公里",
+      "color": "#DF21B7",
+      "offset": [
+        30,
+        -10
+      ]
+    },
+    {
+      "name": "芜湖市",
+      "metric": "运营46.2公里",
+      "color": "#DF21B7",
+      "offset": [
+        25,
+        0
+      ]
+    },
+    {
+      "name": "马鞍山市",
+      "metric": "运营27.49公里",
+      "color": "#DF21B7",
+      "offset": [
+        35,
+        -5
+      ]
+    }
+  ],
+  "watermark_text": "@满爸爱生活"
+}

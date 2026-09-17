@@ -1,0 +1,157 @@
+{
+  "theme": "city_night",
+  "region": "江苏省",
+  "title": "2025江苏十三太保GDP",
+  "subtitle": "一张图看懂江苏实力！苏大强是真强！",
+  "kpis": [
+    {
+      "label": "GDP总额",
+      "value": "14.24万亿"
+    },
+    {
+      "label": "常住人口",
+      "value": "8518万"
+    },
+    {
+      "label": "人均GDP",
+      "value": "16.7万元"
+    }
+  ],
+  "tiers": {
+    "tier1": {
+      "color": "#E5161C",
+      "valClass": "yellow"
+    },
+    "tier2": {
+      "color": "#199889",
+      "valClass": "white"
+    },
+    "tier3": {
+      "color": "#922761",
+      "valClass": "white"
+    }
+  },
+  "cities": [
+    {
+      "name": "苏州市",
+      "tier": "tier1",
+      "value": "27695亿",
+      "offset": [
+        85,
+        20
+      ]
+    },
+    {
+      "name": "南京市",
+      "tier": "tier1",
+      "value": "19428亿",
+      "offset": [
+        -70,
+        -20
+      ]
+    },
+    {
+      "name": "无锡市",
+      "tier": "tier1",
+      "value": "16773亿",
+      "offset": [
+        40,
+        -10
+      ]
+    },
+    {
+      "name": "南通市",
+      "tier": "tier1",
+      "value": "12801亿",
+      "offset": [
+        50,
+        0
+      ]
+    },
+    {
+      "name": "常州市",
+      "tier": "tier1",
+      "value": "11158亿",
+      "isHorizontal": true,
+      "offset": [
+        -30,
+        -35
+      ]
+    },
+    {
+      "name": "徐州市",
+      "tier": "tier1",
+      "value": "9957亿",
+      "offset": [
+        -30,
+        5
+      ]
+    },
+    {
+      "name": "扬州市",
+      "tier": "tier2",
+      "value": "8050亿",
+      "offset": [
+        -25,
+        0
+      ]
+    },
+    {
+      "name": "盐城市",
+      "tier": "tier2",
+      "value": "8045亿",
+      "offset": [
+        40,
+        -25
+      ]
+    },
+    {
+      "name": "泰州市",
+      "tier": "tier2",
+      "value": "7100亿",
+      "offset": [
+        15,
+        10
+      ]
+    },
+    {
+      "name": "镇江市",
+      "tier": "tier3",
+      "value": "5736亿",
+      "offset": [
+        20,
+        -15
+      ]
+    },
+    {
+      "name": "淮安市",
+      "tier": "tier3",
+      "value": "5630亿",
+      "offset": [
+        -10,
+        5
+      ]
+    },
+    {
+      "name": "宿迁市",
+      "tier": "tier3",
+      "value": "5026亿",
+      "offset": [
+        -40,
+        0
+      ]
+    },
+    {
+      "name": "连云港市",
+      "tier": "tier3",
+      "value": "4830亿",
+      "tagText": "连云港",
+      "isPlainTag": true,
+      "offset": [
+        20,
+        10
+      ]
+    }
+  ],
+  "watermark_text": "@满爸爱生活"
+}

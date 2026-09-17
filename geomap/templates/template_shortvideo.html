@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>__TITLE__</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      width: 1080px;
+      height: 1920px;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background: __BG_STYLE__;
+      font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      position: relative;
+    }
+
+    /* 顶部明黄黑框告示板 */
+    .title-board {
+      position: absolute;
+      top: 100px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 580px;
+      background: #FFE600;
+      border: 3px solid #000000;
+      border-radius: 10px;
+      padding: 22px 20px 24px;
+      text-align: center;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.45);
+      z-index: 10;
+    }
+    .title-line-1 {
+      font-size: 64px;
+      font-weight: 900;
+      color: #000000;
+      line-height: 1.1;
+      letter-spacing: 2px;
+    }
+    .title-line-2, .title-line-3 {
+      font-size: 56px;
+      font-weight: 900;
+      color: #000000;
+      line-height: 1.15;
+      letter-spacing: 2px;
+      font-family: "Kaiti", "STKaiti", "PingFang SC", sans-serif;
+    }
+
+    /* 地图画板 */
+    .map-container {
+      position: absolute;
+      top: 360px;
+      left: 40px;
+      width: 1000px;
+      height: 1450px;
+      z-index: 5;
+    }
+    #map-svg {
+      width: 100%;
+      height: 100%;
+      overflow: visible;
+      filter: drop-shadow(0 15px 25px rgba(0, 0, 0, 0.65));
+    }
+    path.city-polygon {
+      stroke: #000000;
+      stroke-width: 2.2px;
+      stroke-linejoin: round;
+      stroke-linecap: round;
+    }
+
+    /* 浮动白字黑边标注 */
+    .map-labels {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 15;
+    }
+    .city-label-group {
+      position: absolute;
+      transform: translate(-50%, -50%);
+      text-align: center;
+      white-space: nowrap;
+      pointer-events: none;
+    }
+    .label-metric {
+      font-size: 28px;
+      font-weight: 900;
+      color: #FFFFFF;
+      -webkit-text-stroke: 4px #000000;
+      paint-order: stroke fill;
+      line-height: 1.1;
+      letter-spacing: 0.5px;
+    }
+    .label-name {
+      font-size: 34px;
+      font-weight: 900;
+      color: #FFFFFF;
+      -webkit-text-stroke: 4.5px #000000;
+      paint-order: stroke fill;
+      line-height: 1.15;
+      letter-spacing: 1px;
+    }
+    .label-name.plain {
+      font-size: 30px;
+      -webkit-text-stroke: 4px #000000;
+    }
+
+    /* 水印 */
+    .watermark {
+      position: absolute;
+      top: 1080px;
+      left: 240px;
+      font-size: 30px;
+      font-weight: 900;
+      color: rgba(255, 255, 255, 0.85);
+      -webkit-text-stroke: 3px #000000;
+      paint-order: stroke fill;
+      z-index: 25;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 顶部标题告示板 -->
+  <div class="title-board">
+    <div class="title-line-1">__LINE_1__</div>
+    <div class="title-line-2">__LINE_2__</div>
+    <div class="title-line-3">__LINE_3__</div>
+  </div>
+
+  <!-- 地图容器 -->
+  <div class="map-container">
+    <svg id="map-svg">
+      <g id="map-g"></g>
+    </svg>
+    <div class="map-labels" id="map-labels"></div>
+  </div>
+
+  <div class="watermark" id="wm-box">__WATERMARK__</div>
+
+  <script>
+__D3_CODE__
+  </script>
+  <script>
+    const CONFIG = __CONFIG_JSON__;
+    const GEO_DATA = __GEO_JSON__;
+    const svgG = d3.select("#map-g");
+    const labelsContainer = document.getElementById("map-labels");
+    const width = 1000;
+    const height = 1450;
+
+    if (!CONFIG.watermark_text && !CONFIG.brand_stamp) {
+      const wb = document.getElementById("wm-box");
+      if (wb) wb.style.display = "none";
+    }
+
+    let minLon = Infinity, maxLon = -Infinity, minLat = Infinity, maxLat = -Infinity;
+    function extractCoords(coords) {
+      if (typeof coords[0] === "number") {
+        const [lon, lat] = coords;
+        if (lon < minLon) minLon = lon;
+        if (lon > maxLon) maxLon = lon;
+        if (lat < minLat) minLat = lat;
+        if (lat > maxLat) maxLat = lat;
+      } else {
+        coords.forEach(extractCoords);
+      }
+    }
+    GEO_DATA.features.forEach(f => extractCoords(f.geometry.coordinates));
+
+    const centerLon = (minLon + maxLon) / 2 + 0.05;
+    const centerLat = (minLat + maxLat) / 2 - 0.05;
+
+    function mercY(lat) {
+      const rad = lat * Math.PI / 180;
+      return Math.log(Math.tan(Math.PI / 4 + rad / 2));
+    }
+
+    const minMercY = mercY(minLat);
+    const maxMercY = mercY(maxLat);
+    const dMercY = maxMercY - minMercY;
+    const dLonRad = (maxLon - minLon) * Math.PI / 180;
+
+    const FIT = 0.94;
+    const scaleX = (width * FIT) / dLonRad;
+    const scaleY = (height * FIT) / dMercY;
+    const autoScale = Math.min(scaleX, scaleY);
+    const centerMercY = mercY(centerLat);
+
+    const projection = d3.geoTransform({
+      point: function(lon, lat) {
+        const x = (lon - centerLon) * (Math.PI / 180) * autoScale + width / 2;
+        const y = height / 2 - (mercY(lat) - centerMercY) * autoScale;
+        this.stream.point(x, y);
+      }
+    });
+
+    const pathGenerator = d3.geoPath().projection(projection);
+
+    // 高亮城市映射
+    const highlightMap = {};
+    (CONFIG.highlights || []).forEach(h => {
+      highlightMap[h.name] = h;
+    });
+
+    const defaultColor = CONFIG.default_city_color || "#1EA0E6";
+
+    GEO_DATA.features.forEach(feature => {
+      const name = feature.properties.name;
+      const h = highlightMap[name];
+      const fillColor = h ? (h.color.startsWith("#") ? h.color : (h.color === "red" ? "#E51818" : "#DF21B7")) : defaultColor;
+
+      svgG.append("path")
+        .datum(feature)
+        .attr("class", "city-polygon")
+        .attr("d", pathGenerator)
+        .attr("fill", fillColor);
+
+      const centroid = pathGenerator.centroid(feature);
+      if (centroid && !isNaN(centroid[0])) {
+        let x = centroid[0];
+        let y = centroid[1];
+
+        const labelDiv = document.createElement("div");
+        labelDiv.className = "city-label-group";
+
+        if (h) {
+          if (h.offset) {
+            x += h.offset[0];
+            y += h.offset[1];
+          }
+          labelDiv.innerHTML = '<div class="label-metric">' + (h.metric || "") + '</div>' +
+                               '<div class="label-name">' + name + '</div>';
+        } else {
+          labelDiv.innerHTML = '<div class="label-name plain">' + name + '</div>';
+        }
+
+        labelDiv.style.left = x + "px";
+        labelDiv.style.top = y + "px";
+        labelsContainer.appendChild(labelDiv);
+      }
+    });
+
+    // 标记完成
+    const markReady = () => { window.__RENDER_READY__ = true; };
+    if (document.fonts && document.fonts.ready) {
+      document.fonts.ready.then(() => requestAnimationFrame(() => requestAnimationFrame(markReady)));
+    } else {
+      requestAnimationFrame(() => requestAnimationFrame(markReady));
+    }
+  </script>
+</body>
+</html>
+

@@ -1,0 +1,148 @@
+{
+  "theme": "national",
+  "region": "全国",
+  "title": "山姆会员商店分布图",
+  "subtitle": "截止2026年9月10日已营业数量",
+  "banner_bg": "#0052D9",
+  "bg_color": "#C6DCFD",
+  "highlight_color": "#0052D9",
+  "brand_stamp": "满爸爱生活",
+  "provinces": [
+    {
+      "name": "广东省",
+      "value": "13家",
+      "offset": [
+        0,
+        5
+      ]
+    },
+    {
+      "name": "江苏省",
+      "value": "11家",
+      "offset": [
+        15,
+        -10
+      ]
+    },
+    {
+      "name": "浙江省",
+      "value": "8家",
+      "offset": [
+        10,
+        15
+      ]
+    },
+    {
+      "name": "上海市",
+      "value": "7家",
+      "offset": [
+        55,
+        -5
+      ]
+    },
+    {
+      "name": "北京市",
+      "value": "6家",
+      "offset": [
+        -20,
+        -5
+      ]
+    },
+    {
+      "name": "湖北省",
+      "value": "4家",
+      "offset": [
+        0,
+        0
+      ]
+    },
+    {
+      "name": "福建省",
+      "value": "4家",
+      "offset": [
+        25,
+        5
+      ]
+    },
+    {
+      "name": "四川省",
+      "value": "3家",
+      "offset": [
+        -15,
+        0
+      ]
+    },
+    {
+      "name": "重庆市",
+      "value": "2家",
+      "offset": [
+        5,
+        -10
+      ]
+    },
+    {
+      "name": "湖南省",
+      "value": "2家",
+      "offset": [
+        0,
+        5
+      ]
+    },
+    {
+      "name": "山东省",
+      "value": "2家",
+      "offset": [
+        5,
+        5
+      ]
+    },
+    {
+      "name": "辽宁省",
+      "value": "2家",
+      "offset": [
+        15,
+        -5
+      ]
+    },
+    {
+      "name": "河北省",
+      "value": "1家",
+      "offset": [
+        -35,
+        15
+      ]
+    },
+    {
+      "name": "天津市",
+      "value": "1家",
+      "offset": [
+        40,
+        10
+      ]
+    },
+    {
+      "name": "安徽省",
+      "value": "1家",
+      "offset": [
+        -10,
+        0
+      ]
+    },
+    {
+      "name": "江西省",
+      "value": "1家",
+      "offset": [
+        0,
+        0
+      ]
+    },
+    {
+      "name": "广西壮族自治区",
+      "value": "1家",
+      "offset": [
+        -5,
+        0
+      ]
+    }
+  ]
+}

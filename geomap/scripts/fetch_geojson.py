@@ -1,5 +1,13 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+"""
+fetch_geojson.py — 获取并缓存中国行政区划 GeoJSON 数据 (阿里 DataV 官方源)
+支持：
+  1. 全国各省级行政区 (全国/中国/100000)
+  2. 各省份下辖地级市 (如 江苏/320000, 安徽/340000)
+  3. 各地级市下辖区县 (如 扬州/321000, 南京/320100, 合肥/340100, 苏州/320500 等)
+"""
+
 import os, sys, argparse, httpx
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'data')
@@ -43,15 +51,81 @@ PROVINCE_CODES = {
     '全国': '100000', '中国': '100000'
 }
 
+# 常见地级市代码映射（覆盖主要地市，其他地市可直接传 6 位数字代码）
+CITY_CODES = {
+    # 江苏
+    '南京': '320100', '南京市': '320100',
+    '无锡': '320200', '无锡市': '320200',
+    '徐州': '320300', '徐州市': '320300',
+    '常州': '320400', '常州市': '320400',
+    '苏州': '320500', '苏州市': '320500',
+    '南通': '320600', '南通市': '320600',
+    '连云港': '320700', '连云港市': '320700',
+    '淮安': '320800', '淮安市': '320800',
+    '盐城': '320900', '盐城市': '320900',
+    '扬州': '321000', '扬州市': '321000',
+    '镇江': '321100', '镇江市': '321100',
+    '泰州': '321200', '泰州市': '321200',
+    '宿迁': '321300', '宿迁市': '321300',
+    # 安徽
+    '合肥': '340100', '合肥市': '340100',
+    '芜湖': '340200', '芜湖市': '340200',
+    '蚌埠': '340300', '蚌埠市': '340300',
+    '淮南': '340400', '淮南市': '340400',
+    '马鞍山': '340500', '马鞍山市': '340500',
+    '淮北': '340600', '淮北市': '340600',
+    '铜陵': '340700', '铜陵市': '340700',
+    '安庆': '340800', '安庆市': '340800',
+    '黄山': '341000', '黄山市': '341000',
+    '滁州': '341100', '滁州市': '341100',
+    '阜阳': '341200', '阜阳市': '341200',
+    '宿州': '341300', '宿州市': '341300',
+    '六安': '341500', '六安市': '341500',
+    '亳州': '341600', '亳州市': '341600',
+    '池州': '341700', '池州市': '341700',
+    '宣城': '341800', '宣城市': '341800',
+    # 浙江与长三角
+    '杭州': '330100', '杭州市': '330100',
+    '宁波': '330200', '宁波市': '330200',
+    '温州': '330300', '温州市': '330300',
+    '嘉兴': '330400', '嘉兴市': '330400',
+    '湖州': '330500', '湖州市': '330500',
+    '绍兴': '330600', '绍兴市': '330600',
+    '金华': '330700', '金华市': '330700',
+    # 广东/山东/河南等
+    '广州': '440100', '广州市': '440100',
+    '深圳': '440300', '深圳市': '440300',
+    '济南': '370100', '济南市': '370100',
+    '青岛': '370200', '青岛市': '370200',
+    '郑州': '410100', '郑州市': '410100',
+    '武汉': '420100', '武汉市': '420100',
+    '长沙': '430100', '长沙市': '430100',
+    '成都': '510100', '成都市': '510100',
+    '西安': '610100', '西安市': '610100'
+}
+
 def resolve_adcode(name_or_code: str) -> str:
     name_or_code = name_or_code.strip()
-    if name_or_code.isdigit(): return name_or_code
-    return PROVINCE_CODES.get(name_or_code, '')
+    if name_or_code.isdigit():
+        return name_or_code
+    if name_or_code in PROVINCE_CODES:
+        return PROVINCE_CODES[name_or_code]
+    if name_or_code in CITY_CODES:
+        return CITY_CODES[name_or_code]
+    # 模糊匹配
+    clean_name = name_or_code.replace('省', '').replace('市', '').replace('自治区', '').replace('特别行政区', '')
+    for k, v in PROVINCE_CODES.items():
+        if clean_name == k.replace('省', '').replace('市', '').replace('自治区', ''):
+            return v
+    for k, v in CITY_CODES.items():
+        if clean_name == k.replace('市', ''):
+            return v
+    return ''
 
 def get_geojson(name_or_code: str, force: bool = False) -> str:
     adcode = resolve_adcode(name_or_code)
     if not adcode:
-        raise ValueError(f'未识别的省份名称或行政区划代码：{name_or_code}')
+        raise ValueError(f'未识别的行政区划名称或代码：{name_or_code}。支持省名、地级市名或 6 位标准行政代码。')
     filename = f'{adcode}_full.json'
     cache_path = os.path.join(DATA_DIR, filename)
     if os.path.exists(cache_path) and not force:
@@ -65,13 +139,14 @@ def get_geojson(name_or_code: str, force: bool = False) -> str:
     return cache_path
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='获取并缓存中国省份 GeoJSON 数据')
-    parser.add_argument('province', help='省份名称或代码')
+    parser = argparse.ArgumentParser(description='获取并缓存中国行政区划 GeoJSON 数据')
+    parser.add_argument('region', help='省份、地级市名称或6位行政区划代码')
     parser.add_argument('--force', action='store_true', help='强制刷新')
     args = parser.parse_args()
     try:
-        p = get_geojson(args.province, force=args.force)
+        p = get_geojson(args.region, force=args.force)
         print(f'OK: {p}')
     except Exception as e:
         print(f'Error: {e}', file=sys.stderr)
         sys.exit(1)
+

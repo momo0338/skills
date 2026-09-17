@@ -1,0 +1,69 @@
+{
+  "theme": "district",
+  "region": "扬州市",
+  "title": "2026年上半年扬州市\\n各区县GDP",
+  "subtitle": "单位:亿元",
+  "source_note": "注:采用初对初、名义增速和行政区划口径。",
+  "districts": [
+    {
+      "name": "邗江区",
+      "value": "1160.01",
+      "rate": "4.36%",
+      "color": "#7B0D18",
+      "offset": [
+        0,
+        0
+      ]
+    },
+    {
+      "name": "江都区",
+      "value": "732.52",
+      "rate": "4.08%",
+      "color": "#E0111E",
+      "offset": [
+        0,
+        0
+      ]
+    },
+    {
+      "name": "广陵区",
+      "value": "542.84",
+      "rate": "1.55%",
+      "color": "#D110D8",
+      "offset": [
+        0,
+        25
+      ]
+    },
+    {
+      "name": "高邮市",
+      "value": "522.68",
+      "rate": "5.06%",
+      "color": "#A87FE8",
+      "offset": [
+        0,
+        0
+      ]
+    },
+    {
+      "name": "仪征市",
+      "value": "508.37",
+      "rate": "6.47%",
+      "color": "#F086B6",
+      "offset": [
+        -15,
+        0
+      ]
+    },
+    {
+      "name": "宝应县",
+      "value": "457.01",
+      "rate": "0.65%",
+      "color": "#F6B3DF",
+      "offset": [
+        0,
+        0
+      ]
+    }
+  ]
+}

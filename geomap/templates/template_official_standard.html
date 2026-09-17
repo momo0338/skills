@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>__TITLE__</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      width: 1440px;
+      height: 1080px;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background: #FFFFFF;
+      font-family: "PingFang SC", "Songti SC", "SimSun", "STSong", serif;
+      position: relative;
+    }
+
+    /* 官方双层外图廓 */
+    .outer-border {
+      position: absolute;
+      top: 15px;
+      left: 15px;
+      right: 15px;
+      bottom: 25px;
+      border: 3.5px solid #1A1A1A;
+      pointer-events: none;
+      z-index: 100;
+    }
+    .inner-border {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      right: 20px;
+      bottom: 30px;
+      border: 1px solid #1A1A1A;
+      pointer-events: none;
+      z-index: 100;
+    }
+
+    /* 右上角竖排标准图名 */
+    .map-title-vertical {
+      position: absolute;
+      top: 50px;
+      right: 70px;
+      font-family: "PingFang SC", "Microsoft YaHei", "SimHei", sans-serif;
+      font-size: 58px;
+      font-weight: 900;
+      color: #1A1A1A;
+      writing-mode: vertical-rl;
+      letter-spacing: 12px;
+      z-index: 50;
+    }
+
+    /* 官方图例方框 (左下角) */
+    .legend-box {
+      position: absolute;
+      bottom: 60px;
+      left: 50px;
+      width: 320px;
+      background: #FFFFFF;
+      border: 1.5px solid #1A1A1A;
+      padding: 16px 20px 14px;
+      z-index: 50;
+      font-family: "Songti SC", "SimSun", serif;
+    }
+    .legend-title {
+      font-size: 24px;
+      font-weight: 900;
+      text-align: center;
+      letter-spacing: 16px;
+      margin-bottom: 12px;
+      color: #1A1A1A;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      margin-bottom: 10px;
+      font-size: 18px;
+      font-weight: 700;
+      color: #222222;
+    }
+    .legend-symbol {
+      width: 70px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-right: 12px;
+    }
+    .symbol-circle-double {
+      width: 16px;
+      height: 16px;
+      border: 1.8px solid #1A1A1A;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .symbol-circle-double::after {
+      content: "";
+      width: 6px;
+      height: 6px;
+      background: #1A1A1A;
+      border-radius: 50%;
+    }
+    .symbol-line-prov {
+      width: 60px;
+      height: 4px;
+      background: #9F9B9A;
+      border-top: 1.5px solid #1A1A1A;
+    }
+    .symbol-line-city {
+      width: 60px;
+      height: 1px;
+      background: #555555;
+    }
+    .scale-text {
+      text-align: center;
+      font-size: 16px;
+      font-weight: 700;
+      margin-top: 10px;
+      color: #333333;
+    }
+    .disclaimer-text {
+      font-size: 14px;
+      color: #555555;
+      text-align: center;
+      margin-top: 6px;
+    }
+
+    /* 底部审图号与监制单位 */
+    .map-footer {
+      position: absolute;
+      bottom: 2px;
+      left: 25px;
+      right: 25px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 15px;
+      font-weight: 700;
+      color: #333333;
+      font-family: "Songti SC", "SimSun", serif;
+      z-index: 105;
+    }
+
+    /* 中部地图容器 */
+    .map-container {
+      position: absolute;
+      top: 30px;
+      left: 120px;
+      width: 1100px;
+      height: 980px;
+      z-index: 10;
+    }
+    #map-svg {
+      width: 100%;
+      height: 100%;
+      overflow: visible;
+    }
+
+    /* 省界外侧铅灰立体晕渲 (Halo) */
+    path.prov-halo {
+      stroke: #9F9B9A;
+      stroke-width: 14px;
+      stroke-linejoin: round;
+      stroke-linecap: round;
+      fill: none;
+      opacity: 0.7;
+    }
+    /* 地市多边形与内部市界线 */
+    path.city-polygon {
+      stroke: #555555;
+      stroke-width: 1.2px;
+      stroke-linejoin: round;
+      stroke-linecap: round;
+    }
+
+    /* 城市标注文字与符号 */
+    .map-labels {
+      position: absolute;
+      top: 0; left: 0; width: 100%; height: 100%;
+      pointer-events: none;
+      z-index: 20;
+    }
+    .city-label-node {
+      position: absolute;
+      transform: translate(-50%, -50%);
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      white-space: nowrap;
+      pointer-events: none;
+    }
+    .city-dot {
+      width: 14px;
+      height: 14px;
+      border: 1.6px solid #1A1A1A;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #FFFFFF;
+    }
+    .city-dot::after {
+      content: "";
+      width: 5px;
+      height: 5px;
+      background: #1A1A1A;
+      border-radius: 50%;
+    }
+    .city-name {
+      font-family: "PingFang SC", "Songti SC", "SimSun", serif;
+      font-size: 22px;
+      font-weight: 800;
+      color: #1A1A1A;
+      letter-spacing: 1px;
+    }
+    .metric-bubble {
+      font-size: 16px;
+      font-weight: 800;
+      color: #0056CC;
+      background: rgba(255, 255, 255, 0.85);
+      border: 1px solid #0056CC;
+      border-radius: 4px;
+      padding: 1px 6px;
+      margin-left: 2px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 双层外图廓 -->
+  <div class="outer-border"></div>
+  <div class="inner-border"></div>
+
+  <!-- 官方图名 -->
+  <div class="map-title-vertical">__MAIN_TITLE__</div>
+
+  <!-- 左下角官方图例与比例尺 -->
+  <div class="legend-box">
+    <div class="legend-title">图 例</div>
+    <div class="legend-item">
+      <div class="legend-symbol"><div class="symbol-circle-double"></div></div>
+      <div>设区市行政中心</div>
+    </div>
+    <div class="legend-item">
+      <div class="legend-symbol"><div class="symbol-line-prov"></div></div>
+      <div>省级界</div>
+    </div>
+    <div class="legend-item">
+      <div class="legend-symbol"><div class="symbol-line-city"></div></div>
+      <div>设区市界</div>
+    </div>
+    <div class="scale-text">1 : 6 000 000</div>
+    <div class="disclaimer-text">图上界线不作为实地划界依据</div>
+  </div>
+
+  <!-- 底部审图号与监制单位 -->
+  <div class="map-footer">
+    <div>审图号：__AUDIT_NO__</div>
+    <div>__SUPERVISOR__</div>
+  </div>
+
+  <!-- 地图画板 -->
+  <div class="map-container">
+    <svg id="map-svg">
+      <g id="map-halo-g"></g>
+      <g id="map-poly-g"></g>
+    </svg>
+    <div class="map-labels" id="map-labels"></div>
+  </div>
+
+  <script>
+__D3_CODE__
+  </script>
+  <script>
+    const CONFIG = __CONFIG_JSON__;
+    const GEO_DATA = __GEO_JSON__;
+    const haloG = d3.select("#map-halo-g");
+    const polyG = d3.select("#map-poly-g");
+    const labelsContainer = document.getElementById("map-labels");
+    const width = 1100;
+    const height = 980;
+
+    let minLon = Infinity, maxLon = -Infinity, minLat = Infinity, maxLat = -Infinity;
+    function extractCoords(coords) {
+      if (typeof coords[0] === "number") {
+        const [lon, lat] = coords;
+        if (lon < minLon) minLon = lon;
+        if (lon > maxLon) maxLon = lon;
+        if (lat < minLat) minLat = lat;
+        if (lat > maxLat) maxLat = lat;
+      } else {
+        coords.forEach(extractCoords);
+      }
+    }
+    GEO_DATA.features.forEach(f => extractCoords(f.geometry.coordinates));
+
+    const centerLon = (minLon + maxLon) / 2;
+    const centerLat = (minLat + maxLat) / 2;
+
+    function mercY(lat) {
+      const rad = lat * Math.PI / 180;
+      return Math.log(Math.tan(Math.PI / 4 + rad / 2));
+    }
+
+    const minMercY = mercY(minLat);
+    const maxMercY = mercY(maxLat);
+    const dMercY = maxMercY - minMercY;
+    const dLonRad = (maxLon - minLon) * Math.PI / 180;
+
+    const FIT = 0.92;
+    const scaleX = (width * FIT) / dLonRad;
+    const scaleY = (height * FIT) / dMercY;
+    const autoScale = Math.min(scaleX, scaleY);
+    const centerMercY = mercY(centerLat);
+
+    const projection = d3.geoTransform({
+      point: function(lon, lat) {
+        const x = (lon - centerLon) * (Math.PI / 180) * autoScale + width / 2;
+        const y = height / 2 - (mercY(lat) - centerMercY) * autoScale;
+        this.stream.point(x, y);
+      }
+    });
+    const pathGenerator = d3.geoPath().projection(projection);
+
+    // 官方标准四色/五色温润莫兰迪低饱和度色谱
+    const OFFICIAL_PALETTE = [
+      "#FFFDDC", // 淡奶黄
+      "#FDECD2", // 淡粉杏
+      "#E2F0E3", // 淡薄荷青
+      "#FCE7F0", // 淡丁香粉
+      "#E2F0FA"  // 淡天青蓝
+    ];
+
+    // 特别指定的城市颜色或由索引轮换
+    const cityData = {};
+    (CONFIG.cities || CONFIG.highlights || []).forEach(c => {
+      cityData[c.name] = c;
+    });
+
+    // 绘制外轮廓铅灰晕圈
+    GEO_DATA.features.forEach(feature => {
+      haloG.append("path")
+        .datum(feature)
+        .attr("class", "prov-halo")
+        .attr("d", pathGenerator);
+    });
+
+    // 绘制地块与注记
+    GEO_DATA.features.forEach((feature, idx) => {
+      const name = feature.properties.name || "";
+      const d = cityData[name] || {};
+      const fillColor = d.color || OFFICIAL_PALETTE[idx % OFFICIAL_PALETTE.length];
+
+      polyG.append("path")
+        .datum(feature)
+        .attr("class", "city-polygon")
+        .attr("d", pathGenerator)
+        .attr("fill", fillColor);
+
+      const centroid = pathGenerator.centroid(feature);
+      if (centroid && !isNaN(centroid[0])) {
+        const off = d.offset || [0, 0];
+        const x = centroid[0] + off[0];
+        const y = centroid[1] + off[1];
+
+        const node = document.createElement("div");
+        node.className = "city-label-node";
+        
+        let metricTag = "";
+        if (d.value || d.metric) {
+          metricTag = '<span class="metric-bubble">' + (d.value || d.metric) + '</span>';
+        }
+
+        node.innerHTML = '<div class="city-dot"></div>' +
+                         '<span class="city-name">' + name + '</span>' +
+                         metricTag;
+
+        node.style.left = x + "px";
+        node.style.top = y + "px";
+        labelsContainer.appendChild(node);
+      }
+    });
+
+    const markReady = () => { window.__RENDER_READY__ = true; };
+    if (document.fonts && document.fonts.ready) {
+      document.fonts.ready.then(() => requestAnimationFrame(() => requestAnimationFrame(markReady)));
+    } else {
+      requestAnimationFrame(() => requestAnimationFrame(markReady));
+    }
+  </script>
+</body>
+</html>
+

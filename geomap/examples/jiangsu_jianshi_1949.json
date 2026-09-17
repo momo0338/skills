@@ -1,0 +1,130 @@
+{
+  "theme": "short_video",
+  "region": "江苏省",
+  "header_lines": [
+    "江苏省各市",
+    "建市时间全景",
+    "1949·1962·1983·1996"
+  ],
+  "bg_style": "linear-gradient(180deg, #F8F6F0 0%, #EDE9E0 100%)",
+  "highlights": [
+    {
+      "name": "南京市",
+      "metric": "1949建市",
+      "color": "#D32F2F",
+      "offset": [
+        -45,
+        -10
+      ]
+    },
+    {
+      "name": "苏州市",
+      "metric": "1949建市",
+      "color": "#2E7D32",
+      "offset": [
+        75,
+        15
+      ]
+    },
+    {
+      "name": "无锡市",
+      "metric": "1949建市",
+      "color": "#8D4E19",
+      "offset": [
+        20,
+        -35
+      ]
+    },
+    {
+      "name": "常州市",
+      "metric": "1949建市",
+      "color": "#3E2768",
+      "offset": [
+        -45,
+        -30
+      ]
+    },
+    {
+      "name": "南通市",
+      "metric": "1949建市",
+      "color": "#0D47A1",
+      "offset": [
+        45,
+        0
+      ]
+    },
+    {
+      "name": "徐州市",
+      "metric": "1949建市",
+      "color": "#455A64",
+      "offset": [
+        -25,
+        5
+      ]
+    },
+    {
+      "name": "连云港市",
+      "metric": "1962建市",
+      "color": "#673AB7",
+      "offset": [
+        20,
+        10
+      ]
+    },
+    {
+      "name": "扬州市",
+      "metric": "1983设市",
+      "color": "#0288D1",
+      "offset": [
+        -25,
+        0
+      ]
+    },
+    {
+      "name": "盐城市",
+      "metric": "1983设市",
+      "color": "#F57C00",
+      "offset": [
+        35,
+        -20
+      ]
+    },
+    {
+      "name": "淮安市",
+      "metric": "1983设市",
+      "color": "#689F38",
+      "offset": [
+        -10,
+        5
+      ]
+    },
+    {
+      "name": "镇江市",
+      "metric": "1983设市",
+      "color": "#E6B800",
+      "offset": [
+        20,
+        -10
+      ]
+    },
+    {
+      "name": "泰州市",
+      "metric": "1996升格",
+      "color": "#00897B",
+      "offset": [
+        15,
+        10
+      ]
+    },
+    {
+      "name": "宿迁市",
+      "metric": "1996升格",
+      "color": "#1B5E20",
+      "offset": [
+        -35,
+        0
+      ]
+    }
+  ],
+  "watermark_text": "@满爸爱生活"
+}
