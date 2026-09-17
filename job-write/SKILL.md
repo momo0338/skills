@@ -378,6 +378,7 @@ $PY /Users/zhugx/src/skills/mp-publish/scripts/wx_pipeline.py \
 | 窄屏右侧被裁假象 | headless 最小窗宽≈500px | `body{width:390px;overflow:hidden}` + `--window-size=500` |
 | ima 取目录报 code:51 | `search_knowledge_base` limit>20 | limit 必须 ≤20，靠 next_cursor 翻页 |
 | 长尾差 | 内容做成图片 / 标题无校招 | 全程文字 HTML + 标题带校招 + FAQ 问句 + 合集 |
+| ⚠️ **手机端三宫格（截止/性质/人数）换行成 2+1 两行** | 用 `flex + flex-wrap + min-width:30%`，而「9月22日 16:00」这类长值在 390px 下撑破 1/3 宽度 → 第三格被挤到下一行（桌面 677px 看不出来） | 三宫格改 **定宽表格** `table-layout:fixed; border-collapse:collapse` + 三等分 `<td>`（`padding:0 4px` 内嵌 `<section>`），**永不换行**；长内容拆「值 + 小字副行」（如「编内」+「全额拨款」）而不是塞一行 |
 
 ---
 
