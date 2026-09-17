@@ -25,6 +25,15 @@
     python3 recruit_scan.py --mode web               # 只巡检官网
     python3 recruit_scan.py --state s.json --out r.md
     python3 recruit_scan.py --all                    # 忽略状态，输出全部命中（首次建库）
+    python3 recruit_scan.py --mode web --line B      # P2：只扫 B 线（sources.yaml）
+    python3 recruit_scan.py --no-sources             # P2：强制用内置 WEB_SOURCES
+
+P2（2026-09-17）配置驱动与健康检查：
+  - 官网源默认读 sources.yaml（probe_sources.py 生成），按 enabled/kind 分流：
+    gov_list|gov_bm|self_list|hotjob → 列表扫描；self_spa → 哨兵（hash 变更告警）；
+    beisen/zhaopin/moka/job51/chinahr → P3 适配器，暂跳过。
+  - 健康状态写 <state目录>/sources-health.json（last_ok_at / consecutive_fail / last_code）；
+    连续失败 ≥3 在报告顶部列「源告警」，防"源静默失效"。
 
 实测结论（2026-09-16）：
   - `opencli` 必须用**全路径** `/usr/local/bin/opencli`（沙箱 PATH 里没有）；
@@ -78,6 +87,15 @@ WX_QUERIES = [
 ]
 
 # ── 官网源（通道 2）──────────────────────────────────────────────────
+# P2 起支持外部 sources.yaml（probe_sources.py 生成，配置驱动）：
+#   --sources 路径 缺省取 DEFAULT_SOURCES_YAML；文件缺失时回退到内置 WEB_SOURCES。
+# yaml 字段：id/name/group/line/tier/kind/url/enabled/probe
+# kind 分流：gov_list|gov_bm|self_list|hotjob → 正常列表扫描；
+#            self_spa → 哨兵（title-hash 变更告警）；
+#            beisen|zhaopin_*|moka|job51|chinahr → P3 适配器，暂不扫。
+DEFAULT_SOURCES_YAML = ("/Users/zhugx/codeup/obsidian/03-工作记录/"
+                        "码上职业/工具/sources.yaml")
+
 # url  列表页地址；base 用于把相对链接补成绝对
 # 选源原则：优先"招聘专栏列表页"，不要放网站首页（首页 90% 是无关政务新闻）
 WEB_SOURCES = [
@@ -122,30 +140,43 @@ WEB_SOURCES = [
 # ══════════════════════════════════════════════════════════════════
 #  工具
 # ══════════════════════════════════════════════════════════════════
+def _curl_fetch(url: str, timeout: int = 20) -> str:
+    """urllib 被 TLS 指纹/legacy renegotiation 拒时，用 /usr/bin/curl（LibreSSL）兜底。"""
+    curl = "/usr/bin/curl" if os.path.exists("/usr/bin/curl") else "curl"
+    p = subprocess.run(
+        [curl, "-sk", "-L", "--compressed", "-A", UA, "-m", str(timeout),
+         "-o", "-", url],
+        capture_output=True, timeout=timeout + 5)
+    return p.stdout.decode("utf-8", "ignore")
+
+
 def fetch(url: str, timeout: int = 20, verify_ssl: bool = False) -> str:
-    """取回网页文本，自动处理 gzip 与 charset。"""
-    req = urllib.request.Request(url, headers={
-        "User-Agent": UA,
-        "Accept": "text/html,application/xhtml+xml,*/*",
-        "Accept-Encoding": "gzip, deflate",
-    })
-    ctx = None if verify_ssl else SSL_CTX
-    with urllib.request.urlopen(req, timeout=timeout, context=ctx) as resp:
-        raw = resp.read()
-        if "gzip" in resp.headers.get("Content-Encoding", ""):
-            import gzip
-            try:
-                raw = gzip.decompress(raw)
-            except Exception:
-                pass
-        ctype = resp.headers.get("Content-Type", "")
-        m = re.search(r"charset=([\w\-]+)", ctype, re.I)
-        for enc in ([m.group(1)] if m else []) + ["utf-8", "gbk", "gb18030"]:
-            try:
-                return raw.decode(enc)
-            except Exception:
-                continue
-        return raw.decode("utf-8", "ignore")
+    """取回网页文本，自动处理 gzip 与 charset；urllib 失败自动 curl 兜底。"""
+    try:
+        req = urllib.request.Request(url, headers={
+            "User-Agent": UA,
+            "Accept": "text/html,application/xhtml+xml,*/*",
+            "Accept-Encoding": "gzip, deflate",
+        })
+        ctx = None if verify_ssl else SSL_CTX
+        with urllib.request.urlopen(req, timeout=timeout, context=ctx) as resp:
+            raw = resp.read()
+            if "gzip" in resp.headers.get("Content-Encoding", ""):
+                import gzip
+                try:
+                    raw = gzip.decompress(raw)
+                except Exception:
+                    pass
+            ctype = resp.headers.get("Content-Type", "")
+            m = re.search(r"charset=([\w\-]+)", ctype, re.I)
+            for enc in ([m.group(1)] if m else []) + ["utf-8", "gbk", "gb18030"]:
+                try:
+                    return raw.decode(enc)
+                except Exception:
+                    continue
+            return raw.decode("utf-8", "ignore")
+    except Exception:
+        return _curl_fetch(url, timeout)
 
 
 def clean_title(s: str) -> str:
@@ -316,13 +347,16 @@ def scan_wx_opencli(queries, verbose=True):
 #  通道 2：官网列表页
 # ══════════════════════════════════════════════════════════════════
 def scan_web(sources, verbose=True, verify_ssl=False):
-    items = []
+    items, statuses = [], []
     for s in sources:
+        ok = True
         try:
             html = fetch(s["url"], verify_ssl=verify_ssl)
         except Exception as e:
+            ok = False
             if verbose:
                 print(f"  ⚠️  [{s['name']}] 抓取失败：{str(e)[:70]}", file=sys.stderr)
+            statuses.append((s.get("id", s["name"]), False, 0))
             continue
         for m in re.finditer(
                 r'<a\s[^>]*href=["\']([^"\']+)["\'][^>]*>(.*?)</a>', html, re.S | re.I):
@@ -346,6 +380,7 @@ def scan_web(sources, verbose=True, verify_ssl=False):
                 "url": abspath(href, s["base"]),
                 "note": "",
             })
+        statuses.append((s.get("id", s["name"]), True, 200))
     # 同一页里同名条目去重
     uniq, seen = [], set()
     for it in items:
@@ -353,7 +388,111 @@ def scan_web(sources, verbose=True, verify_ssl=False):
             continue
         seen.add(it["title"])
         uniq.append(it)
-    return uniq
+    return uniq, statuses
+
+
+# ══════════════════════════════════════════════════════════════════
+#  sources.yaml 解析 + 源健康检查（P2）
+# ══════════════════════════════════════════════════════════════════
+SCAN_KINDS = {"gov_list", "gov_bm", "self_list", "hotjob"}
+SENTINEL_KINDS = {"self_spa"}
+
+
+def load_sources_yaml(path):
+    """解析 probe_sources.py 生成的扁平 YAML。返回 list[dict]；文件缺失返回 []。"""
+    if not path or not os.path.exists(path):
+        return []
+    rows, cur = [], None
+    with open(path, encoding="utf-8") as f:
+        for ln in f:
+            if ln.startswith("- id:"):
+                cur = {"id": ln.split(":", 1)[1].strip()}
+                rows.append(cur)
+            elif cur is not None and ln.startswith("  "):
+                m = re.match(r"  (\w+): (.*)\n?$", ln)
+                if m and m.group(1) != "probe":
+                    cur[m.group(1)] = m.group(2).strip().strip('"')
+    return rows
+
+
+def select_web_sources(yaml_path, line="all", verbose=True):
+    """从 yaml 选出本次要跑的源。返回 (scan_list, sentinel_list, skipped_count)。"""
+    rows = load_sources_yaml(yaml_path)
+    if not rows:
+        if verbose and yaml_path:
+            print(f"  ⚠️  sources.yaml 不存在（{yaml_path}），回退内置 WEB_SOURCES", file=sys.stderr)
+        return ([{"name": s["name"], "url": s["url"], "base": s["base"],
+                  "id": s["name"], "kind": "gov_list"} for s in WEB_SOURCES], [], 0)
+    scan, sentinel, skipped = [], [], 0
+    for r in rows:
+        if r.get("enabled") != "true":
+            continue
+        if line != "all" and r.get("line") != line:
+            continue
+        kind = r.get("kind", "gov_list")
+        base = re.match(r"(https?://[^/]+)", r["url"]).group(1) + "/"
+        entry = {"id": r["id"], "name": f"{r['name']}", "url": r["url"],
+                 "base": base, "kind": kind, "group": r.get("group", "")}
+        if kind in SCAN_KINDS:
+            scan.append(entry)
+        elif kind in SENTINEL_KINDS:
+            sentinel.append(entry)
+        else:
+            skipped += 1
+    return scan, sentinel, skipped
+
+
+def load_health(path):
+    if path and os.path.exists(path):
+        try:
+            with open(path, encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {}
+
+
+def save_health(path, health):
+    if not path:
+        return
+    os.makedirs(os.path.dirname(os.path.abspath(path)) or ".", exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(health, f, ensure_ascii=False, indent=1)
+
+
+def update_health(health, sid, ok, code=0):
+    h = health.setdefault(sid, {"consecutive_fail": 0, "last_ok_at": "", "last_code": 0})
+    if ok:
+        h.update({"consecutive_fail": 0, "last_ok_at": time.strftime("%Y-%m-%d %H:%M"),
+                  "last_code": code})
+    else:
+        h["consecutive_fail"] = h.get("consecutive_fail", 0) + 1
+        h["last_code"] = code
+        h["last_fail_at"] = time.strftime("%Y-%m-%d %H:%M")
+    return h
+
+
+def scan_sentinels(sentinels, health, verbose=True, verify_ssl=False):
+    """哨兵：SPA 源只比 <title>+正文长度的 hash，变了就报「需人工查看」。"""
+    alerts = []
+    for s in sentinels:
+        try:
+            html = fetch(s["url"], verify_ssl=verify_ssl)
+            title = re.search(r"<title[^>]*>(.*?)</title>", html, re.S | re.I)
+            sig = (unescape(title.group(1)).strip() if title else "") + "|" + str(len(html))
+            ok = True
+        except Exception as e:
+            sig = ""
+            ok = False
+            if verbose:
+                print(f"  ⚠️  [哨兵·{s['name']}] 抓取失败：{str(e)[:60]}", file=sys.stderr)
+        h = update_health(health, "sentinel::" + s["id"], ok)
+        prev = h.get("last_sig", "")
+        if ok and prev and prev != sig:
+            alerts.append(f"🔔 哨兵·{s['name']} 页面有更新（hash 变化），需人工查看：{s['url']}")
+        if ok:
+            h["last_sig"] = sig
+    return alerts
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -379,7 +518,7 @@ def save_state(path, state):
         json.dump(state, f, ensure_ascii=False, indent=1)
 
 
-def render_md(new_items, all_items, scanned_at, mode_desc):
+def render_md(new_items, all_items, scanned_at, mode_desc, alerts=None):
     lines = [
         f"# 招聘信息巡检 · 新增 {len(new_items)} 条",
         "",
@@ -387,6 +526,10 @@ def render_md(new_items, all_items, scanned_at, mode_desc):
         "> 本文件由 `job-write/scripts/recruit_scan.py` 自动生成；标题去重基于状态快照，只列出**首次出现**的条目。",
         "",
     ]
+    if alerts:
+        lines += ["## 🚨 源告警（先处理，再看下面的新增）", ""]
+        lines += [f"- {a}" for a in alerts]
+        lines += [""]
     if not new_items:
         lines += ["**本次未发现新增招聘信息。**", ""]
         return "\n".join(lines)
@@ -414,6 +557,14 @@ def main():
                     help="临时追加检索关键词（可多次；默认组见 WX_QUERIES）")
     ap.add_argument("--state", default="", help="状态文件（记录已见标题）")
     ap.add_argument("--out", default="", help="报告输出 Markdown 路径")
+    ap.add_argument("--sources", default=DEFAULT_SOURCES_YAML,
+                    help="sources.yaml 路径（P2 配置驱动；文件缺失回退内置 WEB_SOURCES）")
+    ap.add_argument("--line", choices=["A", "B", "all"], default="all",
+                    help="只扫某条线（A=校招 B=事业编，默认全扫）")
+    ap.add_argument("--health", default="",
+                    help="源健康状态文件（缺省取 state 同目录 sources-health.json）")
+    ap.add_argument("--no-sources", action="store_true",
+                    help="强制使用内置 WEB_SOURCES（忽略 sources.yaml）")
     ap.add_argument("--all", action="store_true", help="忽略状态，输出全部命中")
     ap.add_argument("--verify-ssl", action="store_true", help="严格校验 HTTPS 证书（默认放宽）")
     ap.add_argument("-q", "--quiet", action="store_true")
@@ -422,15 +573,40 @@ def main():
     verbose = not args.quiet
     scanned_at = time.strftime("%Y-%m-%d %H:%M")
     all_items = []
+    alerts = []
+    health_path = args.health or (
+        os.path.join(os.path.dirname(os.path.abspath(args.state)), "sources-health.json")
+        if args.state else "")
+    health = load_health(health_path)
 
     if args.mode in ("wx", "both"):
         if verbose:
             print(f"📡 通道 1 · 公众号检索（{args.wx_engine}）……", file=sys.stderr)
         all_items += scan_wx(WX_QUERIES + list(args.wx_query), engine=args.wx_engine, verbose=verbose, days=args.wx_days)
     if args.mode in ("web", "both"):
+        if args.no_sources:
+            web_sources = [{"id": s["name"], "name": s["name"], "url": s["url"],
+                            "base": s["base"], "kind": "gov_list"} for s in WEB_SOURCES]
+            sentinels, skipped = [], 0
+        else:
+            web_sources, sentinels, skipped = select_web_sources(
+                args.sources, line=args.line, verbose=verbose)
         if verbose:
-            print("🌐 通道 2 · 官网列表页巡检……", file=sys.stderr)
-        all_items += scan_web(WEB_SOURCES, verbose, verify_ssl=args.verify_ssl)
+            print(f"🌐 通道 2 · 官网列表页巡检（{len(web_sources)} 个列表源"
+                  f" + {len(sentinels)} 个哨兵，{skipped} 个待适配器跳过）……", file=sys.stderr)
+        web_items, statuses = scan_web(web_sources, verbose, verify_ssl=args.verify_ssl)
+        all_items += web_items
+        # 健康检查：连续失败 ≥3 → 告警（防"源静默失效"）
+        for sid, ok, code in statuses:
+            update_health(health, "web::" + sid, ok, code)
+        for sid, h in health.items():
+            if h.get("consecutive_fail", 0) >= 3:
+                alerts.append(f"🚨 源连续失败 {h['consecutive_fail']} 次：{sid}"
+                              f"（last_code={h.get('last_code')}）→ 请探活复核")
+        # 哨兵：SPA 源 hash 变更告警
+        if sentinels:
+            alerts += scan_sentinels(sentinels, health, verbose, verify_ssl=args.verify_ssl)
+        save_health(health_path, health)
 
     # 全局去重
     uniq, seen = [], set()
@@ -450,7 +626,7 @@ def main():
     save_state(args.state, state)
 
     mode_desc = {"wx": "公众号检索", "web": "官网列表页", "both": "公众号 + 官网"}[args.mode]
-    md = render_md(new_items, uniq, scanned_at, mode_desc)
+    md = render_md(new_items, uniq, scanned_at, mode_desc, alerts=alerts)
     if args.out:
         os.makedirs(os.path.dirname(os.path.abspath(args.out)) or ".", exist_ok=True)
         with open(args.out, "w", encoding="utf-8") as f:
