@@ -87,7 +87,7 @@ metadata: {"openclaw":{"emoji":"🏆"}}
 
 ### Step 8: 一键直推草稿与双向回读验证
 - 生成 **900x383（2.35:1）** 蓝金科技教育文字封面（PIL 渲染保存至 /tmp/）；
-- 运行 wx_dialect_check.py 进行零违规断言；
+- 运行 mp-html 官方方言校验器（`/usr/local/bin/python3 /Users/zhugx/src/skills/mp-html/scripts/wx_dialect_check.py <html>`）进行零违规断言；
 - 运行 wx_push_draft.py 直接推入公众号草稿箱；
 - 调用 draft/get 回读验证正文长度、标签保留率，清理历史废稿。
 

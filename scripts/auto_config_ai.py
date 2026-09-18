@@ -52,6 +52,7 @@ SKILL_DEPS = {
     },
     "guide-write": {},
     "ima-skill": {},
+    "job-ima": {},
     "job-write": {},
     "mp-html": {},
     "mp-publish": {},
