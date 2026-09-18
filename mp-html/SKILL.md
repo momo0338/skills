@@ -562,3 +562,27 @@ assert stored.count("<div") == 0
   </section>
 </section>
 ```
+
+---
+
+## 十五、官方方言校验器（scripts/wx_dialect_check.py）
+
+> 📌 **定位**：微信公众号排版原生方言的**本地静态语法检查器（Linter）**，由 `mp-html` 统一维护。任何排版稿（无论属于哪个业务技能或专栏）在本地产出 HTML 后，均应首先调用本脚本进行零违规断言，**在本地写作阶段即完成合规闭环**，避免拖延到发布推送期才暴露问题。
+
+### 15.1 命令行用法
+```bash
+/usr/local/bin/python3 /Users/zhugx/src/skills/mp-html/scripts/wx_dialect_check.py <正文HTML文件路径>
+```
+- **依赖**：`BeautifulSoup`（`bs4`），请使用系统 Python `/usr/local/bin/python3` 执行；
+- **返回值**：`exit 0` ＝ 全部通过（打印 `✅ 方言校验通过`）；`exit 1` ＝ 存在违例阻断项。
+
+### 15.2 核心校验项矩阵
+
+| 规则项 | 级别 | 判定逻辑 | 微信端实测危害 / 修复建议 |
+|---|---|---|---|
+| **`a.href`** | ⛔ 阻断 | 正文中包含 `<a href="...">` | 微信会彻底剥除 `href` 属性变成纯文本。需外链请列出明文 URL 或在后台由编辑插入 |
+| **`position:relative`** | ⛔ 阻断 | `style` 中含有 `position:relative` | 微信会在入库存储时静默抹掉，导致坐标位移失效。改用 `flex` 或 `margin` 自绘 |
+| **`position:absolute/fixed/sticky`** | ⛔ 阻断 | `style` 中含有绝对/固定定位 | 微信全部静默删除。改用语义化流式布局 |
+| **`空 style 属性 style=""`** | ⛔ 阻断 | 出现 `style=""` | 往往由于实体字符转义或非法属性导致整条样式被清空，排查修正 |
+| **`div 含块级子元素`** | ⛔ 阻断 | `<div>` 内部嵌套块级元素（p/h*/img/ul/section/div） | **破坏力最大**：微信会将此类 div 彻底溶解成 p/span，并丢弃绝大部分内联样式！**块级容器全部改用 `<section>`** |
+| **`class= 残留`** | ⚠️ 建议 | 出现 `class="..."` | 样式已全部内联，class 会导致体积冗余且可能受微信默认样式污染，建议清理 |

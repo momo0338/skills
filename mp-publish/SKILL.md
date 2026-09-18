@@ -16,6 +16,10 @@ description: 微信公众号内容中台（多账号 · 草稿 · 发布 · 数�
 
 ---
 
+> 📌 **架构边界与分层治理（2026-09-18 明确）**：
+> - **排版方言标准与方言检查器归属于 `mp-html`**（Linter 位于 `mp-html/scripts/wx_dialect_check.py`）。本地写作与排版阶段请直接调用 `mp-html` 或对应垂直写稿技能（如 `job-write/scripts/verify_draft.py`），**写稿排版阶段不要调用 mp-publish**。
+> - **`mp-publish` 专注作为发布与草稿中台**：仅在本地三件套通过质检、最终决定将稿件推入微信草稿箱时才调用。本技能目录下的 `wx_dialect_check.py` 为指向 `mp-html` 的符号链接，仅在入箱前作为最后一道防御性检查执行。
+
 ## 一、凭据与前置
 
 
@@ -326,6 +330,17 @@ for y in range(y0, y1):
 **40164 IP 白名单判断铁律（2026-09-05 实测）**：判断"该加哪个 IP"只能以**微信 40164 报错里的 IP 为准**——`curl api.ipify.org / ifconfig.me` 走的是 WorkBuddy 沙箱代理出口（本次 20.9.176.2），与 python requests 直连 api.weixin.qq.com 的出口（58.213.75.90）不是同一个，别信 curl。家宽/代理出口会变，白名单建议保留多条历史 IP。
 
 **封面目检（2026-09-05 阳山稿教训）**：wx_prep_content.py 自动选"loss 最小接近 2.35"的图作封面，可能不是文章主形象图（阳山稿它选了戏楼广场，主题表达弱；而父子碑身仰视图才是主形象）。**push 前必须 Read /tmp/zj_cover.jpg 目检**；不对就手动 PIL 裁（scale=max(900/w,383/h) 等比放大→居中裁 900×383，边缘 6px 自检无黑）覆盖后 --cover 传。
+
+**⭐ 推完封面必做「服务端回读」复核（2026-09-17 新增，招聘稿红线）**：正文内嵌二维码的稿件（招聘稿首图就是群二维码），**光看推送日志不足以确认封面对不对** ——
+prep 阶段会先打印一行 `[6] 封面 … 源图 zj_img_0 600x600 …`（这是**兜底候选**，即"拿正文首图当封面"的那条路径），**真正生效的是紧随其后的 `[COVER] … <自备路径> (900x383) -> …/zj_cover.jpg` 行**。两者并存极易误判。
+**判定办法**：推完后用 `material/get_material` 按 `thumb_media_id` 回读服务端封面，与本地封面比像素 + 目检：
+```bash
+TOK=$(python3 -c "import sys;sys.path.insert(0,'<mp-publish>/scripts');import wx_common as C;C.set_profile('mashang');print(C.get_token(profile='mashang'))")
+curl -s -X POST "https://api.weixin.qq.com/cgi-bin/material/get_material?access_token=$TOK" \
+  -H "Content-Type: application/json" -d '{"media_id":"<thumb_media_id>"}' -o /tmp/thumb_dl.jpg
+# ⚠️ 该接口对图片返回**二进制 JPEG**（不是 JSON），用 requests/json 解析会 UnicodeDecodeError —— 必须 curl -o 落盘
+```
+然后 PIL 打开与本地封面比尺寸/像素（渐变母版经 JPEG 重编码后平均像素差 ~4 属正常）+ **Read 目检确认不是二维码**。
 
 **图内实物文字须放大核对（2026-09-05 明文化村教训）**：AI 看缩略图/接触表会把实物文字认错（"通行大红"实为"大明通行宝钞"）。凡图注涉及照片上可见的文字，必须 Read 单张原图放大核对。
 
@@ -802,7 +817,16 @@ print('12 slices saved to /tmp/slice_*.png')
 `article_type` 为 `news`（图文消息）时 `thumb_media_id` 必填；为 `newspic`（图片消息）时用 `image_info.image_list[].image_media_id`（≤20 张，首张即封面），且正文只支持纯文本与商品标签（商品 ≤50 个）。
 `cover_info.crop_percent_list[].ratio`：图文消息仅支持 `2.35_1`/`1_1`；图片消息支持 `1_1`/`16_9`/`2.35_1`。
 
-**高频错误码**：`40007` media_id 无效（三种成因，见下）｜`40114` index 越界｜`41039` content_source_url 不合法｜`45166` content 不合法｜`47001` 格式错误（必须 JSON body）｜`53404/53405/53406` 带货相关。
+**高频错误码**：`40007` media_id 无效（三种成因，见下）｜`40114` index 越界｜`41039` content_source_url 不合法｜`45166` content 不合法｜`47001` 格式错误（必须 JSON body）｜**`53407` 定时发布中，无法删除或修改**（见下）
+
+**⚠️ `53407 定时发布中，无法删除或修改`（2026-09-17 实测）**：草稿在后台被**设置了定时发布**后，`draft/update` 与 `draft/delete` 一律被平台拒绝。
+**⚠️ 只能靠"真写入"探锁**：`--dry-run` **不会提交、因此也发现不了锁**（它只调 `draft/get` 存备份 + 本地校验），`draft/batchget`（`draft/list`）**照样列出被锁的草稿** → **"列表里有"≠"能改"**。
+判定只能用**真实写操作**试：`update` 直接返回 `[53407]`（失败是干净的，不会写入半截），或 `delete`（默认演练，需 `--yes` 才真删——**不要用 delete 探锁**）。
+**处置**：让号主在后台取消定时发布 → 再走 `draft/update` → 改完重新定时。**API 侧无解**，不要反复重试。
+> 推论：**推完草稿≠还能改**。凡"改完还要发"的稿，要么趁早改，要么让号主先取消定时。
+
+**⚠️ `wx_draft.py update` 的 `--title` 校验会误伤多图文次条**：`update` 即使只改 `--content-file`，也会校验**平台现有 title**，而校验规则是 `title ≤32 字`。多图文次条标题常超过 32 字（如国家能源稿 52 字）→ 直接 `[FAIL] title 52 字 > 32 字上限`，**改不了正文**。
+**绕过办法**：用 `wx_common.api_call('/cgi-bin/draft/update', {...})` 直接构造 `{media_id, index, articles:{content}}` 提交（`articles` 是**对象**不是数组），跳过本地校验；或先把该次条标题改短。dy）｜`53404/53405/53406` 带货相关。
 
 **`40007 invalid media_id` 排查顺序（2026-09-16 多账号实测，别一上来就怀疑微信）**：
 
