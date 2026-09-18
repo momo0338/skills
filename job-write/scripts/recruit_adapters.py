@@ -5,8 +5,10 @@
 当前实现：
   zhaokao   智联招考型子站（附录 A 三步法）：
             cms-menu/list-portal → job-info/selectJobList → 岗位数组
-            适用于 jsrg / jsep / jsyhkf / jssalt2026xz 等招考型站点；
+            适用于 jsrg / jsep / jsyhkf 等**招考型**站点；
             企业招聘型站点返回 492「站点已经禁用」，不适用。
+            ⚠️ 2026-09-18 实测更正：jssalt2026xz 属**企业型**，返回 492，**不在**适用名单内
+            （原 docstring 曾误列为适用）。判断口径＝看子站是「招考报名站」还是「企业招聘站」。
 
 约定：
   scan_<kind>(entry, verbose) -> (items, ok)
