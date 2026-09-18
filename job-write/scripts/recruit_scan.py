@@ -404,7 +404,12 @@ def scan_web(sources, verbose=True, verify_ssl=False):
 # ══════════════════════════════════════════════════════════════════
 SCAN_KINDS = {"gov_list", "gov_bm", "self_list", "hotjob"}
 SENTINEL_KINDS = {"self_spa"}
-ADAPTER_KINDS = {"zhaokao"}      # P3：recruit_adapters.scan_zhaokao
+ADAPTER_KINDS = {"zhaokao", "zhaopin_gen"}
+# zhaopin_gen = 智联「企业招聘型」子站。与 zhaokao 走同一个适配器：
+# 招考型正常返回岗位数组，企业型由适配器回报 492「站点已经禁用」——
+# 后者是**明确结论**（该源不适用本适配器），比静默跳过更有价值。
+# ⚠️ 未实现的 kind（beisen / zhaopin_api / moka / job51 / chinahr）不再静默计数，
+#    见 select_web_sources：会归入 skipped 名单并在运行日志里逐个打印。
 
 
 def load_sources_yaml(path):
@@ -425,14 +430,15 @@ def load_sources_yaml(path):
 
 
 def select_web_sources(yaml_path, line="all", verbose=True):
-    """从 yaml 选出本次要跑的源。返回 (scan_list, sentinel_list, adapter_list, skipped)。"""
+    """从 yaml 选出本次要跑的源。返回 (scan_list, sentinel_list, adapter_list, skipped)。
+    skipped 是**名单**（"kind::name"），不是计数——未实现的 kind 必须可见。"""
     rows = load_sources_yaml(yaml_path)
     if not rows:
         if verbose and yaml_path:
             print(f"  ⚠️  sources.yaml 不存在（{yaml_path}），回退内置 WEB_SOURCES", file=sys.stderr)
         return ([{"name": s["name"], "url": s["url"], "base": s["base"],
-                  "id": s["name"], "kind": "gov_list"} for s in WEB_SOURCES], [], [], 0)
-    scan, sentinel, adapter, skipped = [], [], [], 0
+                  "id": s["name"], "kind": "gov_list"} for s in WEB_SOURCES], [], [], [])
+    scan, sentinel, adapter, skipped = [], [], [], []
     for r in rows:
         if r.get("enabled") != "true":
             continue
@@ -449,7 +455,8 @@ def select_web_sources(yaml_path, line="all", verbose=True):
         elif kind in ADAPTER_KINDS:
             adapter.append(entry)
         else:
-            skipped += 1
+            # 记名而非计数：静默跳过＝「以为在扫、其实没扫」，是最危险的失效模式。
+            skipped.append(f"{kind}::{r.get('name')}")
     return scan, sentinel, adapter, skipped
 
 
@@ -598,14 +605,17 @@ def main():
         if args.no_sources:
             web_sources = [{"id": s["name"], "name": s["name"], "url": s["url"],
                             "base": s["base"], "kind": "gov_list"} for s in WEB_SOURCES]
-            sentinels, adapters, skipped = [], [], 0
+            sentinels, adapters, skipped = [], [], []
         else:
             web_sources, sentinels, adapters, skipped = select_web_sources(
                 args.sources, line=args.line, verbose=verbose)
         if verbose:
             print(f"🌐 通道 2 · 官网列表页巡检（{len(web_sources)} 个列表源"
                   f" + {len(sentinels)} 个哨兵 + {len(adapters)} 个适配器，"
-                  f"{skipped} 个跳过）……", file=sys.stderr)
+                  f"{len(skipped)} 个跳过）……", file=sys.stderr)
+            for s in skipped:
+                print(f"  ⚠️  [未实现·跳过] {s}（sources.yaml 里 enabled=true 但 kind 无实现，"
+                      f"此源当前未被巡检）", file=sys.stderr)
         web_items, statuses = scan_web(web_sources, verbose, verify_ssl=args.verify_ssl)
         all_items += web_items
         # P3 适配器：智联招考型直接拉岗位数组
