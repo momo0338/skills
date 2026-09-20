@@ -212,7 +212,10 @@ def main():
                     help="公司主数据 CSV 路径（默认指向码上职业 vault 主档）")
     ap.add_argument("--out", metavar="DIR", help="写到该目录（文件名=单位.md）；不传则打印到 stdout")
     ap.add_argument("--gap-only", action="store_true", help="只打印缺口一行式摘要")
-    ap.add_argument("--ready", action="store_true", help="列出必填事实已齐的单位")
+    ap.add_argument("--ready", action="store_true",
+                    help="列出必填事实已齐、**且尚未动笔**的单位（选题池）")
+    ap.add_argument("--include-done", action="store_true",
+                    help="配合 --ready：把已发布/已推草稿箱的也列出来（防止重复写）")
     ap.add_argument("--limit", type=int, default=3, help="每个关键词最多匹配几条，默认3")
     a = ap.parse_args()
     global MASTER_CSV
@@ -228,17 +231,31 @@ def main():
         return kw.strip() in blob
 
     if a.ready:
-        ready = []
+        # ⚠️ 「硬信息齐」≠「还没写」。主档的「稿件」列会标 已发布/已推草稿箱，
+        # 不过滤就会把写完的单位混进选题池，导致重复劳动（09-18 曾发过这种事故：
+        # 4 篇早已发布却仍在待发布目录里）。默认只列**还没动手**的。
+        DONE = ("已发布", "已推草稿箱", "线上", "发布中")
+        ready, done = [], []
         for r in rows:
             if not (r.get("公司/主体") or "").strip():
                 continue
             if any(grade(r.get(c, "")) != "OK" for _k, (_l, c, _w) in REQUIRED.items()):
                 continue
-            ready.append(((r.get("报名截止") or ""), (r.get("公司/主体") or ""), (r.get("稿件") or "")))
+            rec = ((r.get("报名截止") or ""), (r.get("公司/主体") or ""), (r.get("稿件") or ""))
+            if any(k in (r.get("稿件") or "") for k in DONE):
+                done.append(rec)
+            else:
+                ready.append(rec)
         ready.sort()
-        print(f"必填八项已齐、可直接开笔的单位：{len(ready)} 条")
-        for dl, name, ds in ready[:60]:
+        done.sort()
+        print(f"必填八项已齐 **且尚未动笔** 的单位：{len(ready)} 条（另有 {len(done)} 条已发布/已推草稿箱，"
+              f"用 --include-done 一并列出）")
+        for dl, name, ds in ready:
             print(f"  {dl or '—':<12} {name:<40} 稿件={ds or '未排'}")
+        if a.include_done:
+            print(f"\n--- 已完成（勿重复写）{len(done)} 条 ---")
+            for dl, name, ds in done:
+                print(f"  {dl or '—':<12} {name:<40} 稿件={ds}")
         return
 
     if not a.keywords:
