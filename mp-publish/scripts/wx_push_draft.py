@@ -37,6 +37,8 @@ ap.add_argument("--cover", default="", help="缺省 $WX_RUN_DIR/zj_cover.jpg")
 ap.add_argument("--source-url", default="", help="原文链接/活动页地址，正文禁<a>时靠它外链")
 ap.add_argument("--update-media-id", default="",
                 help="就地更新已有草稿（draft/update，不新增草稿）；留空则新建（draft/add）")
+ap.add_argument("--index", type=int, default=0,
+                help="配合 --update-media-id：更新多图文中的第几篇（第一篇为 0，默认 0）")
 args = ap.parse_args()
 
 # 账号选择必须早于任何凭据读取；只有显式传了 --profile 才覆盖 WX_PROFILE 的语义。
@@ -220,7 +222,7 @@ article = {
 }
 if args.update_media_id:
     # 就地增量更新：不删旧稿、不新增草稿（2026-09-14 立规，优先 update）
-    payload = {"media_id": args.update_media_id, "index": 0, "articles": article}
+    payload = {"media_id": args.update_media_id, "index": args.index, "articles": article}
     r = draft_write("update", payload,
                     done=f"草稿就地更新成功! draft media_id: {args.update_media_id}")
 else:
