@@ -404,7 +404,7 @@ def scan_web(sources, verbose=True, verify_ssl=False):
 # ══════════════════════════════════════════════════════════════════
 SCAN_KINDS = {"gov_list", "gov_bm", "self_list", "hotjob"}
 SENTINEL_KINDS = {"self_spa"}
-ADAPTER_KINDS = {"zhaokao", "zhaopin_gen"}
+ADAPTER_KINDS = {"zhaokao", "zhaopin_gen", "guopin"}
 # zhaopin_gen = 智联「企业招聘型」子站。与 zhaokao 走同一个适配器：
 # 招考型正常返回岗位数组，企业型由适配器回报 492「站点已经禁用」——
 # 后者是**明确结论**（该源不适用本适配器），比静默跳过更有价值。
@@ -621,14 +621,20 @@ def main():
         # P3 适配器：智联招考型直接拉岗位数组
         for entry in adapters:
             try:
-                from recruit_adapters import scan_zhaokao
-                a_items, ok = scan_zhaokao(entry, verbose)
+                import recruit_adapters
+                kind = entry.get("kind")
+                if kind == "guopin":
+                    a_items, ok = recruit_adapters.scan_guopin(entry, verbose)
+                    prefix = "guopin::"
+                else:
+                    a_items, ok = recruit_adapters.scan_zhaokao(entry, verbose)
+                    prefix = "zhaokao::"
             except Exception as e:
                 a_items, ok = [], False
                 if verbose:
                     print(f"  ⚠️  [适配器·{entry['name']}] 异常：{str(e)[:60]}", file=sys.stderr)
             all_items += a_items
-            statuses.append(("zhaokao::" + entry["id"], ok, 200 if ok else 0))
+            statuses.append((prefix + entry["id"], ok, 200 if ok else 0))
             if verbose:
                 print(f"  · [适配器·{entry['name']}] 岗位 {len(a_items)} 条", file=sys.stderr)
         # 健康检查：连续失败 ≥3 → 告警（防"源静默失效"）
