@@ -35,6 +35,7 @@ metadata:
 | `/Users/zhugx/src/skills/job-write/scripts/emit_briefing.py` | **写稿前先跑** —— `--ready` 选活（含草稿箱对账）／出硬信息投料单 |
 | `/Users/zhugx/src/skills/job-write/scripts/verify_draft.py` | **成稿后必跑** —— 三件套门禁质检 |
 | `/Users/zhugx/src/skills/job-write/scripts/build_cover.py` | 封面生成（母版 + logo 胶囊） |
+| `/Users/zhugx/src/skills/job-write/scripts/sync_articles_to_db.py` | **发布后对账** —— 本地排版稿 ↔ `jobs.db` 的 `campaigns.has_article` 回填（**务必先跑 `--dry-run`**；遇到「一稿多批次」或「多稿同批次」会跳过并报告，不静默覆盖） |
 
 ⛔ **别把 references/ 整个读一遍"以防万一"**——那等于绕过了这次拆分。
 
