@@ -16,7 +16,9 @@ import argparse
 import base64
 from concurrent.futures import ThreadPoolExecutor
 
-GH_CLI_PATH = "/opt/homebrew/bin/gh"
+# gh CLI 的兜底路径。取值优先级见 run_gh_api()：先 shutil.which("gh") 走 PATH，
+# 再退回这里。用 GH_CLI 环境变量可覆盖，避免换平台（Linux/CI）时该常量失效。
+GH_CLI_PATH = os.environ.get("GH_CLI") or "/opt/homebrew/bin/gh"
 
 def parse_repo_identifier(raw: str) -> str:
     """提取标准化 owner/repo"""
