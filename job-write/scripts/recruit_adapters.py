@@ -9,6 +9,13 @@
             企业招聘型站点返回 492「站点已经禁用」，不适用。
             ⚠️ 2026-09-18 实测更正：jssalt2026xz 属**企业型**，返回 492，**不在**适用名单内
             （原 docstring 曾误列为适用）。判断口径＝看子站是「招考报名站」还是「企业招聘站」。
+  guopin   国聘网央企/国企官方招聘平台（gp-api.iguopin.com 推荐/最新岗位接口）。
+  beisen   北森招聘门户（zhiye.com 新门户 ux-recruitment-portal 2022+）：
+            POST /api/Jobad/GetJobAdPageList 拉职位数组。
+            2026-09-23 实测（foresealife.zhiye.com）：接口免鉴权、JSON 返回；
+            职位详情 URL = https://<host>/<campus|social>/detail?jobAdId=<Id>。
+            ⚠️ 北森**老版模板**（CMS / tms-recruit，如 cssc.zhiye.com）无此接口
+            （302→404，非 JSON）——调用方需将其降级为哨兵（见 recruit_scan 数据分型）。
 
 约定：
   scan_<kind>(entry, verbose) -> (items, ok)
@@ -162,4 +169,99 @@ def scan_guopin(entry, verbose=True, max_pages=2):
             print(f"  ⚠️  [国聘·{entry['name']}] 接口失败：{str(e)[:60]}",
                   file=__import__("sys").stderr)
         return items, len(items) > 0
+
+
+def scan_beisen(entry, verbose=True, max_pages=3, only_campus=True):
+    """北森招聘门户（zhiye.com 新门户 ux-recruitment-portal 2022+）职位列表适配器。
+
+    POST /api/Jobad/GetJobAdPageList（免鉴权 JSON 接口），返回在招职位数组。
+    entry: {"id","name","url",...}
+    only_campus=True（默认）：只保留校招/校园/实习/管培类岗位进收件箱——
+    北森在招岗位以社招为主（实测 80 站单轮 9479 条，社招占绝大多数），
+    全量入库会淹没公告线索；公众号选题（A 线校招）也只需要校招类。
+    社招岗位如需监控，传 only_campus=False 取全量。
+    返回 (items, ok)；老版模板（CMS/tms-recruit）接口 302/非 JSON → ([], False)，
+    调用方应将该源降级为哨兵（改 kind=self_spa），避免持续误报健康失败。
+    """
+    m = re.match(r"https?://([^/]+)", entry["url"])
+    if not m:
+        return [], False
+    host = m.group(1)
+    api = f"https://{host}/api/Jobad/GetJobAdPageList"
+    headers = {
+        "User-Agent": UA,
+        "Content-Type": "application/json",
+        "Accept": "application/json, text/plain, */*",
+        "Origin": f"https://{host}",
+        "Referer": f"https://{host}/",
+    }
+    body = {
+        "PageIndex": 0, "PageSize": 100, "KeyWords": "", "SpecialType": 0,
+        "PortalId": "",
+        "DisplayFields": ["Category", "Kind", "LocId", "PostDate",
+                          "ClassificationTwo", "WorkWeChatQrCode"],
+    }
+
+    items = []
+    try:
+        for page in range(max_pages):
+            body["PageIndex"] = page
+            req = urllib.request.Request(
+                api, headers=headers,
+                data=json.dumps(body).encode("utf-8"))
+            with urllib.request.urlopen(req, timeout=15, context=SSL_CTX) as resp:
+                raw = resp.read()
+                try:
+                    data = json.loads(raw.decode("utf-8", "ignore"))
+                except Exception:
+                    # 老版模板 / 非 JSON：明确回报不支持
+                    if verbose:
+                        print(f"  ⚠️  [北森·{entry['name']}] 接口非 JSON"
+                              f"（老版模板不支持），建议降级哨兵", file=__import__("sys").stderr)
+                    return [], False
+            jobs = data.get("Data") or []
+            if not isinstance(jobs, list) or not jobs:
+                break
+            total = data.get("Total") or 0
+            for j in jobs:
+                jid = j.get("Id") or j.get("JobAdId")
+                jname = str(j.get("JobAdName") or "").strip()
+                if not jid or not jname:
+                    continue
+                category = str(j.get("Category") or "").strip()
+                kind_str = str(j.get("Kind") or "").strip()
+                # only_campus：只保留校招/校园/实习/管培类岗位
+                if only_campus and not (
+                        "校招" in category or "校园" in category
+                        or "实习" in category or "intern" in kind_str.lower()
+                        or "管培" in jname):
+                    continue
+                locs = j.get("LocNames") or []
+                place = "、".join(str(x) for x in locs if x) if locs else ""
+                hc = j.get("HeadCount")
+                hc_str = f"{hc}人" if isinstance(hc, (int, float)) and hc else ""
+                note_parts = [category, place, hc_str,
+                              str(j.get("Degree") or "").strip()]
+                note = " ｜ ".join(p for p in note_parts if p)
+                # 详情页路由：校招/校园类走 campus，其余走 social
+                detail_path = "campus" if ("校招" in category or "校园" in category
+                                           or "intern" in str(j.get("Kind") or "").lower()
+                                           or "实习" in str(j.get("Kind") or "")) else "social"
+                items.append({
+                    "title": f"{jname}（{entry['name']}）",
+                    "source": f"北森招聘·{entry['name']}",
+                    "date": str(j.get("PostDate") or "")[:10],
+                    "url": f"https://{host}/{detail_path}/detail?jobAdId={jid}",
+                    "note": note,
+                })
+            if len(jobs) < (body["PageSize"] or 100) or (total and page * (body["PageSize"] or 100) + len(jobs) >= total):
+                break
+            time.sleep(0.15)
+    except Exception as e:
+        if verbose:
+            print(f"  ⚠️  [北森·{entry['name']}] 接口失败：{str(e)[:60]}",
+                  file=__import__("sys").stderr)
+        return items, len(items) > 0
+
+    return items, True
 

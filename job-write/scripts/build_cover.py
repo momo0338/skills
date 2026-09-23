@@ -6,25 +6,34 @@
   · **校招**（2027 届校园招聘 / A 线）→ 用 `标准校招封面母版.png`（主标题「2027 秋季校招开启」）
   · **社会招聘**（事业单位・高校编制招考 / B 线，以及企业社招）→ 用 `标准社招封面母版.png`（主标题「招聘通知」）
 
+朱总 2026-09-18 追加：
+  · **升学**（强基计划 / 选调生等升学政策解读 / C 线）→ 用 `标准升学封面母版.png`（主标题「升学专题」+ 横幅「政策解读  提前规划」）
+    该版由 `标准社招封面母版.png` 派生（仅替换主标题与横幅文案，其余像素保持不动）。
+    ⛔ 仍不得为单篇稿自创底版。
+  · **求职**（求职方法 / 职业规划类）→ 用 `标准求职封面母版.png`。
+
 母版与胶囊规格（job-write §7.1~7.3，不得自创底版）：
   母版 900×383 ｜ 胶囊坐标 (40,32) ｜ 圆角 10 ｜ 内边距横 16 纵 8 ｜
   白底 rgba(255,255,255,240) ｜ 描边 1px #DCE6F2 ｜ logo 等比缩至高 42px（Lanczos）
 
 用法：
-  python3 build_cover.py --type 社招 --logo "../事业单位招考/素材/logos/njqxq.png" \\
-                         --out  "../事业单位招考/待发布/xxx-封面.png"
+  python3 build_cover.py --type 社招 --logo "素材/logos/njqxq.png" \\
+                         --out  "事业单位招考/待发布/xxx-封面.png"
 """
 import argparse
 import os
 from PIL import Image, ImageDraw
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+# 本脚本权威位置在技能内；母版目录在 Obsidian 工作区。优先用相对路径，回退到绝对路径。
 DEFAULT_MASTER_DIR = "/Users/zhugx/codeup/obsidian/03-工作记录/码上职业/素材/封面母版"
 local_master = os.path.normpath(os.path.join(HERE, "..", "素材", "封面母版"))
 MASTER_DIR = local_master if os.path.exists(local_master) else DEFAULT_MASTER_DIR
 MASTERS = {
     "校招": "标准校招封面母版.png",
     "社招": "标准社招封面母版.png",
+    "升学": "标准升学封面母版.png",
+    "求职": "标准求职封面母版.png",
 }
 
 CAP_X, CAP_Y = 40, 32
@@ -78,7 +87,7 @@ def build(kind, logo_path, out_path, master_path=None):
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(description="码上职业封面生成器（母版 + Logo 胶囊）")
-    ap.add_argument("--type", required=True, choices=list(MASTERS), help="校招 / 社招")
+    ap.add_argument("--type", required=True, choices=list(MASTERS), help="校招 / 社招 / 升学 / 求职")
     ap.add_argument("--logo", default="", help="主体官方 logo PNG（可省，省则出纯母版）")
     ap.add_argument("--out", required=True, help="输出封面路径（.png）")
     ap.add_argument("--master", default="", help="自定义母版路径（一般不用）")
