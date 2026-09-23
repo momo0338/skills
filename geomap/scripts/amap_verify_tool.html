@@ -1,0 +1,776 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>高德地理编码 - 地址验证工具</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, "Microsoft YaHei", sans-serif; background: #f0f2f5; }
+
+        .header {
+            background: white; padding: 16px 24px;
+            border-bottom: 1px solid #e0e0e0;
+            display: flex; align-items: center; gap: 12px;
+        }
+        .header h1 { font-size: 18px; color: #333; }
+        .header .badge {
+            background: #e6f7ff; color: #1890ff; padding: 2px 10px;
+            border-radius: 10px; font-size: 12px;
+        }
+
+        .controls {
+            background: white; padding: 14px 24px;
+            border-bottom: 1px solid #e0e0e0;
+            display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+        }
+        .controls input[type="text"] {
+            width: 320px; padding: 8px 12px;
+            border: 1px solid #d9d9d9; border-radius: 6px;
+            font-size: 13px; font-family: monospace;
+        }
+        .controls button {
+            padding: 8px 18px; border: none; border-radius: 6px;
+            cursor: pointer; font-size: 13px; font-weight: 500;
+        }
+        .btn-query { background: #3385ff; color: white; }
+        .btn-query:hover { background: #2b75e6; }
+        .btn-query:disabled { background: #999; cursor: not-allowed; }
+        .btn-outline { background: white; color: #3385ff; border: 1px solid #3385ff !important; }
+        .btn-outline:hover { background: #f0f5ff; }
+        .btn-outline:disabled { background: #eee !important; color: #ccc !important; border-color: #ddd !important; }
+        .btn-import { background: white; color: #722ed1; border: 1px solid #722ed1 !important; }
+        .btn-import:hover { background: #f9f0ff; }
+
+        .separator { width: 1px; height: 28px; background: #e8e8e8; margin: 0 4px; }
+
+        .summary {
+            padding: 12px 24px; font-size: 13px; color: #666;
+            display: flex; align-items: center; justify-content: space-between;
+        }
+        .summary .stat strong { font-size: 20px; }
+
+        .progress-wrap {
+            padding: 0 24px; margin-bottom: 12px;
+        }
+        .progress-bar {
+            height: 4px; background: #e8e8e8; border-radius: 2px; overflow: hidden;
+        }
+        .progress-bar .fill {
+            height: 100%; background: #3385ff; transition: width 0.3s;
+        }
+
+        .table-wrap {
+            padding: 0 24px 24px;
+        }
+        table {
+            width: 100%; background: white; border-radius: 8px;
+            border-collapse: collapse; overflow: hidden;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+        }
+        th {
+            background: #fafafa; padding: 10px 14px; text-align: left;
+            font-size: 12px; color: #888; font-weight: 600;
+            border-bottom: 1px solid #e8e8e8; text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        td {
+            padding: 10px 14px; font-size: 13px;
+            border-bottom: 1px solid #f0f0f0; color: #333;
+        }
+        tr:last-child td { border-bottom: none; }
+        tr:hover td { background: #f8faff; }
+        tr.querying td { background: #fffbe6; }
+        tr.success td { background: #f6ffed; }
+        tr.error td { background: #fff2f0; }
+
+        .status-dot {
+            display: inline-block; width: 8px; height: 8px;
+            border-radius: 50%; margin-right: 6px; vertical-align: middle;
+        }
+        .dot-pending { background: #d9d9d9; }
+        .dot-loading { background: #faad14; animation: pulse 1s infinite; }
+        .dot-ok { background: #52c41a; }
+        .dot-fail { background: #ff4d4f; }
+        @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.3; } }
+
+        .coord { font-family: monospace; color: #3385ff; font-size: 12px; }
+        .level-tag {
+            display: inline-block; padding: 1px 6px; border-radius: 3px;
+            font-size: 11px; background: #f0f0f0; color: #666;
+        }
+
+        .toast {
+            position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+            background: #333; color: white; padding: 10px 20px;
+            border-radius: 8px; font-size: 13px; z-index: 9999;
+            opacity: 0; transition: opacity 0.3s;
+        }
+        .toast.show { opacity: 1; }
+
+        /* ===== 导入弹窗 ===== */
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.45); z-index: 1000;
+            display: none; align-items: center; justify-content: center;
+        }
+        .modal-overlay.show { display: flex; }
+
+        .modal {
+            background: white; border-radius: 12px; width: 600px; max-width: 90vw;
+            box-shadow: 0 8px 40px rgba(0,0,0,0.2); overflow: hidden;
+        }
+        .modal-header {
+            padding: 18px 24px; border-bottom: 1px solid #f0f0f0;
+            display: flex; align-items: center; justify-content: space-between;
+        }
+        .modal-header h3 { font-size: 16px; color: #333; }
+        .modal-close {
+            width: 32px; height: 32px; border: none; background: none;
+            cursor: pointer; font-size: 18px; color: #999; border-radius: 6px;
+        }
+        .modal-close:hover { background: #f5f5f5; color: #333; }
+
+        .modal-body { padding: 20px 24px; }
+
+        .tab-bar { display: flex; gap: 0; margin-bottom: 16px; border-bottom: 2px solid #f0f0f0; }
+        .tab-btn {
+            padding: 8px 20px; border: none; background: none; cursor: pointer;
+            font-size: 14px; color: #999; border-bottom: 2px solid transparent;
+            margin-bottom: -2px; transition: all 0.2s;
+        }
+        .tab-btn.active { color: #3385ff; border-bottom-color: #3385ff; font-weight: 500; }
+        .tab-btn:hover { color: #3385ff; }
+
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        textarea.import-textarea {
+            width: 100%; height: 220px; padding: 12px; border: 1px solid #d9d9d9;
+            border-radius: 8px; font-size: 13px; font-family: monospace;
+            resize: vertical; line-height: 1.8;
+        }
+        textarea.import-textarea:focus { outline: none; border-color: #3385ff; box-shadow: 0 0 0 2px rgba(51,133,255,0.1); }
+
+        .format-hint {
+            margin-top: 10px; padding: 10px 14px; background: #f6f8fa;
+            border-radius: 6px; font-size: 12px; color: #666; line-height: 1.8;
+        }
+        .format-hint code { background: #e8e8e8; padding: 1px 5px; border-radius: 3px; font-size: 11px; }
+
+        .file-drop {
+            border: 2px dashed #d9d9d9; border-radius: 8px; padding: 40px 20px;
+            text-align: center; cursor: pointer; transition: all 0.2s;
+        }
+        .file-drop:hover, .file-drop.dragover { border-color: #3385ff; background: #f0f5ff; }
+        .file-drop .icon { font-size: 36px; margin-bottom: 8px; }
+        .file-drop .text { font-size: 14px; color: #666; }
+        .file-drop .sub { font-size: 12px; color: #999; margin-top: 4px; }
+
+        .preview-table {
+            margin-top: 16px; max-height: 200px; overflow-y: auto;
+            border: 1px solid #e8e8e8; border-radius: 6px;
+        }
+        .preview-table table { box-shadow: none; }
+        .preview-table td, .preview-table th { padding: 6px 10px; font-size: 12px; }
+
+        .modal-footer {
+            padding: 14px 24px; border-top: 1px solid #f0f0f0;
+            display: flex; align-items: center; justify-content: flex-end; gap: 10px;
+        }
+        .modal-footer button {
+            padding: 8px 20px; border-radius: 6px; font-size: 13px;
+            cursor: pointer; border: none;
+        }
+        .btn-cancel { background: #f5f5f5; color: #666; }
+        .btn-cancel:hover { background: #e8e8e8; }
+        .btn-confirm { background: #722ed1; color: white; }
+        .btn-confirm:hover { background: #5e25b0; }
+        .btn-confirm:disabled { background: #ccc; cursor: not-allowed; }
+
+        .import-count { font-size: 13px; color: #666; margin-top: 10px; }
+        .import-count strong { color: #722ed1; }
+
+        .delete-btn {
+            display: inline-block; width: 22px; height: 22px; border: none;
+            background: none; cursor: pointer; color: #ccc; font-size: 14px;
+            border-radius: 4px; line-height: 22px; text-align: center;
+        }
+        .delete-btn:hover { background: #fff2f0; color: #ff4d4f; }
+
+        .city-input {
+            width: 100px; padding: 4px 8px; border: 1px solid #d9d9d9;
+            border-radius: 4px; font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>地址验证工具</h1>
+        <span class="badge">高德 REST API</span>
+        <span class="badge">地理编码</span>
+    </div>
+
+    <div class="controls">
+        <input type="text" id="apiKey" value="5791a0b729cf11ac31f0f81113a9b160" placeholder="高德 API Key（Web 服务类型）">
+        <span class="separator"></span>
+        <button class="btn-import" onclick="openImportModal()">导入地址</button>
+        <button class="btn-query" id="queryBtn" onclick="queryAll()" disabled>批量查询</button>
+        <span class="separator"></span>
+        <button class="btn-outline" id="exportBtn" onclick="exportGeoJSON()" disabled>导出 GeoJSON</button>
+        <button class="btn-outline" id="resetBtn" onclick="resetData()">重置</button>
+    </div>
+
+    <div class="summary" id="summary">
+        <span>请先点击 <strong>"导入地址"</strong> 添加数据</span>
+    </div>
+
+    <div class="progress-wrap">
+        <div class="progress-bar"><div class="fill" id="progressFill" style="width:0%"></div></div>
+    </div>
+
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th style="width:30px">#</th>
+                    <th style="width:60px">类型</th>
+                    <th>地址名称</th>
+                    <th>备注</th>
+                    <th>查询地址</th>
+                    <th>坐标</th>
+                    <th>精度</th>
+                    <th>匹配结果</th>
+                    <th style="width:40px"></th>
+                </tr>
+            </thead>
+            <tbody id="tableBody">
+                <tr><td colspan="9" style="text-align:center;padding:40px;color:#999;">还没有地址数据，请点击"导入地址"加载</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <!-- ===== 导入弹窗 ===== -->
+    <div class="modal-overlay" id="importModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>导入地址</h3>
+                <button class="modal-close" onclick="closeImportModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="tab-bar">
+                    <button class="tab-btn active" onclick="switchTab('text')">粘贴文本</button>
+                    <button class="tab-btn" onclick="switchTab('file')">上传文件</button>
+                </div>
+
+                <!-- 文本粘贴 -->
+                <div class="tab-content active" id="tab-text">
+                    <textarea class="import-textarea" id="importText"
+                        placeholder="每行一个地址，支持以下格式：&#10;&#10;长虹路&#10;长虹路|道路|集庆门大街以北&#10;莫愁新村|社区&#10;水西门大街|road|单号文体西路以东&#10;&#10;格式：名称|类型|备注（后两项可选）"></textarea>
+                    <div class="import-count" id="textPreview"></div>
+                    <div class="format-hint">
+                        每行一个地址，用 <code>|</code> 分隔字段：<code>名称 | 类型 | 备注</code><br>
+                        类型可选：road / 道路 / community / 社区（默认自动推断）<br>
+                        也可以只写地址名称，其他留空
+                    </div>
+                </div>
+
+                <!-- 文件上传 -->
+                <div class="tab-content" id="tab-file">
+                    <div class="file-drop" id="fileDrop" onclick="document.getElementById('fileInput').click()">
+                        <div class="icon">📁</div>
+                        <div class="text">点击选择或拖拽文件到这里</div>
+                        <div class="sub">支持 .txt / .csv / .tsv 格式</div>
+                    </div>
+                    <input type="file" id="fileInput" accept=".txt,.csv,.tsv" style="display:none" onchange="handleFile(this.files[0])">
+                    <div class="import-count" id="filePreview"></div>
+                    <div class="format-hint">
+                        <strong>.txt / .tsv</strong>：每行一个地址，字段用 <code>|</code> 或 <code>Tab</code> 分隔<br>
+                        <strong>.csv</strong>：首行为表头，支持列名 <code>name</code>、<code>type</code>、<code>note</code>
+                    </div>
+                </div>
+
+                <!-- 预览区域 -->
+                <div id="importPreview" style="display:none;">
+                    <div class="import-count" id="parseSummary"></div>
+                    <div class="preview-table" id="previewTable"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-cancel" onclick="closeImportModal()">取消</button>
+                <button class="btn-confirm" id="confirmImport" onclick="confirmImport()" disabled>导入（0 个地址）</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ========== 默认数据 ==========
+        var LOCATIONS = [];
+        var results = {};
+        var pendingImport = [];
+
+        // ========== 渲染表格 ==========
+        function renderTable() {
+            var tbody = document.getElementById('tableBody');
+            tbody.innerHTML = '';
+
+            if (LOCATIONS.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:40px;color:#999;">还没有地址数据</td></tr>';
+                document.getElementById('queryBtn').disabled = true;
+                return;
+            }
+
+            LOCATIONS.forEach(function(loc, i) {
+                var tr = document.createElement('tr');
+                tr.id = 'row-' + i;
+                var r = results[i];
+                var coordsHtml = '-';
+                var levelHtml = '<span class="level-tag">-</span>';
+                var resultHtml = '<span class="status-dot dot-pending"></span>等待查询';
+                var rowClass = '';
+
+                if (r) {
+                    if (r.lng) {
+                        coordsHtml = r.lng.toFixed(6) + ', ' + r.lat.toFixed(6);
+                        levelHtml = '<span class="level-tag">' + (r.level || '-') + '</span>';
+                        resultHtml = '<span class="status-dot dot-ok"></span>' + r.formatted;
+                        rowClass = 'success';
+                    } else if (r.error) {
+                        resultHtml = '<span class="status-dot dot-fail"></span>' + r.error;
+                        rowClass = 'error';
+                    }
+                }
+
+                tr.className = rowClass;
+                tr.innerHTML =
+                    '<td>' + (i + 1) + '</td>' +
+                    '<td>' + (loc.type === 'road' ? '道路' : '社区') + '</td>' +
+                    '<td><strong>' + loc.name + '</strong></td>' +
+                    '<td style="color:#999;font-size:12px;">' + (loc.note || '-') + '</td>' +
+                    '<td style="font-size:12px;color:#666;">' + loc.search + '</td>' +
+                    '<td id="cell-coords-' + i + '" class="coord">' + coordsHtml + '</td>' +
+                    '<td id="cell-level-' + i + '">' + levelHtml + '</td>' +
+                    '<td id="cell-result-' + i + '">' + resultHtml + '</td>' +
+                    '<td><button class="delete-btn" onclick="deleteRow(' + i + ')" title="删除">&times;</button></td>';
+                tbody.appendChild(tr);
+            });
+
+            document.getElementById('queryBtn').disabled = false;
+        }
+
+        function deleteRow(idx) {
+            LOCATIONS.splice(idx, 1);
+            // Rebuild results index
+            var newResults = {};
+            Object.keys(results).forEach(function(k) {
+                var ki = parseInt(k);
+                if (ki < idx) newResults[ki] = results[ki];
+                else if (ki > idx) newResults[ki - 1] = results[ki];
+            });
+            results = newResults;
+            renderTable();
+            document.getElementById('summary').innerHTML =
+                '共 <strong>' + LOCATIONS.length + '</strong> 个地址';
+        }
+
+        function resetData() {
+            LOCATIONS = [];
+            results = {};
+            renderTable();
+            document.getElementById('queryBtn').disabled = true;
+            document.getElementById('exportBtn').disabled = true;
+            document.getElementById('summary').innerHTML =
+                '<span>请先点击 <strong>"导入地址"</strong> 添加数据</span>';
+            document.getElementById('progressFill').style.width = '0%';
+        }
+
+        // ========== Toast ==========
+        function showToast(msg) {
+            var t = document.getElementById('toast');
+            t.textContent = msg;
+            t.classList.add('show');
+            setTimeout(function() { t.classList.remove('show'); }, 3000);
+        }
+
+        // ========== 导入弹窗 ==========
+        function openImportModal() {
+            document.getElementById('importModal').classList.add('show');
+            document.getElementById('importText').value = '';
+            document.getElementById('textPreview').innerHTML = '';
+            document.getElementById('filePreview').innerHTML = '';
+            document.getElementById('importPreview').style.display = 'none';
+            pendingImport = [];
+            switchTab('text');
+        }
+
+        function closeImportModal() {
+            document.getElementById('importModal').classList.remove('show');
+        }
+
+        function switchTab(tab) {
+            document.querySelectorAll('.tab-btn').forEach(function(b) { b.classList.remove('active'); });
+            document.querySelectorAll('.tab-content').forEach(function(c) { c.classList.remove('active'); });
+            if (tab === 'text') {
+                document.querySelectorAll('.tab-btn')[0].classList.add('active');
+                document.getElementById('tab-text').classList.add('active');
+            } else {
+                document.querySelectorAll('.tab-btn')[1].classList.add('active');
+                document.getElementById('tab-file').classList.add('active');
+            }
+        }
+
+        // 文本输入实时预览
+        document.getElementById('importText').addEventListener('input', function() {
+            var text = this.value.trim();
+            if (!text) {
+                document.getElementById('textPreview').innerHTML = '';
+                pendingImport = [];
+                updateImportBtn();
+                return;
+            }
+            var parsed = parseAddresses(text);
+            pendingImport = parsed;
+            document.getElementById('textPreview').innerHTML =
+                '解析到 <strong>' + parsed.length + '</strong> 个地址';
+            updateImportBtn();
+        });
+
+        // ========== 地址解析 ==========
+        function parseAddresses(text) {
+            var lines = text.split('\n').filter(function(l) { return l.trim(); });
+            var results = [];
+            lines.forEach(function(line) {
+                line = line.trim();
+                if (!line) return;
+
+                var parts;
+                if (line.indexOf('\t') >= 0) {
+                    parts = line.split('\t').map(function(s) { return s.trim(); });
+                } else if (line.indexOf('|') >= 0) {
+                    parts = line.split('|').map(function(s) { return s.trim(); });
+                } else {
+                    parts = [line];
+                }
+
+                var name = parts[0] || '';
+                var typeRaw = (parts[1] || '').toLowerCase();
+                var note = parts[2] || '';
+
+                var type = 'community';
+                if (typeRaw.indexOf('road') >= 0 || typeRaw.indexOf('道路') >= 0 || typeRaw.indexOf('街') >= 0 || typeRaw.indexOf('路') >= 0) {
+                    type = 'road';
+                } else if (typeRaw.indexOf('comm') >= 0 || typeRaw.indexOf('社区') >= 0 || typeRaw.indexOf('小区') >= 0) {
+                    type = 'community';
+                }
+
+                // 智能推断：如果名称中包含道路特征词
+                if (!parts[1]) {
+                    if (/路|街|道|巷|大道|胡同/.test(name)) type = 'road';
+                }
+
+                results.push({
+                    type: type,
+                    name: name,
+                    search: name,  // 用户输入的地址作为查询内容
+                    note: note
+                });
+            });
+            return results;
+        }
+
+        // ========== CSV 解析 ==========
+        function parseCSV(text) {
+            var lines = text.trim().split('\n').map(function(l) { return l.trim(); }).filter(Boolean);
+            if (lines.length < 2) return parseAddresses(text);
+
+            // 尝试检测分隔符
+            var sep = ',';
+            if (lines[0].indexOf('\t') >= 0) sep = '\t';
+            else if (lines[0].indexOf(';') >= 0) sep = ';';
+
+            var headers = lines[0].split(sep).map(function(h) {
+                return h.trim().toLowerCase().replace(/["'\s]/g, '');
+            });
+
+            // 查找列索引
+            var nameIdx = -1, typeIdx = -1, noteIdx = -1, searchIdx = -1;
+            headers.forEach(function(h, i) {
+                if (h === 'name' || h === '名称' || h === '地址' || h === '地址名称') nameIdx = i;
+                else if (h === 'type' || h === '类型') typeIdx = i;
+                else if (h === 'note' || h === '备注') noteIdx = i;
+                else if (h === 'search' || h === '查询地址') searchIdx = i;
+            });
+
+            // 如果没找到 name 列，默认用第一列
+            if (nameIdx < 0) nameIdx = 0;
+
+            var results = [];
+            for (var i = 1; i < lines.length; i++) {
+                var cells = lines[i].split(sep).map(function(c) { return c.trim().replace(/^["']|["']$/g, ''); });
+                var name = cells[nameIdx] || '';
+                if (!name) continue;
+
+                var typeRaw = typeIdx >= 0 ? (cells[typeIdx] || '').toLowerCase() : '';
+                var note = noteIdx >= 0 ? (cells[noteIdx] || '') : '';
+                var search = searchIdx >= 0 ? (cells[searchIdx] || name) : name;
+
+                var type = 'community';
+                if (typeRaw.indexOf('road') >= 0 || typeRaw.indexOf('道路') >= 0) type = 'road';
+                else if (/路|街|道|巷|大道/.test(name)) type = 'road';
+
+                results.push({ type: type, name: name, search: search, note: note });
+            }
+            return results;
+        }
+
+        // ========== 文件处理 ==========
+        function handleFile(file) {
+            if (!file) return;
+            var reader = new FileReader();
+            reader.onload = function(e) {
+                var text = e.target.result;
+                var ext = file.name.split('.').pop().toLowerCase();
+
+                var parsed;
+                if (ext === 'csv') {
+                    parsed = parseCSV(text);
+                } else {
+                    parsed = parseAddresses(text);
+                }
+
+                pendingImport = parsed;
+                document.getElementById('filePreview').innerHTML =
+                    '从文件解析到 <strong>' + parsed.length + '</strong> 个地址';
+                showPreview(parsed);
+                updateImportBtn();
+            };
+            reader.readAsText(file);
+        }
+
+        // 拖拽支持
+        var fileDrop = document.getElementById('fileDrop');
+        fileDrop.addEventListener('dragover', function(e) { e.preventDefault(); fileDrop.classList.add('dragover'); });
+        fileDrop.addEventListener('dragleave', function() { fileDrop.classList.remove('dragover'); });
+        fileDrop.addEventListener('drop', function(e) {
+            e.preventDefault();
+            fileDrop.classList.remove('dragover');
+            if (e.dataTransfer.files.length > 0) {
+                handleFile(e.dataTransfer.files[0]);
+            }
+        });
+
+        // ========== 预览 ==========
+        function showPreview(items) {
+            if (items.length === 0) {
+                document.getElementById('importPreview').style.display = 'none';
+                return;
+            }
+            document.getElementById('importPreview').style.display = 'block';
+            document.getElementById('parseSummary').innerHTML =
+                '即将导入 <strong>' + items.length + '</strong> 个地址：' +
+                items.filter(function(i){return i.type==='road';}).length + ' 条道路，' +
+                items.filter(function(i){return i.type==='community';}).length + ' 个社区';
+
+            var html = '<table><thead><tr><th>#</th><th>类型</th><th>名称</th><th>备注</th></tr></thead><tbody>';
+            var show = Math.min(items.length, 20);
+            for (var i = 0; i < show; i++) {
+                html += '<tr><td>' + (i + 1) + '</td>' +
+                    '<td>' + (items[i].type === 'road' ? '道路' : '社区') + '</td>' +
+                    '<td>' + items[i].name + '</td>' +
+                    '<td style="color:#999;font-size:11px;">' + (items[i].note || '-') + '</td></tr>';
+            }
+            if (items.length > 20) {
+                html += '<tr><td colspan="4" style="text-align:center;color:#999;">... 还有 ' + (items.length - 20) + ' 个</td></tr>';
+            }
+            html += '</tbody></table>';
+            document.getElementById('previewTable').innerHTML = html;
+        }
+
+        function updateImportBtn() {
+            var btn = document.getElementById('confirmImport');
+            if (pendingImport.length > 0) {
+                btn.disabled = false;
+                btn.textContent = '导入（' + pendingImport.length + ' 个地址）';
+                showPreview(pendingImport);
+            } else {
+                btn.disabled = true;
+                btn.textContent = '导入（0 个地址）';
+            }
+        }
+
+        // ========== 确认导入 ==========
+        function confirmImport() {
+            if (pendingImport.length === 0) return;
+
+            LOCATIONS = pendingImport.map(function(l) { return Object.assign({}, l); });
+            results = {};
+            renderTable();
+            closeImportModal();
+            document.getElementById('queryBtn').disabled = false;
+            document.getElementById('exportBtn').disabled = true;
+            document.getElementById('summary').innerHTML =
+                '共 <strong>' + LOCATIONS.length + '</strong> 个地址待查询';
+            document.getElementById('progressFill').style.width = '0%';
+            showToast('成功导入 ' + LOCATIONS.length + ' 个地址');
+        }
+
+        // ========== 高德 API 查询 ==========
+        function queryOne(idx, key) {
+            return new Promise(function(resolve) {
+                var loc = LOCATIONS[idx];
+                var tr = document.getElementById('row-' + idx);
+                if (!tr) { resolve(); return; }
+                var coordsCell = document.getElementById('cell-coords-' + idx);
+                var levelCell = document.getElementById('cell-level-' + idx);
+                var resultCell = document.getElementById('cell-result-' + idx);
+
+                tr.className = 'querying';
+                coordsCell.textContent = '查询中...';
+                resultCell.innerHTML = '<span class="status-dot dot-loading"></span>查询中...';
+
+                var url = 'https://restapi.amap.com/v3/geocode/geo?address=' +
+                    encodeURIComponent(loc.search) +
+                    '&key=' + key +
+                    '&city=南京';
+
+                fetch(url)
+                    .then(function(r) { return r.json(); })
+                    .then(function(data) {
+                        if (data.status === '1' && data.geocodes && data.geocodes.length > 0) {
+                            var geo = data.geocodes[0];
+                            var locParts = geo.location.split(',');
+                            var lng = parseFloat(locParts[0]);
+                            var lat = parseFloat(locParts[1]);
+
+                            results[idx] = {
+                                name: loc.name,
+                                search: loc.search,
+                                lng: lng,
+                                lat: lat,
+                                formatted: geo.formatted_address,
+                                level: geo.level,
+                                type: loc.type,
+                                note: loc.note
+                            };
+
+                            tr.className = 'success';
+                            coordsCell.textContent = lng.toFixed(6) + ', ' + lat.toFixed(6);
+                            levelCell.innerHTML = '<span class="level-tag">' + geo.level + '</span>';
+                            resultCell.innerHTML = '<span class="status-dot dot-ok"></span>' + geo.formatted_address;
+                        } else {
+                            var msg = data.info || '未找到结果';
+                            if (data.status === '0') msg = 'Key 无效: ' + (data.infocode || '');
+                            results[idx] = {
+                                name: loc.name, search: loc.search, location: null,
+                                type: loc.type, note: loc.note, error: msg
+                            };
+                            tr.className = 'error';
+                            coordsCell.textContent = '-';
+                            levelCell.innerHTML = '<span class="level-tag">-</span>';
+                            resultCell.innerHTML = '<span class="status-dot dot-fail"></span>' + msg;
+                        }
+
+                        var done = Object.keys(results).length;
+                        document.getElementById('progressFill').style.width = (done / LOCATIONS.length * 100) + '%';
+                        resolve();
+                    })
+                    .catch(function(e) {
+                        results[idx] = {
+                            name: loc.name, search: loc.search, location: null,
+                            type: loc.type, note: loc.note, error: '网络错误: ' + e.message
+                        };
+                        tr.className = 'error';
+                        coordsCell.textContent = '-';
+                        resultCell.innerHTML = '<span class="status-dot dot-fail"></span>网络错误';
+                        var done = Object.keys(results).length;
+                        document.getElementById('progressFill').style.width = (done / LOCATIONS.length * 100) + '%';
+                        resolve();
+                    });
+            });
+        }
+
+        async function queryAll() {
+            var key = document.getElementById('apiKey').value.trim();
+            if (!key) { showToast('请输入 API Key'); return; }
+
+            var btn = document.getElementById('queryBtn');
+            btn.disabled = true;
+            btn.textContent = '查询中...';
+            results = {};
+            document.getElementById('progressFill').style.width = '0%';
+            document.getElementById('exportBtn').disabled = true;
+            renderTable();
+
+            for (var i = 0; i < LOCATIONS.length; i++) {
+                await queryOne(i, key);
+                await new Promise(function(r) { setTimeout(r, 300); });
+            }
+
+            var found = Object.values(results).filter(function(r) { return r.lng; }).length;
+            document.getElementById('summary').innerHTML =
+                '查询完成：找到 <strong style="color:#52c41a">' + found + '</strong> / ' +
+                LOCATIONS.length + ' 个地址';
+
+            if (found > 0) document.getElementById('exportBtn').disabled = false;
+            btn.disabled = false;
+            btn.textContent = '重新查询';
+            showToast('查询完成！找到 ' + found + ' 个地址');
+        }
+
+        // ========== 导出 GeoJSON ==========
+        function exportGeoJSON() {
+            var features = [];
+            Object.values(results).forEach(function(r) {
+                if (!r.lng) return;
+                features.push({
+                    type: 'Feature',
+                    properties: {
+                        name: r.name,
+                        search_query: r.search,
+                        formatted_address: r.formatted,
+                        level: r.level,
+                        note: r.note || '',
+                        source: 'amap_rest_geocoding'
+                    },
+                    geometry: {
+                        type: 'Point',
+                        coordinates: [r.lng, r.lat]
+                    }
+                });
+            });
+
+            var geojson = {
+                type: 'FeatureCollection',
+                name: 'amap_verified_addresses',
+                description: '地址验证 - 高德 REST API 地理编码',
+                features: features
+            };
+
+            var jsonStr = JSON.stringify(geojson, null, 2);
+
+            var textarea = document.createElement('textarea');
+            textarea.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:9999;font-size:12px;opacity:0;';
+            textarea.value = jsonStr;
+            document.body.appendChild(textarea);
+            textarea.select();
+            try { document.execCommand('copy'); } catch(e) {}
+            document.body.removeChild(textarea);
+
+            var blob = new Blob([jsonStr], { type: 'application/json' });
+            var url = URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            a.href = url;
+            a.download = 'addresses_verified.geojson';
+            a.click();
+            URL.revokeObjectURL(url);
+
+            showToast('GeoJSON 已导出并复制到剪贴板，共 ' + features.length + ' 个要素');
+        }
+
+        // 初始化
+        renderTable();
+    </script>
+</body>
+</html>

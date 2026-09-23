@@ -16,25 +16,41 @@
       position: relative;
     }
 
-    /* 顶部标题横幅 */
+    /* 顶部标题横幅：主标题 + 说明两行层级排版 */
     .top-banner {
       position: absolute;
-      top: 90px;
+      top: 80px;
       left: 0;
       width: 1080px;
-      height: 120px;
+      min-height: 150px;
       background: __BANNER_BG__;
       display: flex;
+      flex-direction: column;
       align-items: center;
       justify-content: center;
-      box-shadow: 0 6px 18px rgba(0, 50, 150, 0.15);
+      padding: 16px 20px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16);
       z-index: 20;
+      gap: 10px;
     }
     .banner-title {
-      font-size: 64px;
+      font-size: 58px;
       font-weight: 900;
       color: #FFFFFF;
-      letter-spacing: 6px;
+      letter-spacing: 4px;
+      line-height: 1.15;
+      text-align: center;
+    }
+    .banner-subtitle {
+      font-size: 26px;
+      font-weight: 700;
+      color: rgba(255, 255, 255, 0.92);
+      letter-spacing: 1.5px;
+      text-align: center;
+      background: rgba(0, 0, 0, 0.12);
+      padding: 4px 22px;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.22);
     }
 
     /* 中部全国地图主画板 */
@@ -57,7 +73,6 @@
       stroke-width: 1.4px;
       stroke-linejoin: round;
       stroke-linecap: round;
-      fill: #FFFFFF;
     }
     path.prov-polygon.highlight {
       stroke: rgba(255, 255, 255, 0.45);
@@ -177,41 +192,36 @@
     .sh-val { font-size: 29px; }
     .sh-name { font-size: 25px; }
 
-    /* 底部品牌印章与说明 */
-    .footer-area {
+    /* 全屏防盗水印层 */
+    .watermark-layer {
       position: absolute;
-      top: 1610px;
+      top: 0;
       left: 0;
       width: 100%;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 14px;
-      z-index: 10;
+      height: 100%;
+      pointer-events: none;
+      z-index: 12;
+      overflow: hidden;
     }
-    .stamp-box {
-      border: 3.5px solid #0056CC;
-      border-radius: 14px;
-      padding: 6px 26px;
-      font-size: 34px;
-      font-weight: 900;
-      color: #0056CC;
-      letter-spacing: 4px;
-      background: #FFFFFF;
-      box-shadow: 0 4px 14px rgba(0, 50, 150, 0.12);
-    }
-    .date-note {
+    .wm-item {
+      position: absolute;
       font-size: 28px;
       font-weight: 900;
-      color: #0056CC;
-      letter-spacing: 1.5px;
+      opacity: 0.14;
+      transform: rotate(-25deg);
+      letter-spacing: 2px;
+      white-space: nowrap;
+      user-select: none;
     }
+
+
   </style>
 </head>
 <body>
 
   <div class="top-banner">
     <div class="banner-title">__MAIN_TITLE__</div>
+    <div class="banner-subtitle" id="banner-subtitle">__SUB_TITLE__</div>
   </div>
 
   <div class="map-container">
@@ -228,9 +238,9 @@
     </svg>
   </div>
 
-  <div class="footer-area" id="footer-area">
-    <div class="stamp-box" id="stamp-box">__BRAND_STAMP__</div>
-    <div class="date-note" id="date-note">__SUB_TITLE__</div>
+  <div class="watermark-layer" id="watermark-layer"></div>
+
+  
   </div>
 
   <script>
@@ -238,6 +248,47 @@ __D3_CODE__
   </script>
   <script>
     const CONFIG = __CONFIG_JSON__;
+    const themeBrandColor = CONFIG.banner_bg || CONFIG.highlight_color || "#0056CC";
+    
+    // 动态同步主视觉色调至图注胶囊与附图框
+    const cBadge = document.getElementById("caption-badge");
+    if (cBadge) {
+      cBadge.style.background = themeBrandColor;
+    }
+    
+    // 生成覆盖整张图片的散布式半透明防盗水印
+    const wmText = CONFIG.watermark_text || CONFIG.brand_stamp || "满爸爱生活";
+    const wmLayer = document.getElementById("watermark-layer");
+    if (wmLayer && wmText) {
+      const displayWm = wmText.startsWith("@") ? wmText : ("@" + wmText);
+      const wmPositions = [
+        { top: 520, left: 140 },   // 新疆盆地开阔区
+        { top: 440, left: 820 },   // 东北兴安岭
+        { top: 640, left: 420 },   // 内蒙古高原
+        { top: 820, left: 140 },   // 西藏高原腹地
+        { top: 1020, left: 260 },  // 青藏高原边缘
+        { top: 1360, left: 180 },  // 西南滇缅外侧开阔区
+        { top: 1680, left: 460 }   // 底部海域
+      ];
+      wmPositions.forEach(pos => {
+        const item = document.createElement("div");
+        item.className = "wm-item";
+        item.style.top = pos.top + "px";
+        item.style.left = pos.left + "px";
+        item.style.color = themeBrandColor;
+        item.innerText = displayWm;
+        wmLayer.appendChild(item);
+      });
+    }
+    const sCard = document.getElementById("south-sea-card");
+    if (sCard) {
+      sCard.style.borderColor = themeBrandColor;
+    }
+    const sHeader = document.querySelector(".south-sea-header");
+    if (sHeader) {
+      sHeader.style.background = themeBrandColor;
+    }
+
     const GEO_DATA = __GEO_JSON__;
     const svgG = d3.select("#map-g");
     const southSeaG = d3.select("#south-sea-g");
@@ -256,8 +307,8 @@ __D3_CODE__
       if (sb) sb.style.display = "none";
     }
     if (!CONFIG.subtitle) {
-      const dn = document.getElementById("date-note");
-      if (dn) dn.style.display = "none";
+      const subEl = document.getElementById("banner-subtitle");
+      if (subEl) subEl.style.display = "none";
     }
 
     const lon0 = 105.0;
@@ -357,13 +408,13 @@ __D3_CODE__
         .datum(feature)
         .attr("class", isHl ? "prov-polygon highlight" : "prov-polygon")
         .attr("d", pathGenerator)
-        .attr("fill", fillColor);
+        .style("fill", fillColor);
 
       if (['海南省', '广东省', '台湾省', '广西壮族自治区'].includes(fullName)) {
         southSeaG.append("path")
           .datum(feature)
           .attr("d", ssPathGenerator)
-          .attr("fill", isHl ? (p.color || highlightColor) : "#FFFFFF")
+          .style("fill", isHl ? (p.color || highlightColor) : "#FFFFFF")
           .attr("stroke", "#0041A8")
           .attr("stroke-width", "0.8px");
       }

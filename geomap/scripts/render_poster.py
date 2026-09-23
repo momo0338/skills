@@ -98,10 +98,14 @@ def build_html(config_path: str) -> tuple[str, str, dict]:
         main_title = config.get("title") or "全国分布图"
         sub_title = config.get("subtitle") or "截止2026年9月统计"
         brand_stamp = config.get("brand_stamp") or "满爸爱生活"
+        banner_bg = config.get("banner_bg") or "#0052D9"
+        bg_color = config.get("bg_color") or "#C6DCFD"
 
         html = tpl.replace("__TITLE__", main_title)\
                   .replace("__MAIN_TITLE__", main_title)\
                   .replace("__SUB_TITLE__", sub_title)\
+                  .replace("__BANNER_BG__", banner_bg)\
+                  .replace("__BG_COLOR__", bg_color)\
                   .replace("__BRAND_STAMP__", brand_stamp)\
                   .replace("__D3_CODE__", d3_code)\
                   .replace("__CONFIG_JSON__", json.dumps(config, ensure_ascii=False))\

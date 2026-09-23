@@ -153,3 +153,28 @@ PY="/Users/zhugx/.workbuddy/binaries/python/envs/default/bin/python3"
 - 自然资源厅标准低饱和莫兰迪五色相间：淡米黄 (`#FFFDDC`)、淡粉杏 (`#FDECD2`)、淡薄荷青 (`#E2F0E3`)、淡丁香粉 (`#FCE7F0`)、淡天青蓝 (`#E2F0FA`)；
 - 省界外侧 14px 柔和铅灰立体外晕渲 (Halo)。
 
+---
+
+## 附：POI 取数与坐标工具（2026-09-22 并入）
+
+制图之前常常先要"取数"。本技能现在自带百度/高德取数脚本，不再依赖外部目录里的散装脚本。
+
+| 脚本 | 用途 | 用法 |
+|---|---|---|
+| `scripts/baidu_poi.py` | 百度 POI 检索抓取（分页、区域限定） | `baidu_poi.py -q "景区" -r "南京" -o out.csv` |
+| `scripts/baidu_conv.py` | 坐标转换（米制 / 百度经纬度互转） | `baidu_conv.py --input coords.csv` |
+| `scripts/baidu_xiaoqu.py` | 栅格化小区批量抓取（按经纬度网格切片） | `baidu_xiaoqu.py --lat-min .. --lat-max .. --lng-min .. --lng-max ..` |
+| `scripts/amap_verify_tool.html` | 高德地理编码 · 地址批量验证（浏览器打开即用） | 双击打开 HTML |
+
+**凭据**：三个百度脚本的 AK 从环境变量读取，**脚本内不含任何明文 AK**：
+
+```bash
+export BAIDU_MAP_AK=<你的百度地图AK>   # 未注入时脚本会直接退出并提示
+```
+
+**数据源与在线工具清单**：见 `references/数据源与在线工具.md`（GeoJSON 下载、POI 数据、
+坐标转换、OSM/Overpass 等网址汇总）。
+
+> 迁移自 `~/codeup/obsidian/03-工作记录/满爸爱生活/工具/`（2026-09-22）。
+> 迁移时把原脚本里硬编码的百度 AK 全部移除，**该 AK 此前以明文形式躺在 vault 里，建议到百度开放平台轮换一次**。
+
