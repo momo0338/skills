@@ -55,6 +55,7 @@ SKILL_DEPS = {
     "job-ima": {},
     "job-write": {},
     "mp-html": {},
+    "mp-ops": {},
     "mp-publish": {},
     "mp-save": {},
     "dy-cli": {
@@ -85,6 +86,7 @@ SKILL_DEPS = {
             "npm": "npm install -g @jackwener/opencli",
         },
     },
+    "project-handover": {},
     "yt-dlp": {
         "bins": ["yt-dlp", "ffmpeg"],
         "pip": ["yt-dlp"],
