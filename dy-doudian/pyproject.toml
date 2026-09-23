@@ -28,7 +28,24 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=7.0", "pytest-asyncio", "pytest-cov", "ruff"]
+# dev 必须包含 playwright —— 见下方注释，别删
+# tests/test_browser.py 虽然全程用 MagicMock、不启动真实浏览器，但它的 import 链是
+#   tests/test_browser.py
+#     → dy_doudian.browser.daily_report / order_client
+#       → dy_doudian.browser.__init__
+#         → dy_doudian.browser.base  → from playwright.sync_api import ...
+# 因此只要 playwright 不可导入，pytest 会在**收集阶段**就中断（exit 2），
+# 整个 dy-doudian 测试目录一个都跑不了。此前 CI 只装 `[dev]` 而 dev 里没有它，
+# 导致 offline-tests 自 2026-09-20 起持续红灯（2026-09-23 修复）。
+dev = [
+    "pytest>=7.0",
+    "pytest-asyncio",
+    "pytest-cov",
+    "ruff",
+    "playwright>=1.40",
+]
+# browser 是「可选功能依赖」，供真正跑浏览器自动化时使用（独立于测试）；
+# 与 dev 里的 playwright 指向同一版本约束，保持二者一致以免版本漂移。
 browser = ["playwright>=1.40"]
 
 [project.scripts]
