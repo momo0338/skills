@@ -6,6 +6,7 @@ mp_search.py: 微信文章与官方标准短链检索采集统一工具
 
 功能：
 1. search  - 按关键词检索全网文章（默认优先微信端原生，失败自动降级到 opencli 搜狗）
+2. biz     - 按名称或关键词搜索公众号主体（获取 fakeid、微信号、认证信息等）
 2. album   - 抓取公众号合集（Album）整卷文章列表与 Markdown 索引（公开 API，免登录）
 3. account - 获取指定公众号全量/近期历史图文与永久短链（公众平台超链接接口）
 4. format  - 将搜一搜采集到的文章元数据与真实互动指标格式化为 Markdown 对比表格
@@ -48,11 +49,43 @@ def handle_album(args):
         sys.exit(1)
 
 
+def handle_biz(args):
+    """处理公众号主体搜索"""
+    from wechat_mp_login import mp_search_accounts
+
+    query = args.query.strip()
+    count = args.limit
+    headless = args.headless
+    print(f"🔍 正在检索公众号主体: 「{query}」 (数量: {count}, 模式: {'无头' if headless else '可视化'})...", file=sys.stderr)
+
+    result = mp_search_accounts(query=query, count=count, headless=headless, output_file=args.output)
+    if result.get("success"):
+        accounts = result.get("accounts", [])
+        print()
+        print("=" * 75)
+        print(f"✅ 找到 {len(accounts)} 个匹配公众号")
+        print("=" * 75)
+        print(f"{'公众号名称':<25} {'微信号/Alias':<20} {'FakeID'}")
+        print("-" * 75)
+        for a in accounts:
+            nick = a.get("nickname", "-")
+            alias = a.get("alias") or "-"
+            fid = a.get("fakeid", "-")
+            print(f"{nick:<25} {alias:<20} {fid}")
+        print("=" * 75)
+    else:
+        err = result.get("message", "未知错误")
+        print(f"\n❌ 公众号搜索失败: {err}", file=sys.stderr)
+        sys.exit(1)
+
+
 def handle_account(args):
     """处理号内历史文章获取"""
     from wechat_mp_login import mp_login_and_get_articles
 
     print("📝 目标公众号:", args.nickname)
+    if getattr(args, "query", None):
+        print("🔎 号内关键词过滤:", args.query)
     print("📊 最大获取条数:", args.max_count)
     print("🌐 模式:", "无头模式 (Headless)" if args.headless else "可视化浏览器")
     if args.output:
@@ -63,6 +96,7 @@ def handle_account(args):
         result = mp_login_and_get_articles(
             nickname=args.nickname,
             max_count=args.max_count,
+            query=getattr(args, "query", "") or "",
             headless=args.headless,
             output_file=args.output,
         )
@@ -107,6 +141,61 @@ def handle_format(args):
     else:
         print(md_content)
 
+
+def search_via_sogou_http(keyword: str, limit: int, rank_type: str):
+    """高效通道：直接通过 HTTP 抓取搜狗微信文章检索结果"""
+    import urllib.request
+    from urllib.parse import quote
+    import html as html_mod
+
+    url = f"https://weixin.sogou.com/weixin?type=2&query={quote(keyword)}&page=1"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Referer": "https://weixin.sogou.com/"
+    }
+    try:
+        req = urllib.request.Request(url, headers=headers)
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            text = resp.read().decode("utf-8")
+        if "antispider" in text or "请输入验证码" in text:
+            return []
+        items = []
+        for blk in text.split('<div class="txt-box">')[1:]:
+            m = re.search(r'<h3>.*?<a[^>]*>(.*?)</a>', blk, re.S)
+            if not m:
+                continue
+            title = re.sub(r'<[^>]+>', '', m.group(1)).strip()
+            title = html_mod.unescape(title)
+            href = re.search(r'<h3>.*?href="([^"]+)"', blk, re.S)
+            link = ("https://weixin.sogou.com" + html_mod.unescape(href.group(1))) if href else ""
+            acc = (re.search(r'class="all-time-y2"[^>]*>(.*?)</span>', blk, re.S)
+                   or re.search(r'class="account"[^>]*>(.*?)</a>', blk, re.S))
+            acc_name = re.sub(r'<[^>]+>', '', acc.group(1)).strip() if acc else "-"
+            acc_name = html_mod.unescape(acc_name)
+            info = re.search(r'<p class="txt-info"[^>]*>(.*?)</p>', blk, re.S)
+            summary = re.sub(r'<[^>]+>', '', info.group(1)).strip() if info else ""
+            summary = html_mod.unescape(summary)
+            ts = (re.search(r"timeConvert('(\d{9,11})')", blk) or re.search(r't="(\d{9,11})"', blk))
+            date_str = "-"
+            if ts:
+                date_str = time.strftime("%Y-%m-%d", time.localtime(int(ts.group(1))))
+            items.append({
+                "title": title,
+                "account": acc_name,
+                "publish_date": date_str,
+                "read_count": "-",
+                "like_count": 0,
+                "share_count": 0,
+                "collect_count": 0,
+                "comment_count": 0,
+                "mp_url": link,
+                "summary": summary
+            })
+            if len(items) >= limit:
+                break
+        return items
+    except Exception:
+        return []
 
 def search_via_opencli(keyword: str, limit: int, rank_type: str):
     """降级通道：使用 opencli 走搜狗微信检索"""
@@ -213,6 +302,48 @@ def handle_search(args):
     rank_type = "最新" if sort_mode == "new" else "最热"
     limit = args.limit
     engine = getattr(args, "engine", "auto")
+    account_filter = getattr(args, "account", None)
+
+    # 1. 如果指定了公众号名称，走官方公众平台号内精准检索
+    if account_filter:
+        print(f"🔍 正在限定在公众号「{account_filter}」内检索关键词「{keyword}」...", file=sys.stderr)
+        import wechat_mp_login
+
+        res = wechat_mp_login.mp_login_and_get_articles(
+            nickname=account_filter,
+            max_count=limit,
+            query=keyword,
+            headless=getattr(args, "headless", True),
+            output_file=args.output
+        )
+        if res.get("success"):
+            items = []
+            for a in res.get("articles", []):
+                t_str = time.strftime("%Y-%m-%d", time.localtime(a.get("create_time", 0))) if a.get("create_time") else "-"
+                items.append({
+                    "title": a.get("title", "").strip(),
+                    "account": account_filter,
+                    "publish_date": t_str,
+                    "read_count": "-",
+                    "like_count": 0,
+                    "share_count": 0,
+                    "collect_count": 0,
+                    "comment_count": 0,
+                    "mp_url": a.get("url", "").strip(),
+                    "summary": a.get("digest", "").strip()
+                })
+            md_content = format_markdown_table(f"{account_filter} · {keyword}", rank_type, items, "wechat_mp_account")
+            if args.format_md:
+                os.makedirs(os.path.dirname(os.path.abspath(args.format_md)), exist_ok=True)
+                with open(args.format_md, "w", encoding="utf-8") as f:
+                    f.write(md_content)
+                print(f"✅ 对比表格 Markdown 已保存至: {args.format_md}", file=sys.stderr)
+            if not args.output and not args.format_md:
+                print(md_content)
+            return
+        else:
+            print(f"❌ 号内检索失败: {res.get('message', '未知错误')}", file=sys.stderr)
+            sys.exit(1)
 
     print(f"🔍 正在检索微信公众号文章: 关键词「{keyword}」 | 排序: {rank_type} | 引擎模式: {engine} | 数量: {limit}篇 ...", file=sys.stderr)
 
@@ -230,12 +361,20 @@ def handle_search(args):
                 print("❌ 微信端原生检索通道未就绪（未检测到有效微信登录凭据或搜一搜通道）", file=sys.stderr)
                 sys.exit(1)
             else:
-                print("⚠️ [降级提示] 微信端原生通道未就绪，已自动降级为搜狗开放检索（opencli）。当前数据不包含端内真实阅读量与点赞数。", file=sys.stderr)
-                items = search_via_opencli(keyword, limit, rank_type)
-                channel = "opencli"
+                items = search_via_sogou_http(keyword, limit, rank_type)
+                if items:
+                    channel = "sogou_http"
+                else:
+                    print("⚠️ [降级提示] 微信端原生通道未就绪，已自动降级为搜狗开放检索（opencli）。当前数据不包含端内真实阅读量与点赞数。", file=sys.stderr)
+                    items = search_via_opencli(keyword, limit, rank_type)
+                    channel = "opencli"
     else:
-        items = search_via_opencli(keyword, limit, rank_type)
-        channel = "opencli"
+        items = search_via_sogou_http(keyword, limit, rank_type)
+        if items:
+            channel = "sogou_http"
+        else:
+            items = search_via_opencli(keyword, limit, rank_type)
+            channel = "opencli"
 
     payload = {
         "keyword": keyword,
@@ -269,6 +408,9 @@ def main():
 
     search_parser = subparsers.add_parser("search", help="按关键词检索微信文章列表（默认优先微信端原生，失败降级搜狗）")
     search_parser.add_argument("keyword", help="搜索关键词")
+    search_parser.add_argument("--account", help="限定在指定公众号内精确检索（官方公众平台通道）")
+    search_parser.add_argument("--headless", action="store_true", default=True, help="无头模式 (默认开启)")
+    search_parser.add_argument("--no-headless", dest="headless", action="store_false", help="显示浏览器窗口 (用于扫码登录)")
     search_parser.add_argument("-s", "--sort", choices=["hot", "new"], default="hot", help="排序方式：hot(最热/综合), new(最新时效)")
     search_parser.add_argument("--engine", choices=["auto", "wechat", "opencli"], default="auto", help="检索通道：auto(默认优先微信端，失败自动降级到 opencli)、wechat(强制微信端)、opencli(直接走搜狗)")
     search_parser.add_argument("-n", "--limit", type=int, default=10, help="返回条数 (默认 10)")
@@ -280,8 +422,16 @@ def main():
     album_parser.add_argument("-o", "--output", default="./weixin-albums", help="输出目录 (默认 ./weixin-albums)")
     album_parser.add_argument("-b", "--batch-size", type=int, default=20, help="每页获取文章数 (默认 20，最大 20)")
 
+    biz_parser = subparsers.add_parser("biz", help="按名称或关键词搜索公众号主体（获取 fakeid、微信号、认证状态）")
+    biz_parser.add_argument("query", help="公众号名称或关键词")
+    biz_parser.add_argument("-n", "--limit", type=int, default=10, help="返回条数 (默认 10)")
+    biz_parser.add_argument("--headless", action="store_true", default=True, help="无头模式 (默认开启)")
+    biz_parser.add_argument("--no-headless", dest="headless", action="store_false", help="显示浏览器窗口 (用于扫码登录)")
+    biz_parser.add_argument("-o", "--output", help="输出 JSON 文件路径")
+
     account_parser = subparsers.add_parser("account", help="获取指定公众号历史推文列表与官方短链")
     account_parser.add_argument("nickname", help="目标公众号名称")
+    account_parser.add_argument("-q", "--query", default="", help="在号内搜索指定关键词过滤文章")
     account_parser.add_argument("-n", "--max-count", type=int, default=20, help="最大获取数量 (默认 20)")
     account_parser.add_argument("--headless", action="store_true", default=True, help="无头模式 (默认开启)")
     account_parser.add_argument("--no-headless", dest="headless", action="store_false", help="显示浏览器窗口 (用于扫码登录)")
@@ -295,6 +445,8 @@ def main():
 
     if args.command == "search":
         handle_search(args)
+    elif args.command == "biz":
+        handle_biz(args)
     elif args.command == "album":
         handle_album(args)
     elif args.command == "account":

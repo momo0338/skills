@@ -1,24 +1,22 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
-微信公众平台扫码登录和文章获取模块
-
-参考项目：
-- wechat-article-assistant: 扫码登录 + Cookie管理 + 文章列表API
-- weChat_collector: 短链接解析 + fakeid搜索
+微信公众平台扫码登录、公众号主体搜索与号内文章检索模块
 
 功能：
-1. 扫码登录微信公众平台
-2. 保存和复用Cookie
-3. 搜索公众号获取fakeid
-4. 获取公众号文章列表（返回短链接）
+1. 扫码登录微信公众平台与 Cookie/Token 动态持久化
+2. 搜索公众号主体（获取 fakeid、微信号、认证信息等）
+3. 获取指定公众号历史文章列表与短链接（支持号内关键词检索过滤）
+4. 多通道凭据加载（支持文件、环境变量与直接传参）
 """
 
 import json
 import os
+import sys
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import urlparse, parse_qs, quote
 
 try:
     from playwright.sync_api import sync_playwright, Page, BrowserContext
@@ -33,8 +31,10 @@ MP_LOGIN_URL = "https://mp.weixin.qq.com/"
 MP_ARTICLE_LIST_API = "https://mp.weixin.qq.com/cgi-bin/appmsgpublish"
 MP_SEARCH_API = "https://mp.weixin.qq.com/cgi-bin/searchbiz"
 
-# Cookie文件路径
+# 凭据存储路径
 COOKIE_FILE = os.path.join(os.path.dirname(__file__), ".mp_cookies.json")
+TOKEN_FILE = os.path.join(os.path.dirname(__file__), ".mp_token")
+QRCODE_FILE = "/tmp/mp_login_qrcode.png"
 
 
 class MPLoginError(Exception):
@@ -48,18 +48,20 @@ class MPLoginError(Exception):
 class WeChatMPClient:
     """微信公众平台客户端"""
 
-    def __init__(self, cookie_file: str = None):
+    def __init__(self, cookie_file: str = None, token: str = None):
         """初始化客户端
         
         Args:
-            cookie_file: Cookie文件路径，默认使用.mp_cookies.json
+            cookie_file: Cookie文件路径，默认使用 .mp_cookies.json
+            token: 直接传入的 token（如通过环境变量或 CLI 注入）
         """
         self.cookie_file = cookie_file or COOKIE_FILE
+        self.token_file = os.path.join(os.path.dirname(self.cookie_file), ".mp_token")
+        self.token = token or os.environ.get("MP_TOKEN")
         self.playwright = None
         self.browser = None
         self.context = None
         self.page = None
-        self.token = None
         self.cookies = []
 
     def __enter__(self):
@@ -69,96 +71,158 @@ class WeChatMPClient:
         self.close()
 
     def close(self):
-        """关闭浏览器"""
+        """安全关闭浏览器与 Playwright 引擎"""
         if self.browser:
-            self.browser.close()
+            try:
+                self.browser.close()
+            except Exception:
+                pass
+            self.browser = None
         if self.playwright:
-            self.playwright.stop()
+            try:
+                self.playwright.stop()
+            except Exception:
+                pass
+            self.playwright = None
 
     def _save_cookies(self):
-        """保存Cookie到文件"""
+        """保存 Cookie 与 Token 到本地"""
         try:
-            cookies = self.context.cookies()
+            if self.context:
+                self.cookies = self.context.cookies()
+            payload = {
+                "token": self.token,
+                "cookies": self.cookies,
+                "updated_at": time.time()
+            }
             with open(self.cookie_file, "w", encoding="utf-8") as f:
-                json.dump(cookies, f, ensure_ascii=False, indent=2)
-            print(f"✅ Cookie已保存到: {self.cookie_file}")
+                json.dump(payload, f, ensure_ascii=False, indent=2)
+            print(f"✅ Cookie 与 Token 已保存到: {self.cookie_file}")
+
+            if self.token:
+                with open(self.token_file, "w", encoding="utf-8") as tf:
+                    tf.write(self.token.strip())
         except Exception as e:
-            print(f"⚠️ 保存Cookie失败: {e}")
+            print(f"⚠️ 保存 Cookie 失败: {e}")
 
     def _load_cookies(self) -> bool:
-        """从文件加载Cookie
-        
-        Returns:
-            是否加载成功
-        """
-        if not os.path.exists(self.cookie_file):
+        """从文件或环境变量加载凭据"""
+        # 1. 尝试从环境变量加载
+        env_token = os.environ.get("MP_TOKEN")
+        if env_token:
+            self.token = env_token.strip()
+
+        # 2. 从文件加载
+        if os.path.exists(self.cookie_file):
+            try:
+                with open(self.cookie_file, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                if isinstance(data, dict):
+                    if not self.token:
+                        self.token = data.get("token")
+                    self.cookies = data.get("cookies", [])
+                elif isinstance(data, list):
+                    self.cookies = data
+            except Exception as e:
+                print(f"⚠️ 加载 Cookie 文件失败: {e}")
+
+        # 3. 检查单独的 token 文件
+        if not self.token and os.path.exists(self.token_file):
+            try:
+                with open(self.token_file, "r", encoding="utf-8") as tf:
+                    self.token = tf.read().strip()
+            except Exception:
+                pass
+
+        # 注入 context
+        if self.context and self.cookies:
+            try:
+                self.context.add_cookies(self.cookies)
+                return True
+            except Exception as e:
+                print(f"⚠️ context 注入 Cookie 失败: {e}")
+                return False
+
+        return bool(self.token or self.cookies)
+
+    def check_session_fast(self) -> bool:
+        """纯 HTTP 快速验证存量 Token 和 Cookie 是否依然有效（无需启动浏览器）"""
+        if not self.token or not self.cookies:
             return False
-        
         try:
-            with open(self.cookie_file, "r", encoding="utf-8") as f:
-                cookies = json.load(f)
-            self.context.add_cookies(cookies)
-            print(f"✅ 已从文件加载Cookie: {self.cookie_file}")
-            return True
-        except Exception as e:
-            print(f"⚠️ 加载Cookie失败: {e}")
+            import urllib.request
+            cookie_str = "; ".join([f"{c['name']}={c['value']}" for c in self.cookies if 'name' in c and 'value' in c])
+            url = f"{MP_SEARCH_API}?action=search_biz&begin=0&count=1&token={self.token}&lang=zh_CN&f=json&ajax=1&query=test"
+            headers = {
+                "Cookie": cookie_str,
+                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+                "Referer": f"{MP_BASE_URL}/cgi-bin/appmsg?token={self.token}&lang=zh_CN"
+            }
+            req = urllib.request.Request(url, headers=headers)
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                ret = data.get("base_resp", {}).get("ret")
+                return ret == 0
+        except Exception:
             return False
 
     def _validate_cookies(self) -> bool:
-        """验证Cookie是否有效
-        
-        Returns:
-            Cookie是否有效
-        """
+        """验证已保存凭据的有效性"""
+        if not self.page:
+            return False
         try:
-            self.page.goto(f"{MP_BASE_URL}/cgi-bin/home", wait_until="domcontentloaded", timeout=10000)
+            self.page.goto(f"{MP_BASE_URL}/cgi-bin/home", wait_until="domcontentloaded", timeout=12000)
             self.page.wait_for_timeout(2000)
-            
+
             current_url = self.page.url
             if "cgi-bin/home" in current_url or "cgi-bin/frame" in current_url:
+                body_text = self.page.inner_text("body")
+                if "登录超时" in body_text or "请重新登录" in body_text or "二维码" in body_text:
+                    return False
                 return True
             return False
         except Exception:
             return False
 
     def _extract_token(self) -> Optional[str]:
-        """从页面URL或Cookie中提取token
-        
-        Returns:
-            token字符串或None
-        """
-        # 方法1：从URL参数提取
+        """从页面 URL 或 DOM 中提取当前有效 token"""
+        if not self.page:
+            return self.token
+
+        # 方法 1：从 URL 参数提取
         url = self.page.url
         parsed = urlparse(url)
         params = parse_qs(parsed.query)
         tokens = params.get("token")
-        if tokens:
+        if tokens and tokens[0]:
             return tokens[0]
 
-        # 方法2：从Cookie提取
+        # 方法 2：从页面链接属性中正则提取
         try:
-            cookies = self.context.cookies()
-            for cookie in cookies:
-                if cookie["name"] == "token":
-                    return cookie["value"]
+            links = self.page.eval_on_selector_all('a[href*="token="]', 'elements => elements.map(e => e.href)')
+            for l in links:
+                m = parse_qs(urlparse(l).query).get("token")
+                if m and m[0]:
+                    return m[0]
         except Exception:
             pass
 
-        return None
+        # 方法 3：从 Cookie 提取
+        if self.context:
+            try:
+                cookies = self.context.cookies()
+                for cookie in cookies:
+                    if cookie.get("name") == "token" and cookie.get("value"):
+                        return cookie["value"]
+            except Exception:
+                pass
 
-    # 通用启动参数：容器/沙箱环境必需
+        return self.token
+
     LAUNCH_ARGS = ["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"]
 
     def _launch_usable_browser(self, headless: bool):
-        """启动一个"真能打开微信公众平台"的浏览器实例。
-
-        ⚠️ 踩坑记录（2026-09-16 实测）：
-        在 macOS + 容器沙箱环境下，Playwright **自带 Chromium**（chromium-1169 等）
-        渲染 mp.weixin.qq.com 会直接 `Page.goto: Page crashed`；加不加 `--no-sandbox`
-        都一样，浏览器本身能开 example.com，**只有微信站点崩**（属渲染进程被杀）。
-        而系统安装的 Chrome（`channel="chrome"`）完全正常。
-        故按 [系统 Chrome → 自带 Chromium] 顺序探测，返回第一个能成功导航微信的实例。
-        """
+        """优先系统 Chrome，回退自带 Chromium"""
         last_err = None
         for kwargs in ({"channel": "chrome"}, {}):
             tag = kwargs.get("channel", "bundled-chromium")
@@ -168,18 +232,14 @@ class WeChatMPClient:
                 )
             except Exception as e:
                 last_err = e
-                print(f"⚠️  {tag} 启动失败: {str(e)[:100]}")
                 continue
-            # 启动成功 ≠ 能渲染微信，必须实测导航一次
             try:
                 probe = browser.new_page()
                 probe.goto(MP_BASE_URL, wait_until="domcontentloaded", timeout=20000)
                 probe.close()
-                print(f"✅ 浏览器通道可用: {tag}")
                 return browser
             except Exception as e:
                 last_err = e
-                print(f"⚠️  {tag} 导航微信失败: {str(e)[:100]}，尝试下一个通道")
                 try:
                     browser.close()
                 except Exception:
@@ -187,255 +247,193 @@ class WeChatMPClient:
         raise RuntimeError(f"无可用浏览器通道（系统 Chrome 与自带 Chromium 均失败）: {last_err}")
 
     def login(self, headless: bool = False, timeout: int = 120) -> Dict[str, Any]:
-        """扫码登录微信公众平台
-        
-        Args:
-            headless: 是否无头模式
-            timeout: 登录超时时间（秒）
-            
-        Returns:
-            {
-                "success": bool,
-                "token": str,
-                "cookies": list,
-                "message": str
+        """登录微信公众平台（带凭据复用与扫码兜底）"""
+        # 1. 尝试加载凭据
+        self._load_cookies()
+        if self.check_session_fast():
+            print("✅ 现有公众平台会话凭据有效（快速探活通过，免拉起浏览器）")
+            return {
+                "success": True,
+                "token": self.token,
+                "cookies": self.cookies,
+                "message": "快速验证登录成功"
             }
-        """
-        print("=" * 60)
-        print("微信公众平台扫码登录")
-        print("=" * 60)
 
         try:
-            # 启动Playwright（自动挑选可用浏览器通道，见 _launch_usable_browser）
             self.playwright = sync_playwright().start()
             self.browser = self._launch_usable_browser(headless)
             self.context = self.browser.new_context(
                 user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
                 viewport={"width": 1280, "height": 800}
             )
+            if self.cookies:
+                self.context.add_cookies(self.cookies)
             self.page = self.context.new_page()
 
-            return self._do_login(timeout)
-
-        except Exception as e:
-            print(f"\n❌ 登录失败: {e}")
-            self.close()
-            return {
-                "success": False,
-                "token": None,
-                "cookies": [],
-                "message": f"登录失败: {e}"
-            }
-
-    def _do_login(self, timeout: int) -> Dict[str, Any]:
-        """执行登录流程（内部方法）"""
-        try:
-            # 尝试加载已有Cookie
-            if self._load_cookies():
-                print("\n尝试试用已有Cookie...")
-                self.page.goto(MP_BASE_URL, wait_until="domcontentloaded", timeout=15000)
-                self.page.wait_for_timeout(2000)
-
-                # 检查Cookie是否有效
-                if self._validate_cookies():
-                    self.token = self._extract_token()
-                    self.cookies = self.context.cookies()
-                    
-                    if self.token:
-                        print("✅ Cookie有效，无需重新登录")
-                        return {
-                            "success": True,
-                            "token": self.token,
-                            "cookies": self.cookies,
-                            "message": "Cookie登录成功"
-                        }
-                    else:
-                        print("⚠️ Cookie中未找到token，需要重新登录")
-                else:
-                    print("⚠️ Cookie已失效，需要重新登录")
-
-            # 打开登录页面
-            print("\n正在打开登录页面...")
-            self.page.goto(MP_LOGIN_URL, wait_until="domcontentloaded", timeout=15000)
-            self.page.wait_for_timeout(3000)
-
-            # 等待二维码出现
-            print("等待二维码加载...")
-            self.page.wait_for_timeout(2000)
-
-            # 截取二维码
-            print("\n📱 请用微信扫码登录（需要绑定公众号的微信）")
-            print("⏳ 等待扫码中...")
-
-            # 轮询等待登录成功
-            start_time = time.time()
-            while time.time() - start_time < timeout:
-                current_url = self.page.url
-                
-                # 检查是否登录成功
-                if "cgi-bin/home" in current_url or "cgi-bin/frame" in current_url:
-                    print("\n✅ 登录成功！")
-                    
-                    # 提取token
-                    self.token = self._extract_token()
-                    if not self.token:
-                        print("⚠️ 未获取到token")
-                        return {
-                            "success": False,
-                            "token": None,
-                            "cookies": [],
-                            "message": "未获取到token"
-                        }
-
-                    # 保存Cookie
-                    self.cookies = self.context.cookies()
+            # 2. 检查存量登录态
+            print("正在验证现有公众平台登录凭据...")
+            if self._validate_cookies():
+                self.token = self._extract_token()
+                if self.token:
+                    print(f"✅ 登录凭据有效，Token: {self.token}")
                     self._save_cookies()
-
-                    print(f"✅ Token: {self.token[:20]}...")
-                    print(f"✅ Cookie数量: {len(self.cookies)}")
-
                     return {
                         "success": True,
                         "token": self.token,
                         "cookies": self.cookies,
-                        "message": "扫码登录成功"
+                        "message": "凭据复用登录成功"
                     }
 
-                # 检查是否已扫码（在loginpage页面）
+            print("⚠️ 登录凭据已过期或缺失，正在拉取微信公众平台登录页...")
+            self.page.goto(MP_LOGIN_URL, wait_until="domcontentloaded", timeout=15000)
+
+            # 截图保存二维码供终端/无头用户扫码
+            try:
+                self.page.wait_for_selector("img.login__type__container__scan__qrcode", timeout=10000)
+                self.page.wait_for_function('() => { const el = document.querySelector("img.login__type__container__scan__qrcode"); return el && el.naturalWidth > 50; }', timeout=10000)
+                self.page.locator("img.login__type__container__scan__qrcode").screenshot(path=QRCODE_FILE)
+                print(f"📱 微信扫码二维码已就绪，已保存至本地图片: {QRCODE_FILE}")
+                print("👉 请在终端或查看该图片，使用绑定了公众号的微信扫码授权")
+            except Exception as qre:
+                print(f"⚠️ 截取二维码图片异常: {qre}")
+
+            # 轮询等待登录完成
+            start_time = time.time()
+            while time.time() - start_time < timeout:
+                current_url = self.page.url
+                if "cgi-bin/home" in current_url or "cgi-bin/frame" in current_url:
+                    self.page.wait_for_timeout(1000)
+                    self.token = self._extract_token()
+                    if self.token:
+                        self.cookies = self.context.cookies()
+                        self._save_cookies()
+                        print(f"\n✅ 扫码登录成功！Token: {self.token}")
+                        return {
+                            "success": True,
+                            "token": self.token,
+                            "cookies": self.cookies,
+                            "message": "扫码登录成功"
+                        }
                 if "loginpage" in current_url:
-                    print("✅ 已扫码，请在手机上确认登录...")
+                    print("✅ 已扫码，请在微信端点击确认登录...", end="\r", flush=True)
 
-                self.page.wait_for_timeout(1000)
+                self.page.wait_for_timeout(1500)
 
-            # 超时
             print(f"\n❌ 登录超时（{timeout}秒）")
-            self.close()
             return {
                 "success": False,
                 "token": None,
                 "cookies": [],
-                "message": f"登录超时（{timeout}秒）"
+                "message": f"登录超时（{timeout}秒），请扫码重试"
             }
 
         except Exception as e:
-            print(f"\n❌ 登录失败: {e}")
-            self.close()
+            print(f"\n❌ 登录异常: {e}")
             return {
                 "success": False,
                 "token": None,
                 "cookies": [],
-                "message": f"登录失败: {e}"
+                "message": str(e)
             }
 
-    def search_account(self, nickname: str) -> Optional[Dict[str, Any]]:
-        """搜索公众号获取fakeid
+    def _api_get(self, url: str) -> Dict[str, Any]:
+        """执行公众平台后台 API 请求（优先使用 page.request，否则退回标准 urllib）"""
+        if self.page:
+            resp = self.page.request.get(url)
+            return resp.json()
+
+        import urllib.request
+        cookie_str = "; ".join([f"{c['name']}={c['value']}" for c in self.cookies if 'name' in c and 'value' in c])
+        headers = {
+            "Cookie": cookie_str,
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Referer": f"{MP_BASE_URL}/cgi-bin/appmsg?token={self.token}&lang=zh_CN"
+        }
+        req = urllib.request.Request(url, headers=headers)
+        with urllib.request.urlopen(req, timeout=12) as resp:
+            return json.loads(resp.read().decode("utf-8"))
+
+    def search_accounts(self, query: str, count: int = 10) -> List[Dict[str, Any]]:
+        """搜索公众号列表
         
         Args:
-            nickname: 公众号名称
+            query: 搜索关键词（如「江苏国资」、「金陵人才」）
+            count: 最大返回数量 (默认 10)
             
         Returns:
-            {
-                "fakeid": str,
-                "nickname": str,
-                "alias": str,
-                "round_head_img": str
-            } 或 None
+            公众号信息列表
         """
         if not self.token:
-            raise MPLoginError("未登录，请先调用login()")
+            raise MPLoginError("未登录或 Token 缺失，请先调用 login()")
 
-        print(f"\n🔍 搜索公众号: {nickname}")
-
+        print(f"🔍 正在检索公众号: 「{query}」...")
         try:
-            from urllib.parse import quote
-            
             url = (
                 f"{MP_SEARCH_API}?"
-                f"action=search_biz&begin=0&count=5&"
+                f"action=search_biz&begin=0&count={count}&"
                 f"token={self.token}&lang=zh_CN&f=json&ajax=1&"
-                f"query={quote(nickname)}"
+                f"query={quote(query)}"
             )
 
-            response = self.page.request.get(url)
-            data = response.json()
-
+            data = self._api_get(url)
             if data.get("base_resp", {}).get("ret") != 0:
                 error_msg = data.get("base_resp", {}).get("err_msg", "未知错误")
-                print(f"❌ 搜索失败: {error_msg}")
-                return None
+                print(f"❌ 搜索失败 (ret={data.get('base_resp', {}).get('ret')}): {error_msg}")
+                return []
 
             biz_list = data.get("list", [])
-            if not biz_list:
-                print(f"❌ 未找到公众号: {nickname}")
-                return None
-
-            # 精确匹配
+            accounts = []
             for item in biz_list:
-                if item.get("nickname") == nickname:
-                    print(f"✅ 找到公众号: {nickname}")
-                    print(f"   fakeid: {item.get('fakeid')}")
-                    return {
-                        "fakeid": item.get("fakeid"),
-                        "nickname": item.get("nickname"),
-                        "alias": item.get("alias", ""),
-                        "round_head_img": item.get("round_head_img", "")
-                    }
-
-            # 取第一个结果
-            item = biz_list[0]
-            print(f"⚠️ 未精确匹配，使用第一个结果: {item.get('nickname')}")
-            return {
-                "fakeid": item.get("fakeid"),
-                "nickname": item.get("nickname"),
-                "alias": item.get("alias", ""),
-                "round_head_img": item.get("round_head_img", "")
-            }
-
+                accounts.append({
+                    "fakeid": item.get("fakeid", ""),
+                    "nickname": item.get("nickname", ""),
+                    "alias": item.get("alias", ""),
+                    "round_head_img": item.get("round_head_img", ""),
+                    "service_type": item.get("service_type", 0),
+                    "signature": item.get("signature", "")
+                })
+            print(f"✅ 成功命中 {len(accounts)} 个匹配公众号")
+            return accounts
         except Exception as e:
-            print(f"❌ 搜索公众号失败: {e}")
+            print(f"❌ 搜索公众号主体异常: {e}")
+            return []
+
+    def search_account(self, nickname: str) -> Optional[Dict[str, Any]]:
+        """精确或优选匹配单个公众号"""
+        accounts = self.search_accounts(nickname, count=5)
+        if not accounts:
             return None
+        for a in accounts:
+            if a["nickname"] == nickname:
+                return a
+        return accounts[0]
 
     def get_articles(
         self,
         fakeid: str,
         begin: int = 0,
         count: int = 5,
-        nickname: str = ""
+        nickname: str = "",
+        query: str = ""
     ) -> Dict[str, Any]:
-        """获取公众号文章列表（单页）
-        
-        Args:
-            fakeid: 公众号fakeid
-            begin: 起始位置
-            count: 获取数量（最大5）
-            nickname: 公众号名称（用于显示）
-            
-        Returns:
-            {
-                "success": bool,
-                "articles": list,
-                "total": int,
-                "message": str
-            }
-        """
+        """获取公众号文章列表（单页，支持号内关键词搜索）"""
         if not self.token:
-            raise MPLoginError("未登录，请先调用login()")
+            raise MPLoginError("未登录或 Token 缺失，请先调用 login()")
 
-        print(f"\n📚 获取文章列表: fakeid={fakeid}, begin={begin}, count={count}")
+        log_q = f" | 关键词:「{query}」" if query else ""
+        print(f"📚 拉取文章列表: fakeid={fakeid}, begin={begin}, count={count}{log_q}")
 
         try:
             url = (
                 f"{MP_ARTICLE_LIST_API}?"
                 f"sub=list&search_field=null&"
-                f"begin={begin}&count={count}&query=&"
+                f"begin={begin}&count={count}&query={quote(query)}&"
                 f"fakeid={fakeid}&type=101_1&"
                 f"free_publish_type=1&sub_action=list_ex&"
                 f"token={self.token}&lang=zh_CN&f=json&ajax=1"
             )
 
-            response = self.page.request.get(url)
-            data = response.json()
-
+            data = self._api_get(url)
             if data.get("base_resp", {}).get("ret") != 0:
                 error_msg = data.get("base_resp", {}).get("err_msg", "未知错误")
                 return {
@@ -445,10 +443,9 @@ class WeChatMPClient:
                     "message": f"获取失败: {error_msg}"
                 }
 
-            # 解析文章数据
             publish_page = json.loads(data.get("publish_page", "{}"))
             publish_list = publish_page.get("publish_list", [])
-            
+
             articles = []
             for item in publish_list:
                 publish_info = json.loads(item.get("publish_info", "{}"))
@@ -458,7 +455,7 @@ class WeChatMPClient:
                     article = {
                         "aid": appmsg.get("aid", ""),
                         "title": appmsg.get("title", ""),
-                        "url": appmsg.get("link", ""),  # 这就是短链接！
+                        "url": appmsg.get("link", ""),
                         "cover": appmsg.get("cover", ""),
                         "digest": appmsg.get("digest", ""),
                         "author": appmsg.get("author_name", ""),
@@ -473,9 +470,6 @@ class WeChatMPClient:
                     articles.append(article)
 
             total = publish_page.get("total_count", 0)
-
-            print(f"✅ 获取成功，本页 {len(articles)} 篇，总计 {total} 篇")
-
             return {
                 "success": True,
                 "articles": articles,
@@ -484,12 +478,11 @@ class WeChatMPClient:
             }
 
         except Exception as e:
-            print(f"❌ 获取文章列表失败: {e}")
             return {
                 "success": False,
                 "articles": [],
                 "total": 0,
-                "message": f"获取失败: {e}"
+                "message": f"获取文章异常: {e}"
             }
 
     def get_all_articles(
@@ -497,32 +490,17 @@ class WeChatMPClient:
         fakeid: str,
         nickname: str = "",
         max_count: int = None,
-        delay: tuple = (1, 3)
+        query: str = "",
+        delay: tuple = (1, 2)
     ) -> Dict[str, Any]:
-        """获取公众号全部文章（自动翻页）
-        
-        Args:
-            fakeid: 公众号fakeid
-            nickname: 公众号名称
-            max_count: 最大获取数量，None表示全部
-            delay: 请求间隔（最小值，最大值）
-            
-        Returns:
-            {
-                "success": bool,
-                "articles": list,
-                "total": int,
-                "message": str
-            }
-        """
+        """获取公众号文章（支持号内关键词过滤与自动翻页）"""
         import random
 
         if not self.token:
-            raise MPLoginError("未登录，请先调用login()")
+            raise MPLoginError("未登录，请先调用 login()")
 
-        print(f"\n📚 开始获取全部文章: {nickname or fakeid}")
-        if max_count:
-            print(f"   最大数量: {max_count}")
+        log_q = f" | 关键词过滤:「{query}」" if query else ""
+        print(f"📚 开始获取推文列表: {nickname or fakeid}{log_q}")
 
         all_articles = []
         begin = 0
@@ -530,48 +508,38 @@ class WeChatMPClient:
 
         try:
             while True:
-                # 获取一页数据
-                result = self.get_articles(fakeid, begin=begin, count=5, nickname=nickname)
-                
+                result = self.get_articles(
+                    fakeid=fakeid,
+                    begin=begin,
+                    count=5,
+                    nickname=nickname,
+                    query=query
+                )
                 if not result["success"]:
                     return result
 
-                # 首次获取时记录总数
                 if total == 0:
                     total = result["total"]
-                    print(f"   文章总数: {total}")
+                    print(f"   匹配文章总数: {total}")
 
                 articles = result["articles"]
                 if not articles:
-                    print("   没有更多文章")
                     break
 
-                # 添加到列表
                 for article in articles:
                     if max_count and len(all_articles) >= max_count:
                         break
                     all_articles.append(article)
 
-                # 检查是否达到最大数量
                 if max_count and len(all_articles) >= max_count:
-                    print(f"   已达到最大数量: {max_count}")
                     break
-
-                # 检查是否获取完毕
                 if len(all_articles) >= total:
-                    print("   已获取全部文章")
                     break
 
-                # 翻页
                 begin += 5
-
-                # 随机延时
                 if delay:
                     wait_time = random.uniform(delay[0], delay[1])
-                    print(f"   等待 {wait_time:.1f} 秒...")
                     time.sleep(wait_time)
-
-            print(f"\n✅ 获取完成，共 {len(all_articles)} 篇文章")
 
             return {
                 "success": True,
@@ -581,7 +549,6 @@ class WeChatMPClient:
             }
 
         except Exception as e:
-            print(f"\n❌ 获取全部文章失败: {e}")
             return {
                 "success": False,
                 "articles": all_articles,
@@ -590,60 +557,70 @@ class WeChatMPClient:
             }
 
 
+def mp_search_accounts(
+    query: str,
+    count: int = 10,
+    headless: bool = True,
+    output_file: str = None
+) -> Dict[str, Any]:
+    """一键搜索公众号主体列表"""
+    client = WeChatMPClient()
+    try:
+        login_res = client.login(headless=headless)
+        if not login_res["success"]:
+            return {"success": False, "accounts": [], "message": login_res["message"]}
+
+        accounts = client.search_accounts(query, count=count)
+        if output_file and accounts:
+            with open(output_file, "w", encoding="utf-8") as f:
+                json.dump(accounts, f, ensure_ascii=False, indent=2)
+            print(f"✅ 公众号列表已保存至: {output_file}")
+
+        return {
+            "success": True,
+            "accounts": accounts,
+            "total": len(accounts),
+            "message": f"成功检索到 {len(accounts)} 个公众号"
+        }
+    finally:
+        client.close()
+
+
 def mp_login_and_get_articles(
     nickname: str,
     max_count: int = 20,
-    headless: bool = False,
+    query: str = "",
+    headless: bool = True,
     output_file: str = None
 ) -> Dict[str, Any]:
-    """一键登录并获取公众号文章
-    
-    Args:
-        nickname: 公众号名称
-        max_count: 最大获取数量
-        headless: 是否无头模式
-        output_file: 输出文件路径
-        
-    Returns:
-        {
-            "success": bool,
-            "articles": list,
-            "total": int,
-            "message": str
-        }
-    """
+    """一键登录并获取/搜索指定公众号文章"""
     client = WeChatMPClient()
-    
     try:
-        # 1. 登录
-        login_result = client.login(headless=headless)
-        if not login_result["success"]:
-            return login_result
+        login_res = client.login(headless=headless)
+        if not login_res["success"]:
+            return login_res
 
-        # 2. 搜索公众号
         account = client.search_account(nickname)
         if not account:
             return {
                 "success": False,
                 "articles": [],
                 "total": 0,
-                "message": f"未找到公众号: {nickname}"
+                "message": f"未找到指定公众号: {nickname}"
             }
 
-        # 3. 获取文章
         result = client.get_all_articles(
             fakeid=account["fakeid"],
             nickname=nickname,
-            max_count=max_count
+            max_count=max_count,
+            query=query
         )
 
-        # 4. 保存结果
-        if output_file and result["success"]:
+        if output_file and result.get("success"):
             with open(output_file, "w", encoding="utf-8") as f:
-                json.dump(result["articles"], f, ensure_ascii=False, indent=2)
-            print(f"\n✅ 结果已保存到: {output_file}")
+                json.dump(result.get("articles", []), f, ensure_ascii=False, indent=2)
+            print(f"✅ 文章列表已保存至: {output_file}")
 
         return result
-
     finally:
         client.close()
