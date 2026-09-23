@@ -95,6 +95,34 @@ def _seg_hits_rect(x1, y1, x2, y2, rect, pad=2.0):
     return False
 
 
+def _find_chrome():
+    """定位本机可用的 Chromium 系浏览器（playwright 自带 chromium 起不来时的兜底）。
+
+    与 render_poster._find_chrome 保持同一策略：CHROME_BIN → 常见安装位置 → PATH。
+    原先硬编码单条 macOS 路径，换平台必失败（2026-09-23 加固）。
+    """
+    import shutil
+
+    cands = []
+    env = os.environ.get("CHROME_BIN")
+    if env:
+        cands.append(env)
+    cands += [
+        "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+        "/Applications/Chromium.app/Contents/MacOS/Chromium",
+        "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+        "google-chrome",
+        "google-chrome-stable",
+        "chromium",
+        "chromium-browser",
+    ]
+    for c in cands:
+        p = shutil.which(c) or (c if os.path.exists(c) else None)
+        if p:
+            return p
+    return None
+
+
 def measure(config_path, min_cover=45.0):
     with open(config_path, "r", encoding="utf-8") as f:
         config = json.load(f)
@@ -109,9 +137,10 @@ def measure(config_path, min_cover=45.0):
             try:
                 browser = p.chromium.launch(headless=True)
             except Exception:
-                browser = p.chromium.launch(
-                    executable_path="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-                    headless=True)
+                chrome_path = _find_chrome()
+                if not chrome_path:
+                    raise
+                browser = p.chromium.launch(executable_path=chrome_path, headless=True)
             ctx = browser.new_context(viewport={"width": PAGE_W, "height": PAGE_H})
             page = ctx.new_page()
             page.goto(f"file://{tmp_path}")

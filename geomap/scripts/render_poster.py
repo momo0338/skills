@@ -242,6 +242,35 @@ def build_html(config_path: str) -> tuple[str, str, dict]:
         return rendered, theme, viewport
 
 
+def _find_chrome():
+    """定位本机可用的 Chromium 系浏览器（playwright 自带 chromium 起不来时的兜底）。
+
+    优先级：CHROME_BIN 环境变量 → 三大平台常见安装位置 → PATH 上的命令名。
+    找不到返回 None，由调用方重新抛出原始异常（不掩盖真实原因）。
+    原先这里硬编码单条 macOS 路径，换平台必失败（2026-09-23 加固）。
+    """
+    import shutil
+
+    cands = []
+    env = os.environ.get("CHROME_BIN")
+    if env:
+        cands.append(env)
+    cands += [
+        "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+        "/Applications/Chromium.app/Contents/MacOS/Chromium",
+        "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+        "google-chrome",
+        "google-chrome-stable",
+        "chromium",
+        "chromium-browser",
+    ]
+    for c in cands:
+        p = shutil.which(c) or (c if os.path.exists(c) else None)
+        if p:
+            return p
+    return None
+
+
 def render_poster(config_path: str, output_path: str = None, scale: int = 2, make_video: bool = False) -> str:
     rendered_html, theme, viewport = build_html(config_path)
 
@@ -262,7 +291,9 @@ def render_poster(config_path: str, output_path: str = None, scale: int = 2, mak
         try:
             browser = p.chromium.launch(headless=True)
         except Exception:
-            chrome_path = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+            chrome_path = _find_chrome()
+            if not chrome_path:
+                raise
             browser = p.chromium.launch(executable_path=chrome_path, headless=True)
 
         context = browser.new_context(
