@@ -14,5 +14,7 @@ dy-cli/outputs/
 .workbuddy/
 .cortexkit/
 .mpkey
+.mp_token
 *.key
 .mp_cookies.json
+*.bak-*
