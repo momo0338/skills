@@ -181,13 +181,6 @@ SKILL_DEPS = {
         },
     },
     "gh-write": {},
-    "git-secret-purge": {
-        "bins": ["git", "git-filter-repo"],
-        "brew_bins": ["git-filter-repo"],
-        "install_cmds": {
-            "brew": "brew install git-filter-repo",
-        },
-    },
     "proxy": {
         "pip": ["requests"],
         "install_cmds": {
