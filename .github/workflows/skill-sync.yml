@@ -44,3 +44,5 @@ jobs:
           python -m pytest -q dy-cli/tests
           python -m pytest -q dy-doudian/tests
           python -m pytest -o addopts='' -q dy-fanpai/tests
+          python -m pytest -o addopts='' -q dev-resource-accelerator/tests
+          python -m pytest -o addopts='' -q open-kimi-ppt/tests
