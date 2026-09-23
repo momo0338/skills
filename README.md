@@ -1,6 +1,6 @@
 # Momo Skills Core Library (AI Agent 技能库)
 
-> 包含 **45 个通用与专项 AI Agent 技能**，覆盖大模型自主浏览器操作、全站深度爬虫、网页正文提取、智能视频看懂抽帧、媒体音视频下载、万站 CLI 操作、抖音专项 CLI、抖音「我的」个人数据整理、抖音带货翻拍、抖音小店经营数据、千川投流决策、研发资源加速、网络代理管理、企业情报深度调研、微信公众号采集、本地视频语音转写、GitHub 仓库深度数据调研、公众号技术专栏自动化采写及跨 AI 项目交接体系搭建等场景。
+> 包含 **46 个通用与专项 AI Agent 技能**，覆盖大模型自主浏览器操作、全站深度爬虫、网页正文提取、智能视频看懂抽帧、媒体音视频下载、万站 CLI 操作、抖音专项 CLI、抖音「我的」个人数据整理、抖音带货翻拍、抖音小店经营数据、千川投流决策、研发资源加速、网络代理管理、企业情报深度调研、微信公众号采集、本地视频语音转写、GitHub 仓库深度数据调研、公众号技术专栏自动化采写、跨 AI 项目交接体系搭建及 git 凭据泄露清理等场景。
 
 ---
 
@@ -53,6 +53,7 @@
 | **[mp-save](./mp-save)** | `mp-save/` | 公众号文章保存至本地 vault（opencli 下载） | `opencli`, 微信文章 URL |
 | **[open-kimi-ppt](./open-kimi-ppt)** | `open-kimi-ppt/` | 演示文稿（PPT/PPTX）创建、编辑、复刻与导出（Moonshot PPTD 中间格式 + 浏览器端 PPTX writer，交付 PPTD 项目文件夹与内嵌字体的 .pptx） | Python 3（标准库）, `agent-browser` |
 | **[project-handover](./project-handover)** | `project-handover/` | 跨 AI 项目交接体系搭建（三层结构：`AGENTS.md` 通用 AI 自动入口 + 交接文档权威全文 + `check_env.sh` 环境自检；含冲突/统计假象审计与三份可复用模板） | Bash, git（无外部依赖） |
+| **[git-secret-purge](./git-secret-purge)** | `git-secret-purge/` | git 仓库凭据泄露清理（停止跟踪 + `git filter-repo` 全历史重写 + 残留 ref/对象库清除 + 四层验证 + 显式租约强推 + 轮换闭环；含 `scan_repo_secrets.py` 凭据扫描器） | Python（标准库）, `git`, `git-filter-repo` |
 
 ---
 
