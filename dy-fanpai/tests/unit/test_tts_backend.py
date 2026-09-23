@@ -155,16 +155,21 @@ def test_synthesize_unavailable_backend_raises(tmp_path):
 # ---------------------------------------------------------------------------
 # 对齐工具（_align_duration 用真实 ffmpeg 小样本,仅当 ffmpeg 存在才跑）
 # ---------------------------------------------------------------------------
-def _have_ffmpeg() -> bool:
+def _ffmpeg_path():
+    """按 PATH 优先探测 ffmpeg，回退 Homebrew 绝对路径；返回**真实可用**的路径。
+
+    必须返回实际路径：此前 skipif 用 PATH 探测、函数体却把 ffmpeg_bin 硬编码成
+    /opt/homebrew/bin/ffmpeg —— 在 CI(Ubuntu) 上 skipif 判定"有 ffmpeg"于是照跑，
+    真正调用时却 FileNotFoundError，属自相矛盾（2026-09-23 修）。
+    """
     import shutil
 
-    return (shutil.which("ffmpeg") is not None
-            or shutil.which("/opt/homebrew/bin/ffmpeg") is not None)
+    return shutil.which("ffmpeg") or shutil.which("/opt/homebrew/bin/ffmpeg")
 
 
-@pytest.mark.skipif(not _have_ffmpeg(), reason="需要 ffmpeg")
+@pytest.mark.skipif(_ffmpeg_path() is None, reason="需要 ffmpeg")
 def test_align_duration_pad_and_compress(tmp_path):
-    cfg = Config(ffmpeg_bin="/opt/homebrew/bin/ffmpeg")
+    cfg = Config(ffmpeg_bin=_ffmpeg_path())
     src = str(tmp_path / "src.wav")
     import subprocess
 

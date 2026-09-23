@@ -141,9 +141,20 @@ def _download(url: str, dst: str, base: str) -> None:
         raise RuntimeError(f"VoxCPM 音频下载失败/过小: {dst}")
 
 
+def _ffprobe_bin() -> str:
+    """ffprobe 可执行文件：优先 PATH 探测，其次回退 Homebrew。
+
+    勿硬编码 /opt/homebrew/bin/ffprobe —— Linux/CI 下该路径不存在，
+    会让 _probe_mp3_duration 直接抛 FileNotFoundError（2026-09-23 修）。
+    """
+    import shutil
+
+    return shutil.which("ffprobe") or "/opt/homebrew/bin/ffprobe"
+
+
 def _probe_mp3_duration(path: str) -> float:
     r = subprocess.run(
-        ["/opt/homebrew/bin/ffprobe", "-v", "quiet", "-show_entries",
+        [_ffprobe_bin(), "-v", "quiet", "-show_entries",
          "format=duration", "-of", "csv=p=0", path],
         capture_output=True, text=True,
     )
