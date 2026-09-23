@@ -28,14 +28,16 @@ css = _m.group(1) if _m else ""
 css = re.sub(r'/\*.*?\*/', '', css, flags=re.S)  # 剥离注释，防污染选择器
 
 # ---------- 1. 抽取 base64 图片 ----------
-b64_pattern = re.compile(r'data:image/(jpeg|jpg|png);base64,([A-Za-z0-9+/=]+)')
+# 2026-09-22 加固：允许包含换行/空格等空白字符，并在解码前清洗，防截断导致 broken data stream
+b64_pattern = re.compile(r'data:image/(jpeg|jpg|png);base64,([A-Za-z0-9+/=\s]+)')
 imgmap = []
 idx = 0
 def save_img(m):
     global idx
     ext = "jpg" if m.group(1) in ("jpeg", "jpg") else "png"
     path = os.path.join(RUN_DIR, f"zj_img_{idx}.{ext}")
-    open(path, "wb").write(base64.b64decode(m.group(2)))
+    clean_b64 = re.sub(r'\s+', '', m.group(2))
+    open(path, "wb").write(base64.b64decode(clean_b64))
     imgmap.append({"idx": idx, "path": path, "mime": f"image/{'jpeg' if ext=='jpg' else ext}"})
     idx += 1
     return f'{{{{IMG{idx-1}}}}}'

@@ -224,6 +224,17 @@ content = re.sub(r'style="([^"]*)"', decode_style, content)   # 只动真实 sty
 6. 选**最宽横图**居中裁 900×383（2.35:1 封面比例）→ `/tmp/wx_cover.jpg`
 7. 产出：`/tmp/wx_wechat_content.html`（带占位符）+ `/tmp/wx_imgmap.json` + `/tmp/wx_img_*.jpg` + `/tmp/wx_cover.jpg`
 
+> 🔴 **排版稿里的图片必须 base64 内嵌（2026-09-23 实测补记）**
+> 第 1 步的正则是 `data:image/(jpeg|jpg|png);base64,...` —— **只认 base64**。
+> 相对路径（`<img src="../配图/xxx.png">`）**既不会被抽出、也不会被上传**，
+> 而 `wx_pipeline.py` 里没有第二个图片通道 → **推上去静默丢图，全程不报错**。
+> 另外预览面板把单篇 HTML 扁平托管到 `/static-html/<hash>/`，相对路径一律 404，**本地预览也看不到图**。
+> - ✅ 正确形态：`<img src="data:image/png;base64,iVBORw0…">`
+> - ❌ 错误形态：`<img src="../配图/28-xxx/01.png">`
+> - 基准：`待发布/*-排版.html` 中**真正发布成功过的稿子全是 base64**（19 / 14 / 20 张不等）；
+>   0 图的稿件清一色是"正文不放图"的纯信息推文。
+> - 转换一行正则即可（复用示例见 `满爸爱生活/.workbuddy/memory/MEMORY.md` §五 工具约定）。
+
 ### ② wx_push_draft.py 做了什么
 1. `cgi-bin/token` 取 access_token
 2. 每张图 `cgi-bin/media/uploadimg`（**正文图必须走这个接口**，返回 mmbiz.qpic.cn URL）→ 回填占位符
@@ -553,6 +564,68 @@ curl -sL -A "<桌面 Chrome UA>" -H "Referer: https://weixin.sogou.com/" \
 - 同一时刻的多篇 = 一次**多图文群发**，可据此还原群发批次。
 - **搜不到 ≠ 没发**：新号与冷门标题有索引延迟。**"搜到且来源号对上"是确证；搜不到只能说"未被索引"**，不能据此断言未发布。
 - 顺带排"推错号"：把**默认账号**（满爸爱生活）最近 20 篇也拉一遍（§八.1），搜业务关键词应为 0 命中。
+
+---
+
+### 八.3 快路 C：阅读数据与读者画像怎么取（2026-09-21 在「码上职业」实测打通）
+
+**先别调 API。** 个人订阅号 datacube 21 个接口全 48001;直连还偶发 `40164 invalid ip ... not in whitelist`（这是**出口 IP** 未入白名单,与账号权限无关,**家庭宽带/代理会变**）。→ **一律走登录态浏览器同源 fetch**,可完全绕开这两个问题。
+
+**前置**:ego-browser 里**已经登录**过 `mp.weixin.qq.com` 时,`token` 直接从当前页 URL 的 `?token=` 取,**不需要重新扫码**（先 `location.href` 看一眼）。
+
+导航入口怎么找:打开 `/cgi-bin/home?t=home/index&token=<t>`,然后
+
+```js
+[...document.querySelectorAll('a')].filter(a=>/数据|分析|内容/.test(a.textContent)).map(a=>a.textContent.trim()+' => '+a.getAttribute('href'))
+```
+
+实测可得:`内容分析 = /misc/appmsganalysis?action=report&type=daily_v2`、`用户分析 = /misc/useranalysis`、消息分析、接口分析。
+⛔ **别凭印象拼路径**（`/cgi-bin/appmsgstat?...` 之类是错的,会跳 `chrome-error://chromewebdata/`）——**先读导航再点**。
+
+#### ① 发表记录 + 全部互动指标（阅读/赞/分享/在看/留言）
+
+同 §八.1 的 `appmsgpublish`。**实测补充**:`count=20` 时,14 个批次**一页取完**;`begin=20/40/60` 会返回 **380 字节的空壳**（不是 JSON）,循环取页时按长度提前 break,别当成解析失败。
+
+#### ② 单篇明细:渠道构成 + 读者画像（★ §八.1 未覆盖的新增能力）
+
+```
+GET /misc/appmsganalysis?action=detailpage&msgid=<MID>&publish_date=<YYYY-MM-DD>&type=int&pageVersion=1&token=<t>&lang=zh_CN
+```
+
+- **msgid 从哪来**:先打开 `/misc/appmsganalysis?action=report&type=daily_v2&token=<t>`,页面每行「详情」链接的 `href` 里就带 `msgid=<...>&publish_date=<...>`。
+  ⚠️ **不要用模糊文本匹配点「详情」** —— 侧栏还有「账号详情/认证详情」,同样含「详情」二字,会把你弹到**账号设置页**（实测踩到）。**用 href 正则过滤 `msgid=`**。
+- **返回内容读 `document.body.innerText` 即可**,不必解析 JSON:
+
+  | 区块 | 能拿到 |
+  |---|---|
+  | 顶部 | 阅读人数 / 平均阅读时长 / 完读率 / 新增关注 / 听全文 / 分享 / 在看 / 赞赏 / 留言 / 收藏 |
+  | 阅读渠道构成 | 7 项:搜一搜 ・ 聊天会话 ・ 其它 ・ 公众号消息 ・ 公众号主页 ・ 推荐 ・ 朋友圈 |
+  | 用户画像 | 性别占比 ・ 年龄分桶（18以下/18-25/26-35/36-45/46-60/60以上/未知）・ 地域分布（**分页**,表头是 `地域\t占比`） |
+
+- ⚠️ **两个「阅读」口径别混**:detailpage 的阅读是**区间口径且页面可能滞后**（实测示例显示 22,页脚注明「页面数据更新至 09-20」）;`appmsgpublish` 返回的是**累计 live** 值（同篇 29）。**比大小一律用后者,或注明口径。**
+- 渠道百分比的取值姿势:先 `slice(indexOf('阅读渠道构成'))` 缩小范围,再取 7 个百分比。
+  ⚠️ **2026-09-22 实测更正**:innerText 里是**数值在前、渠道名在后**,
+  且**两者都按数值降序**(不是上面原写的固定图例顺序),必须**按位置 zip 配对**;
+  渠道名之后还有 `0%/25%/50%/75%/100%/125%` 的**坐标轴刻度**,必须丢弃,
+  做法是在 `End of interactive chart` 处截断。按固定顺序硬取会把「搜一搜」和「推荐」配反。
+- ⚠️ **本页面仅统计发表后 30 天内的数据**(页内原文),老文章拿到的是冻结在第 30 天的快照。
+- ⚠️ msgid 是 `appmsgid_序号`(如 `2247488280_1`);发表记录 CSV 里的 msgid 是**批次号**,
+  拿去请求会返回「系统错误(200002)」。
+
+#### ③ 账号底数:粉丝 / 关注来源 / 全站渠道构成
+
+```
+GET /misc/useranalysis?token=<t>&lang=zh_CN                      # 用户增长:每日新增/取消/净增/累计 + 关注来源
+GET /misc/useranalysis?action=attr&token=<t>&begin_date=<>&end_date=<>   # 用户属性
+```
+
+- 「用户增长」页还能直接读到 **关注来源**（搜一搜 / 文章页关注 / 其它合计）。
+- ⚠️ **用户属性页粉丝量太小时返回空**（实测小号只有 117 字节）——不是脚本坏了,是样本不够。
+
+#### 落盘与产出约定
+
+- 原始响应存 `~/.cache/weixin/publish_records/<账号>_发表记录_<YYYYMMDD_HHMM>.json`（用 `fs.writeFileSync`,**别塞 cliLog**,见 ego 技能「大响应别塞 cliLog」）。
+- 分析结论的**唯一落点**:看板 §2.3（线上已发布表）+ 对应专题文件的「流量实证」章;⛔ 不要把数据同时抄进多处。
 
 ---
 
