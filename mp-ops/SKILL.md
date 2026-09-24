@@ -153,6 +153,27 @@ E 合集资产价值 / F 行动清单 / **G 真实长尾水位（剔爆款）** 
 **定序不能凭顺序猜** —— 取每张 base64 图**前 400–500 字的去标签文本**，与 md 中对应引用的
 **前文**做子串匹配，一一对上再命名（S3 号线 3 张图即用此法定位 `s3-01/04/03`，注意**顺序与 md 不同**）。
 
+### ⑨ `search_center_fetch.py` — 搜一搜数据中心全量抓取　*需登录态*
+
+```bash
+"$PY" scripts/search_center_fetch.py --check             # 探登录态 + 目标 profile/appid
+"$PY" scripts/search_center_fetch.py                    # 默认 mashang 近 30 天
+"$PY" scripts/search_center_fetch.py --days 1           # 仅昨天（12:00 后跑）
+"$PY" scripts/search_center_fetch.py --days 7
+"$PY" scripts/search_center_fetch.py --profile manba    # 换已登记账号
+"$PY" scripts/search_center_fetch.py --out <路径>       # 指定落盘位置
+```
+
+打通 `wsad.weixin.qq.com` 三个接口（`get-search-channel` / `get-hot-passage-list` /
+`get-hot-query-list`），落盘 `search_center_raw_<日期>.json` + 结构化 `search_center_<日期>.json`。
+
+⛔ **账号纪律（写错号＝数据污染）**：默认 `--profile mashang`，appid **不写死**，运行时从
+`mp-publish/scripts/wx_account.py env <profile>` 读（账号表是唯一真源）。当前登录账号与
+目标 profile 不符 → **exit 2 硬停**，不允许「A 号登录态 + B 号 appid」取数。
+换号后先 `--check` 看清账号再跑。
+
+> 导航三跳、接口族、Vue SPA 资源漂移等逆向细节全在脚本 docstring 里，别在本文档重复一份。
+
 ---
 
 ## 三、数据源与后台入口
@@ -182,14 +203,22 @@ E 合集资产价值 / F 行动清单 / **G 真实长尾水位（剔爆款）** 
 | 热门文章 | 展示 · 点击 · CTR · **平均排序位置** · 命中的搜索词 |
 | 热门搜索词 | 展示 · 点击 · CTR · **相关搜索词**（可翻页） |
 
-取数：进 pluginloginpage → 取 `iframe.src` → 打开该 URL → `location.hash='#/dataCenter'`
-→ 点「下一页」翻页（每页 4 条）。
+取数：**已脚本化** → `scripts/search_center_fetch.py`（2026-09-24 打通，见 §二·⑨）。
 **数据每日 12:00 更新前一日，仅保留 30 日** —— 必须及时落盘
 （`~/.cache/weixin/publish_records/search_center_<日期>.json`）。
 
-> ⚠️ **本模块截至 2026-09-24 仍无脚本落地**（`scripts/` 下只有 `search_fetch.py`，它取的是
-> **单篇阅读渠道构成**，不是搜一搜数据中心）。取数只能按上面导航步骤人工执行，每取一次务必
-> 确认 JSON 已落盘 —— 该数据 30 天后从后台消失，补不回来。
+> ✅ **本模块已于 2026-09-24 落地脚本**（此前只有本文档、必须人工翻 iframe）：
+> ```bash
+> "$PY" scripts/search_center_fetch.py --check              # 探登录态 + 目标 appid
+> "$PY" scripts/search_center_fetch.py                     # 默认 mashang 近 30 天
+> "$PY" scripts/search_center_fetch.py --days 1            # 仅昨天（12:00 后跑）
+> "$PY" scripts/search_center_fetch.py --profile manba     # 换账号
+> ```
+> ⛔ **写错号＝数据污染**：脚本默认 `--profile mashang`，appid 从 `mp-publish` 账号表
+> 运行时读取（不写死）；**当前登录账号与目标 profile 不符时直接 exit 2 硬停**。
+> 2026-09-24 首跑即靠这条抓出「登录态是满爸爱生活、appid 却是满爸号」的问题 ——
+> 换号后请先跑 `--check` 看清楚账号再取数。
+> ⚠️ `scripts/search_fetch.py` 仍在，但取的是**单篇阅读渠道构成**，与本模块两个口径，勿混。
 
 > ⚠️ **先翻导航再下结论**：不要只从「内容分析 → 单篇渠道构成」拿几篇就说"数据就这么多"。
 
