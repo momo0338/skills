@@ -184,6 +184,24 @@ E 合集资产价值 / F 行动清单 / **G 真实长尾水位（剔爆款）** 
 
 > 导航三跳、接口族、Vue SPA 资源漂移等逆向细节全在脚本 docstring 里，别在本文档重复一份。
 
+### ⑩ `build_traffic_ledger.py` — 生成线上已发布流量台账　*纯离线*
+
+```bash
+"$PY" scripts/build_traffic_ledger.py                    # 用最新发表记录生成台账
+"$PY" scripts/build_traffic_ledger.py --src <JSON>       # 指定源文件
+"$PY" scripts/build_traffic_ledger.py --out <MD 路径>    # 指定输出
+"$PY" scripts/build_traffic_ledger.py --dry-run          # 只统计不写文件
+```
+
+把后台发表记录 JSON 解析成「线上已发布台账」（日期/标题/性质/阅读/分享/在看/链接），
+写到码上职业 `运营/01-线上已发布台账.md`。**只读缓存、只写 vault，不联网、不碰 `jobs.db`。**
+
+解析要点（2026-09-24 实测，已在 docstring 详记）：
+⛔ `publish_page` 是 **JSON 字符串**需二次 `json.loads`；
+⛔ 发表·不通知**没有 `sent_info`**，日期取 `line_info.send_time`；
+⛔ 一条 `publish_list` 可能含**多篇** `appmsg_info`（多图文）要展开；
+⛔ `read_num`/`share_num` 是**当前累计值**，每天**覆盖不累加**。
+
 ---
 
 ## 三、数据源与后台入口
