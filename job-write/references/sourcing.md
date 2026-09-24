@@ -262,7 +262,7 @@ python3 /Users/zhugx/src/ijob/patrol/run.py --probe
 - 巡检报告：`码上职业/巡检记录/YYYY-MM-DD-新增招聘.md`（探活报告同目录）
 - 去重状态：`/Users/zhugx/src/ijob/data/patrol_state/.scan-state.json` ｜ 源健康：同目录 `sources-health.json` ｜ 北森：同目录 `beisen-state.json`（2026-09-24 从 vault 迁入，换机务必整体迁移，否则历史公告会重复入库）
 - ⛔ 旧入口 `00-信息源清单与每日巡检.md` / `01-官方站点源总表.md` 与 `工具/sources.yaml`、`工具/probe_sources.py` **已于 2026-09-21 废弃删除**，功能迁入 ijob（`patrol_sources` 表 + `patrol/run.py`）。
-- ⚠️ 当前**无** WorkBuddy 定时任务跑本巡检（唯一定时任务是 09:40「每日公众号数据分析」）→ 巡检按需手动触发。
+- ⚠️ 当前**无** WorkBuddy 定时任务跑本巡检 → 巡检按需手动触发。（数据复盘的 09:40 定时任务已于 2026-09-24 核查确认同样不存在，见 `mp-ops/references/analytics-mashang.md` §八）
 
 ---
 
