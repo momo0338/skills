@@ -187,6 +187,7 @@ SKILL_DEPS = {
             "pip": "pip install requests",
         },
     },
+    "net-reachability-diagnosis": {},
     "dev-resource-accelerator": {
         "bins": ["git", "curl"],
     },
