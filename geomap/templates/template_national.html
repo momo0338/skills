@@ -34,7 +34,7 @@
       gap: 10px;
     }
     .banner-title {
-      font-size: 58px;
+      font-size: var(--banner-title-size, 58px);
       font-weight: 900;
       color: #FFFFFF;
       letter-spacing: 4px;
@@ -42,7 +42,7 @@
       text-align: center;
     }
     .banner-subtitle {
-      font-size: 26px;
+      font-size: var(--banner-subtitle-size, 26px);
       font-weight: 700;
       color: rgba(255, 255, 255, 0.92);
       letter-spacing: 1.5px;
@@ -136,9 +136,9 @@
       pointer-events: none;
     }
     .prov-label.plain {
-      font-size: 24px;
+      font-size: var(--plain-size, 20px);
       font-weight: 700;
-      color: #4A5568;
+      color: #556987;
       letter-spacing: 0.5px;
     }
     .prov-label.highlight {
@@ -146,20 +146,28 @@
       flex-direction: column;
       align-items: center;
     }
+    .prov-label.highlight.chip-badge {
+      background: rgba(0, 0, 0, 0.42);
+      backdrop-filter: blur(4px);
+      border-radius: 6px;
+      padding: 3px 8px;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.22);
+      border: 1px solid rgba(255, 255, 255, 0.35);
+    }
     .hl-name {
-      font-size: 27px;
+      font-size: var(--hl-name-size, 27px);
       font-weight: 900;
       color: #FFFFFF;
-      line-height: 1.1;
-      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+      line-height: 1.15;
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
     }
     .hl-val {
-      font-size: 31px;
+      font-size: var(--hl-val-size, 31px);
       font-weight: 900;
       color: #FFFFFF;
-      line-height: 1.1;
+      line-height: 1.15;
       margin-top: 2px;
-      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
     }
 
     /* 上海专属引线与右侧深蓝字 */
@@ -191,6 +199,53 @@
     }
     .sh-val { font-size: 29px; }
     .sh-name { font-size: 25px; }
+
+    /* 底部展馆/卡片信息区 */
+    .bottom-cards-dock {
+      position: absolute;
+      top: 1530px;
+      left: 50px;
+      width: 980px;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      z-index: 20;
+    }
+    .dock-card {
+      background: rgba(255, 255, 255, 0.94);
+      backdrop-filter: blur(8px);
+      border-radius: 12px;
+      padding: 10px 14px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+      border: 1px solid rgba(0, 0, 0, 0.06);
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .dock-card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .dock-card-title {
+      font-size: 19px;
+      font-weight: 900;
+      color: #1E293B;
+    }
+    .dock-card-tag {
+      font-size: 12px;
+      font-weight: 700;
+      color: #FFFFFF;
+      background: var(--theme-brand-color, #851D2A);
+      padding: 2px 7px;
+      border-radius: 4px;
+    }
+    .dock-card-desc {
+      font-size: 13.5px;
+      color: #64748B;
+      font-weight: 600;
+      line-height: 1.35;
+    }
 
     /* 全屏防盗水印层 */
     .watermark-layer {
@@ -239,9 +294,7 @@
   </div>
 
   <div class="watermark-layer" id="watermark-layer"></div>
-
-  
-  </div>
+  <div class="bottom-cards-dock" id="bottom-dock"></div>
 
   <script>
 __D3_CODE__
@@ -249,6 +302,31 @@ __D3_CODE__
   <script>
     const CONFIG = __CONFIG_JSON__;
     const themeBrandColor = CONFIG.banner_bg || CONFIG.highlight_color || "#0056CC";
+    document.documentElement.style.setProperty('--theme-brand-color', themeBrandColor);
+
+    if (CONFIG.banner_title_size) document.documentElement.style.setProperty('--banner-title-size', CONFIG.banner_title_size);
+    if (CONFIG.banner_subtitle_size) document.documentElement.style.setProperty('--banner-subtitle-size', CONFIG.banner_subtitle_size);
+    if (CONFIG.plain_size) document.documentElement.style.setProperty('--plain-size', CONFIG.plain_size);
+    if (CONFIG.hl_name_size) document.documentElement.style.setProperty('--hl-name-size', CONFIG.hl_name_size);
+    if (CONFIG.hl_val_size) document.documentElement.style.setProperty('--hl-val-size', CONFIG.hl_val_size);
+
+    if (CONFIG.bottom_cards && Array.isArray(CONFIG.bottom_cards)) {
+      const dock = document.getElementById("bottom-dock");
+      if (dock) {
+        CONFIG.bottom_cards.forEach(card => {
+          const el = document.createElement("div");
+          el.className = "dock-card";
+          el.innerHTML = `
+            <div class="dock-card-header">
+              <span class="dock-card-title">${card.title}</span>
+              ${card.tag ? `<span class="dock-card-tag">${card.tag}</span>` : ''}
+            </div>
+            <div class="dock-card-desc">${card.desc || ''}</div>
+          `;
+          dock.appendChild(el);
+        });
+      }
+    }
     
     // 动态同步主视觉色调至图注胶囊与附图框
     const cBadge = document.getElementById("caption-badge");
@@ -447,8 +525,10 @@ __D3_CODE__
 
           const labelDiv = document.createElement("div");
           if (isHl) {
-            labelDiv.className = "prov-label highlight";
-            labelDiv.innerHTML = '<div class="hl-name">' + shortName + '</div>' +
+            const isChip = (CONFIG.chip_badge === true || p.chip === true);
+            labelDiv.className = isChip ? "prov-label highlight chip-badge" : "prov-label highlight";
+            const displayName = p.display_name || shortName;
+            labelDiv.innerHTML = '<div class="hl-name">' + displayName + '</div>' +
                                  '<div class="hl-val">' + (p.value || p.metric || "") + '</div>';
           } else {
             labelDiv.className = "prov-label plain";
