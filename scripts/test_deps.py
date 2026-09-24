@@ -211,6 +211,22 @@ with tempfile.TemporaryDirectory() as tmpdir:
 empty_deps2 = parse_skill_md_deps("/nonexistent/path/to/skill")
 test("  Non-existent path returns empty deps", len(empty_deps2) == 0)
 
+# Symlinked skill dir must NOT be discovered as a repo skill.
+# 回归测试：2026-09-24 ego CLI 把 ego-browser 软链丢进仓根，导致 check_skill_sync
+# 报 disk→README / disk→registry 漂移并挡住提交。修复点=discover_valid_skills 跳过
+# os.path.islink()；本用例防止该修复被回退。
+import os
+with tempfile.TemporaryDirectory() as tmpdir:
+    real = os.path.join(tmpdir, "real-skill")
+    os.makedirs(real)
+    with open(os.path.join(real, "SKILL.md"), "w", encoding="utf-8") as f:
+        f.write("---\nname: real-skill\n---\n")
+    os.symlink(real, os.path.join(tmpdir, "linked-skill"))
+    found = [name for name, _ in discover_valid_skills(tmpdir)]
+    test("  Symlinked skill dir excluded from discovery",
+         "linked-skill" not in found and "real-skill" in found,
+         f"discovered={found}")
+
 # check_skill_deps with no deps skill
 ok_no_deps, miss_no_deps = check_skill_deps("test_no_deps", "/nonexistent", pip_pkgs, npm_pkgs)
 test("  check_skill_deps for unknown skill", ok_no_deps,

@@ -1187,7 +1187,13 @@ AI_TARGETS = [
 ]
 
 def discover_valid_skills(skills_root):
-    """扫描技能根目录下包含 SKILL.md 的有效技能目录"""
+    """扫描技能根目录下包含 SKILL.md 的有效技能目录
+
+    ⛔ 软链接目录一律不算技能：os.path.isdir() 对 symlink 返回 True，会把外部工具
+    装到仓根的软链（如 ego CLI 建的 ego-browser -> ~/.local/share/ego/ego-skills）
+    误判成"仓内技能"，进而触发 check_skill_sync 的 disk→README / disk→registry
+    漂移，挡住 pre-commit 与 CI。仓内技能是本仓自维护的实体目录，软链不属于。
+    """
     skills = []
     if not os.path.exists(skills_root):
         return skills
@@ -1196,6 +1202,8 @@ def discover_valid_skills(skills_root):
         if entry.startswith(".") or entry in ["scripts", "data", "node_modules"]:
             continue
         skill_path = os.path.join(skills_root, entry)
+        if os.path.islink(skill_path):
+            continue
         if os.path.isdir(skill_path) and os.path.exists(os.path.join(skill_path, "SKILL.md")):
             skills.append((entry, skill_path))
     return skills
