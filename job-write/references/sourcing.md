@@ -171,9 +171,13 @@ const txt = await js(String.raw`(() => document.body.innerText.replace(/\n{2,}/g
 
 ---
 
-## 二、信息源清单与每日巡检（配套脚本 `/Users/zhugx/src/skills/job-write/scripts/recruit_scan.py`）
+## 二、信息源清单与每日巡检（引擎在 `ijob` 仓库：`/Users/zhugx/src/ijob/patrol/recruit_scan.py`）
 
 招聘是**强时效**品类，靠人工想起来去搜必然漏。本技能配一个**零依赖巡检脚本**，每天自动回答"今天新出了哪些招聘信息"。
+
+> 2026-09-24 起巡检引擎与去重/健康缓存**收进 ijob 仓库**（本技能目录不再存副本）。
+> **日常请优先跑总控** `python3 /Users/zhugx/src/ijob/patrol/run.py --daily`，它会串起届别同步 + 探活 + 双通道抓取。
+> 缓存落点：`/Users/zhugx/src/ijob/data/patrol_state/`。
 
 ### 2.1 双通道设计（都是免登录）
 
@@ -184,13 +188,16 @@ const txt = await js(String.raw`(() => document.body.innerText.replace(/\n{2,}/g
 | `--mode web` | **三层管线**（源取自 `jobs.db:patrol_sources`）：①列表扫描（政府专栏/企业招聘站/hotjob，当前 enabled ~177 个）→ ②招考适配器（zkapi 直拉**岗位数组**）→ ③哨兵（SPA hash 变更告警，当前 enabled 15 个） | 官方一手公告 + 岗位级增量 + SPA 变更探测 | 随源数而定 |
 
 ```bash
-# 日常；web 通道源取自 ijob/jobs.db 的 patrol_sources 表
-/usr/local/bin/python3 /Users/zhugx/src/skills/job-write/scripts/recruit_scan.py --mode both --wx-days 30 \
-  --state "<vault>/码上职业/.scan-state.json" \
+# 日常首选：总控（届别同步 + 探活 + 双通道抓取，源取自 ijob/jobs.db 的 patrol_sources 表）
+python3 /Users/zhugx/src/ijob/patrol/run.py --daily
+
+# 只跑引擎（--state 缺省即 ijob/data/patrol_state/.scan-state.json，可不传）
+python3 /Users/zhugx/src/ijob/patrol/recruit_scan.py --mode both --wx-days 30 \
+  --state "/Users/zhugx/src/ijob/data/patrol_state/.scan-state.json" \
   --out   "<vault>/码上职业/巡检记录/$(date +%F)-新增招聘.md"
 # 分线扫 / 回退内置源 / 站点批量探活
-python3 /Users/zhugx/src/skills/job-write/scripts/recruit_scan.py --mode web --line B   # 或 --line A
-python3 /Users/zhugx/src/skills/job-write/scripts/recruit_scan.py --mode web --no-sources
+python3 /Users/zhugx/src/ijob/patrol/recruit_scan.py --mode web --line B   # 或 --line A
+python3 /Users/zhugx/src/ijob/patrol/recruit_scan.py --mode web --no-sources
 python3 /Users/zhugx/src/ijob/patrol/run.py --probe
 ```
 
@@ -251,9 +258,9 @@ python3 /Users/zhugx/src/ijob/patrol/run.py --probe
 ### 2.5 落地位置（本项目）
 
 - **源配置（唯一真源）**：`/Users/zhugx/src/ijob/data/jobs.db` 的 `patrol_sources` 表 ｜ 探活：`python3 /Users/zhugx/src/ijob/patrol/run.py --probe`
-- 巡检脚本：`/Users/zhugx/src/skills/job-write/scripts/recruit_scan.py`（源读 DB；`--db` 可换库）
+- 巡检脚本：`/Users/zhugx/src/ijob/patrol/recruit_scan.py`（源读 DB；`--db` 可换库）
 - 巡检报告：`码上职业/巡检记录/YYYY-MM-DD-新增招聘.md`（探活报告同目录）
-- 去重状态：`码上职业/.scan-state.json` ｜ 源健康：同目录 `sources-health.json`
+- 去重状态：`/Users/zhugx/src/ijob/data/patrol_state/.scan-state.json` ｜ 源健康：同目录 `sources-health.json` ｜ 北森：同目录 `beisen-state.json`（2026-09-24 从 vault 迁入，换机务必整体迁移，否则历史公告会重复入库）
 - ⛔ 旧入口 `00-信息源清单与每日巡检.md` / `01-官方站点源总表.md` 与 `工具/sources.yaml`、`工具/probe_sources.py` **已于 2026-09-21 废弃删除**，功能迁入 ijob（`patrol_sources` 表 + `patrol/run.py`）。
 - ⚠️ 当前**无** WorkBuddy 定时任务跑本巡检（唯一定时任务是 09:40「每日公众号数据分析」）→ 巡检按需手动触发。
 
