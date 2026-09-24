@@ -49,7 +49,7 @@
 | **[job-ima](./job-ima)** | `job-ima/` | ima 知识库「招聘」专用操作封装（随时浏览/搜索/读取/导出招聘库素材，衔接 job-write 落稿「码上职业」；基于 ima-mcp connector） | ima-mcp connector (`ima-mcp`) |
 | **[job-write](./job-write)** | `job-write/` | 招聘/校招/招考类公众号图文专项采写（实拉岗位→要点提炼型原创汇编→原生方言排版→招聘风封面→推草稿并服务端验收，内建招考站接口取数与合规红线） | `mp-html`, `mp-publish`, Python `PIL` |
 | **[mp-html](./mp-html)** | `mp-html/` | 微信公众号原生方言排版规范与组件库（强制 section、禁 position、对话气泡/引言框/斑马纹表格） | HTML/CSS（无外部依赖） |
-| **[mp-ops](./mp-ops)** | `mp-ops/` | 公众号运营数据一体化：刷新发表记录（后台接口）/ 12 维量化分析（粉丝曲线·公域放大倍数·标题特征·稳健性复核）/ 搜一搜数据（独立数据中心 `wsad.weixin.qq.com` + 单篇渠道构成）/ 生成自包含 HTML 报告（ECharts 内联）/ 发布后归档勾稽（三态清单）。**跑公众号数据一律先调本技能** | Python（标准库）, `GZH_*` 环境变量 |
+| **[mp-ops](./mp-ops)** | `mp-ops/` | 公众号运营数据一体化：刷新发表记录（后台接口）/ 12 维量化分析（粉丝曲线·公域放大倍数·标题特征·稳健性复核）/ 搜一搜数据（独立数据中心 `wsad.weixin.qq.com` + 单篇渠道构成）/ 生成自包含 HTML 报告（ECharts 内联）/ 发布后归档勾稽（三态清单）/ 单号每日流量复盘口径（references/）。**跑公众号数据一律先调本技能**；⛔ 写稿类技能不含数据分析 | Python（标准库）, `GZH_*` 环境变量 |
 | **[mp-publish](./mp-publish)** | `mp-publish/` | 微信公众号内容中台（草稿·发布·数据分析三模块）：排版稿直推草稿箱（HTML→微信 CDN 转存→draft/add，原生方言校验 + 长尾 SEO）+ 草稿增删改查与备份回滚 + 发布提交与状态跟踪 + 用户/图文/消息/接口四类数据分析（21 个 datacube 接口，跨度自动分段） | Python（标准库）, `curl`, 微信草稿·发布·数据 API, WX_APPID/WX_APPSECRET |
 | **[mp-save](./mp-save)** | `mp-save/` | 公众号文章保存至本地 vault（opencli 下载） | `opencli`, 微信文章 URL |
 | **[open-kimi-ppt](./open-kimi-ppt)** | `open-kimi-ppt/` | 演示文稿（PPT/PPTX）创建、编辑、复刻与导出（Moonshot PPTD 中间格式 + 浏览器端 PPTX writer，交付 PPTD 项目文件夹与内嵌字体的 .pptx） | Python 3（标准库）, `agent-browser` |

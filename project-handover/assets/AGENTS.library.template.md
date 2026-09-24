@@ -61,7 +61,7 @@
 2. 复制 `AGENTS.template.md` 建项目级 `AGENTS.md`；
 3. 同目录放 thin `CLAUDE.md`（内容只有 `@AGENTS.md`）；
 4. 复制 `交接文档.template.md` 建该项目的交接文档；
-5. 按需建 `工具/check_env.sh`；
+5. 按项目已确认的路线落实自检机制：建 `工具/check_env.sh`，或在权威交接文档内写人工自检清单；
 6. **回填本文件 §2 的项目入口清单**。
 
 ---

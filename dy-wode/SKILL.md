@@ -49,6 +49,22 @@ python3 dy_wode.py --categories like --max-steps 3000 --tab-timeout 3600 --out ~
 python3 "$SKILL_DIR/scripts/export_xlsx.py" ~/Desktop/dy-wode/dy_wode.json
 ```
 
+> ⚠️ **解释器必须选对（2026-09-24 实测踩坑）**：脚本同时依赖 `httpx` 和 `dy_cli` 两个模块，
+> 但本机多个 python3 各缺一个——
+> - `/usr/bin/python3`（3.9.6，macOS 系统解释器）→ **缺 httpx**，在统计阶段 `ModuleNotFoundError`
+> - `/Users/zhugx/.workbuddy/binaries/python/envs/default/bin/python3`（托管 venv）→ **有 httpx、缺 dy_cli**
+> - `/Users/zhugx/.workbuddy/binaries/python/versions/3.13.12/bin/python3`（托管裸解释器）→ **两个都缺**
+> - ~~`/opt/homebrew/bin/python3`（Homebrew 3.14.6）~~ → **2026-09-24 已随 `brew uninstall yt-dlp python@3.14` 一并移除，该路径已不存在**
+> - ✅ **`/Library/Frameworks/Python.framework/Versions/3.14/bin/python3`**（python.org 安装，dy-cli 本体所在）→ **两个都有**
+> - ✅ `/usr/local/bin/python3` 是上面那个的软链，等价，**首选这个短路径**
+>
+> 报错特征是"能采到作品数、但在『正在批量获取作品统计…』处崩栈"。先探测再跑：
+> ```bash
+> for py in /usr/local/bin/python3 /Library/Frameworks/Python.framework/Versions/3.14/bin/python3; do
+>   echo "$py httpx=$($py -c 'import httpx' 2>/dev/null && echo OK) dy_cli=$($py -c 'import dy_cli' 2>/dev/null && echo OK)"
+> done
+> ```
+
 分类键：`like` 喜欢、`favorite` 收藏、`record` 观看历史、`watch_later` 稍后再看、`message` 消息/私信。
 
 ## 流程
