@@ -59,12 +59,17 @@ search_fetch.py（抓**单篇阅读渠道构成**），而「搜一搜数据中�
 
   export GZH_WORK_DIR="/path/to/账号目录"      # 可选，仅用于报告标注
   python3 search_center_fetch.py --check        # 只探登录态+目标appid，不取数
+  python3 search_center_fetch.py --switch       # 换号：拉起扫码页并等登录完成
   python3 search_center_fetch.py                # 默认抓 mashang 近 30 天
   python3 search_center_fetch.py --profile manba   # 抓另一个已登记账号
   python3 search_center_fetch.py --days 7       # 近 7 天
   python3 search_center_fetch.py --days 1       # 仅昨天（配合 12:00 后跑）
   python3 search_center_fetch.py --out <路径>   # 指定落盘位置
   python3 search_center_fetch.py --appid <appid> # 绕过账号表直接指定（不推荐）
+
+换号说明：微信后台**没有多号切换器**（实测：已登录时访问 loginpage 会被 cookie
+直接重定向回原账号后台），所以 `--switch` 走的是「先 logout 再拉扫码页」，
+并轮询等登录完成、校验昵称是否为目标账号。**必须朱总本人扫码**，脚本不碰凭据。
 
 产出：
   ~/.cache/weixin/publish_records/search_center_<YYYYMMDD>.json   结构化
@@ -112,44 +117,132 @@ def log_line(out: str, key: str) -> str:
     return m.group(1).strip() if m else ""
 
 
-def probe_login(timeout=120) -> tuple:
-    """第一道闸门：探登录态。返回 (token, 账号昵称)；取不到 token 返回 ('', '')。"""
+def probe_login(profile: str = "", timeout=180) -> tuple:
+    """第一道闸门：探登录态。返回 (token, 账号昵称, task_space 名)；未登录返回 ('','','')。
+
+    ⚠️ 2026-09-24 实测坑：ego 的 task space **各自独立 cookie**。朱总手动扫码
+    登进的码上职业可能落在另一个 task space 里，而本脚本默认空间仍是旧号
+    （满爸），`openOrReuseTab` 会直接复用旧号标签 → 看起来「登录态失效」，
+    实际是**找错空间**。所以这里遍历所有 agent 空间，找任一已登录的后台页。
+
+    多个账号同时登录时（实测：满爸 + 码上职业各占一个空间），按 profile
+    对应的昵称**优先挑选**；没给 profile 或都不匹配时取最后一个命中的。
+    """
+    out = run_ego(r'''
+const spaces = (await listTaskSpaces()) || {}
+const list = Array.isArray(spaces) ? spaces : (spaces.spaces || [])
+cliLog('SPACE_N=' + list.length)
+const hits = []
+for (const sp of list) {
+  if (sp.createdBy !== 'agent') continue
+  try {
+    await useOrCreateTaskSpace(sp.taskId || sp.name)
+    const tabs = (await listTabs()) || []
+    const arr = Array.isArray(tabs) ? tabs : (tabs.tabs || [])
+    for (const t of arr) {
+      const u = String(t.url || '')
+      if (!/token=\d+/.test(u) || !/cgi-bin\/(home|appmsg|masssend)/.test(u)) continue
+      try {
+        await switchTab(t.targetId)
+        await new Promise(r => setTimeout(r, 1200))
+        const href = String(await js('location.href'))
+        if (!/token=\d+/.test(href) || !/cgi-bin\/(home|appmsg|masssend)/.test(href)) continue
+        const nick = await js(String.raw`(() => {
+          const sels = ['.weui-desktop-account__nickname', '.account_setting_info__nickname',
+                        '.weui-desktop-menu__title', '[class*=nickname]', '.profile_nickname']
+          for (const s of sels) {
+            const e = document.querySelector(s)
+            if (e && e.innerText && e.innerText.trim()) return e.innerText.trim()
+          }
+          const m2 = (document.body.innerText || '').match(/编辑\s*(\S{2,20})\s*功能/)
+          return m2 ? m2[1] : ''
+        })()`)
+        const tk = href.match(/token=(\d+)/)
+        const rec = {space: sp.taskId || sp.name, token: tk ? tk[1] : '',
+                     nick: String(nick).replace(/\s+/g, ' ').trim(), idx: t.index}
+        cliLog('HIT space=' + rec.space + ' token=' + rec.token + ' idx=' + rec.idx +
+               ' nick=' + rec.nick.slice(0, 24))
+        // 同一空间同一账号可能有多张标签（都带同一 token），只留一张即可
+        const dup = hits.findIndex(h => h.space === rec.space && h.nick === rec.nick)
+        if (dup >= 0) hits[dup] = rec; else hits.push(rec)
+      } catch(e) { /* 标签不可用跳过 */ }
+    }
+  } catch(e) { cliLog('SKIP space=' + (sp.taskId || sp.name) + ' err=' + e.message) }
+}
+// 目标 profile 对应的昵称优先（避免多号并存时抓错号）
+const WANT = __WANT__
+let best = null
+for (const h of hits) {
+  if (WANT.length && h.nick && WANT.some(w => h.nick.indexOf(w) >= 0)) { best = h; break }
+}
+if (!best && hits.length) best = hits[hits.length - 1]
+if (best) {
+  await useOrCreateTaskSpace(best.space)
+  cliLog('SPACE=' + best.space)
+  cliLog('TOKEN=' + best.token)
+  cliLog('NICK=' + best.nick.slice(0, 30))
+  cliLog('LOGGED_IN=yes')
+} else {
+  cliLog('SPACE=')
+  cliLog('TOKEN=')
+  cliLog('NICK=')
+  cliLog('LOGGED_IN=no')
+}
+'''.replace("__WANT__", json.dumps(_profile_nicks(profile))), timeout=timeout)
+    if "LOGGED_IN=yes" not in out:
+        return "", "", ""
+    return log_line(out, "TOKEN"), log_line(out, "NICK"), log_line(out, "SPACE")
+
+
+def open_scan(profile: str, timeout=600) -> str:
+    """拉起微信后台登录页让朱总扫码，等登录完成后返回账号昵称。
+
+    微信后台**没有多号切换器**（实测：已登录时访问 loginpage 会被 cookie 直接
+    重定向回原账号后台），所以换号只能「退出当前号 → 扫码进目标号」。
+    本函数只做「打开扫码页 + 轮询等待」，不代填任何凭据、不绕验证。
+    """
     out = run_ego(r'''
 const task = await useOrCreateTaskSpace('搜一搜数据中心抓取')
-await openOrReuseTab('https://mp.weixin.qq.com/', { wait: true, timeout: 45 })
-const href = String(await js('location.href'))
-const t = String(await snapshotText())
-const m = href.match(/token=(\d+)/)
-cliLog('HREF=' + href)
-cliLog('TOKEN=' + (m ? m[1] : 'none'))
-// 强信号优先：URL 带 token 且落在后台页 => 必定已登录。
-// 不可只用文本黑名单：首页运营文案「推荐带来6.5万阅读量，微信扫码查看…」含「扫码」。
-const strongIn = /token=\d+/.test(href) && /cgi-bin\/(home|appmsg|masssend)/.test(href)
-const strongOut = href.includes('loginpage') || /微信扫一扫|登录超时|请重新登录/.test(t)
-const ok = strongIn || (!strongOut && /token=\d+/.test(href))
-cliLog('LOGGED_IN=' + (ok ? 'yes' : 'no'))
-// 账号昵称：后台顶部栏的当前账号名，用于落盘标注（防止把满爸号数据误当码上职业）
-const nick = await js(String.raw`(() => {
-  const sels = ['.weui-desktop-account__nickname', '.account_setting_info__nickname',
-                '.weui-desktop-menu__title', '[class*=nickname]', '.profile_nickname']
-  for (const s of sels) {
-    const e = document.querySelector(s)
-    if (e && e.innerText && e.innerText.trim()) return e.innerText.trim()
+// 退出当前登录态，回到真正的登录页（带 redirect 会跳回原号，必须用 logout）
+await openOrReuseTab('https://mp.weixin.qq.com/cgi-bin/logout', { wait: true, timeout: 45 })
+await new Promise(r => setTimeout(r, 2500))
+await openOrReuseTab('https://mp.weixin.qq.com/cgi-bin/loginpage?t=home/index&lang=zh_CN',
+                     { wait: true, timeout: 45 })
+await new Promise(r => setTimeout(r, 2500))
+cliLog('SCAN_URL=' + String(await js('location.href')))
+// 等朱总扫码：最多 timeout 秒，登录成功即落在后台页
+let nick = ''
+for (let i = 0; i < __TIMEOUT__; i++) {
+  await new Promise(r => setTimeout(r, 2000))
+  const href = String(await js('location.href'))
+  if (/token=\d+/.test(href) && /cgi-bin\/(home|appmsg|masssend)/.test(href)) {
+    nick = await js(String.raw`(() => {
+      const sels = ['.weui-desktop-account__nickname', '[class*=nickname]']
+      for (const s of sels) {
+        const e = document.querySelector(s)
+        if (e && e.innerText && e.innerText.trim()) return e.innerText.trim()
+      }
+      const m = (document.body.innerText || '').match(/编辑\s*(\S{2,20})\s*功能/)
+      return m ? m[1] : ''
+    })()`)
+    cliLog('DONE_NICK=' + String(nick).replace(/\n/g, ' ').slice(0, 30))
+    break
   }
-  const m2 = (document.body.innerText || '').match(/编辑\s*(\S{2,20})\s*功能/)
-  return m2 ? m2[1] : ''
-})()`)
-cliLog('NICK=' + String(nick).replace(/\n/g, ' ').slice(0, 30))
-''', timeout=timeout)
-    if "LOGGED_IN=yes" not in out:
-        return "", ""
-    return log_line(out, "TOKEN"), log_line(out, "NICK")
+}
+if (!nick) cliLog('DONE_NICK=')
+cliLog('FINAL_URL=' + String(await js('location.href')).slice(0, 120))
+'''.replace("__TIMEOUT__", str(int(timeout / 2))), timeout=timeout + 60)
+    return log_line(out, "DONE_NICK")
 
 
-def fetch_all(token: str, from_ds: str, to_ds: str, appid: str, timeout=300) -> dict:
-    """三跳进 iframe，然后页内 fetch 三个数据接口，原始响应返回 Python。"""
+def fetch_all(token: str, from_ds: str, to_ds: str, appid: str, space: str = "", timeout=300) -> dict:
+    """三跳进 iframe，然后页内 fetch 三个数据接口，原始响应返回 Python。
+
+    ⚠️ space 必须传 probe_login 命中的那个 task space。ego 各空间 cookie 独立，
+    拿 A 空间的 token 去 B 空间开插件页会登不上/串号。
+    """
     js = f'''
-const task = await useOrCreateTaskSpace('搜一搜数据中心抓取')
+await useOrCreateTaskSpace({json.dumps(space or "搜一搜数据中心抓取")})
 const TOKEN = {json.dumps(token)}
 // ① 插件页
 await openOrReuseTab(
@@ -216,6 +309,12 @@ def resolve_appid(profile: str):
     except Exception as e:
         print(f"⚠️ 读 mp-publish 账号表失败：{e}")
     return None, f"profile={profile}(未取到 appid)"
+
+
+def _profile_nicks(profile: str) -> list:
+    """profile → 可能的账号昵称关键词（用于跨空间挑登录态）。"""
+    table = {"mashang": ["码上职业"], "manba": ["满爸爱生活", "满爸"]}
+    return table.get(profile, [])
 
 
 def nick_matches(nick: str, profile: str) -> bool:
@@ -362,12 +461,28 @@ def main():
     work = os.environ.get("GZH_WORK_DIR") or os.getcwd()
     profile = a[a.index("--profile") + 1] if "--profile" in a else DEFAULT_PROFILE
 
+    if "--switch" in a:
+        print(f"切换账号 → 目标 profile：{profile}")
+        print("请在弹出的微信后台页面用**该账号的管理员微信**扫码登录。")
+        print("⛔ 本脚本只负责打开扫码页与等待，不会代填凭据、不绕验证。")
+        nick = open_scan(profile)
+        if not nick:
+            sys.exit("未等到登录完成（超时或未扫码）。已登录的旧号可能已被 logout 登出，"
+                     "请重新跑一次或手动登录。")
+        print(f"✅ 登录完成，当前账号：{nick}")
+        if not nick_matches(nick, profile):
+            sys.exit(f"⛔ 扫错了号：登录的是「{nick}」，目标 profile 是「{profile}」。"
+                     f"请重新跑一次并扫对账号。")
+        print("账号已就位，可以直接取数："
+              f"\n  python3 {os.path.basename(__file__)} --profile {profile}")
+        return
+
     if "--check" in a:
-        tk, nick = probe_login()
+        tk, nick, space = probe_login(profile)
         appid, src = resolve_appid(profile)
         print(f"账号目录：{work}")
         print(f"目标 profile：{profile}（appid={appid or '未取到'}，来源 {src}）")
-        print("登录态：" + (f"有效，token={tk}，账号={nick or '未识别'}" if tk
+        print("登录态：" + (f"有效，token={tk}，账号={nick or '未识别'}，空间={space}" if tk
                            else "失效 → 请在 ego 浏览器扫码登录 mp.weixin.qq.com"))
         if tk and nick and not nick_matches(nick, profile):
             print(f"⛔ 账号不符：当前登录「{nick}」，但目标 profile 是「{profile}」。"
@@ -388,11 +503,11 @@ def main():
                  f"（wx_account.py list 查看），或用 --appid 显式指定。")
 
     print(f"[1/3] 探登录态 …（目标 profile={profile}，appid={appid}，来源 {appid_src}）")
-    token, account = probe_login()
+    token, account, space = probe_login(profile)
     if not token:
         sys.exit("登录态失效：需朱总在 ego 浏览器扫码登录 mp.weixin.qq.com 后重试。\n"
                  "⛔ 本脚本绝不尝试自动登录或绕验证。")
-    print(f"      token={token}  当前登录账号={account or '(未识别)'}")
+    print(f"      token={token}  当前登录账号={account or '(未识别)'}  空间={space}")
     if not account:
         print("      ⚠️ 未识别账号昵称：落盘 account 字段标为「(未识别)」，使用前请人工确认当前登录的是目标账号。")
     elif not nick_matches(account, profile):
@@ -403,7 +518,7 @@ def main():
                  f"或明确要抓当前账号时加 --profile {account}。")
 
     print(f"[2/3] 进 iframe 并取三个数据接口（{from_ds} ~ {to_ds}）…")
-    raw = fetch_all(token, from_ds, to_ds, appid)
+    raw = fetch_all(token, from_ds, to_ds, appid, space)
     for k, v in raw.items():
         print(f"      {k}: {len(v)} 字节 " + ("✓JSON" if _ok_json(v) else "✗非JSON"))
     _assert_ok(raw)
@@ -411,7 +526,9 @@ def main():
     print("[3/3] 落盘 …")
     os.makedirs(CACHE, exist_ok=True)
     stamp = datetime.now().strftime("%Y%m%d")
-    raw_path = os.path.join(CACHE, f"search_center_raw_{stamp}.json")
+    # ⛔ 文件名必须带 profile：多号共用 search_center_<日期>.json 会互相覆盖
+    # （2026-09-24 实测踩到：先抓 manba 再抓 mashang，满爸那份被静默覆盖）。
+    raw_path = os.path.join(CACHE, f"search_center_{profile}_raw_{stamp}.json")
     with open(raw_path, "w", encoding="utf-8") as f:
         json.dump(raw, f, ensure_ascii=False, indent=1)
 
@@ -422,7 +539,7 @@ def main():
         out_path = a[a.index("--out") + 1]
         os.makedirs(os.path.dirname(os.path.abspath(out_path)), exist_ok=True)
     else:
-        out_path = os.path.join(CACHE, f"search_center_{stamp}.json")
+        out_path = os.path.join(CACHE, f"search_center_{profile}_{stamp}.json")
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump(parsed, f, ensure_ascii=False, indent=1)
 

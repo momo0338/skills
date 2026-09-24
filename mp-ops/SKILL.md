@@ -165,12 +165,22 @@ E 合集资产价值 / F 行动清单 / **G 真实长尾水位（剔爆款）** 
 ```
 
 打通 `wsad.weixin.qq.com` 三个接口（`get-search-channel` / `get-hot-passage-list` /
-`get-hot-query-list`），落盘 `search_center_raw_<日期>.json` + 结构化 `search_center_<日期>.json`。
+`get-hot-query-list`），落盘 `search_center_<profile>_raw_<日期>.json` +
+`search_center_<profile>_<日期>.json`（⛔ 文件名带 profile，多号并存时不会互相覆盖）。
 
 ⛔ **账号纪律（写错号＝数据污染）**：默认 `--profile mashang`，appid **不写死**，运行时从
 `mp-publish/scripts/wx_account.py env <profile>` 读（账号表是唯一真源）。当前登录账号与
 目标 profile 不符 → **exit 2 硬停**，不允许「A 号登录态 + B 号 appid」取数。
 换号后先 `--check` 看清账号再跑。
+
+⛔ **ego task space 各自独立 cookie**（2026-09-24 实测踩坑）：手动扫码登进的号可能
+落在**另一个** task space，脚本若死绑默认空间会误判「登录态失效」或抓到旧号。
+`probe_login` 已改为**遍历所有 agent 空间**找已登录页，并按目标 profile 的昵称优先挑；
+`fetch_all` 复用同一空间。多号并存（满爸 + 码上职业各占一个空间）时可正常分别抓取。
+
+⛔ **session 会随扫码失效**：给另一个号扫码会登出原号，旧号再跑会返回
+`errcode=-3 invalid session` —— 脚本此时**报错停止、不落半份脏数据**（`_assert_ok` 生效），
+需重新扫码登录该号。
 
 > 导航三跳、接口族、Vue SPA 资源漂移等逆向细节全在脚本 docstring 里，别在本文档重复一份。
 
