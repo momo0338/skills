@@ -1,6 +1,6 @@
 # Momo Skills Core Library (AI Agent 技能库)
 
-> 包含 **45 个通用与专项 AI Agent 技能**，覆盖大模型自主浏览器操作、全站深度爬虫、网页正文提取、智能视频看懂抽帧、媒体音视频下载、万站 CLI 操作、抖音专项 CLI、抖音「我的」个人数据整理、抖音带货翻拍、抖音小店经营数据、千川投流决策、研发资源加速、网络代理管理、企业情报深度调研、微信公众号采集、本地视频语音转写、GitHub 仓库深度数据调研、公众号技术专栏自动化采写及跨 AI 项目交接体系搭建等场景。
+> 包含 **46 个通用与专项 AI Agent 技能**，覆盖大模型自主浏览器操作、全站深度爬虫、网页正文提取、智能视频看懂抽帧、媒体音视频下载、万站 CLI 操作、抖音专项 CLI、抖音「我的」个人数据整理、抖音带货翻拍、抖音小店经营数据、千川投流决策、研发资源加速、网络代理管理、网络连通性诊断、企业情报深度调研、微信公众号采集、本地视频语音转写、GitHub 仓库深度数据调研、公众号技术专栏自动化采写及跨 AI 项目交接体系搭建等场景。
 
 ---
 
@@ -14,6 +14,7 @@
 | **[dy-cli](./dy-cli)** | `dy-cli/` | 抖音全功能 CLI 工具（搜索、无水印音视频/图文下载、热榜 Top 50、点赞/评论/收藏互动、发布与数据分析） | Python `dy-cli` |
 | **[dy-wode](./dy-wode)** | `dy-wode/` | 抖音「我的」个人数据整理（登录态下采集喜欢/收藏/观看历史/稍后再看/私信视频，批量取点赞/评论/收藏/转发统计，输出 Markdown/CSV/JSON/Excel 表格；逐分类缓存与中断续跑） | Python `dy-cli`, `openpyxl`, ego lite（ego-browser） |
 | **[proxy](./proxy)** | `proxy/` | 代理池获取与管理工具（实时同步 `momo0338/proxy` 节点，支持 HTTP/SOCKS5 轮换、延迟测试与环境变量导出） | Python `proxy_manager.py`, GitHub raw |
+| **[net-reachability-diagnosis](./net-reachability-diagnosis)** | `net-reachability-diagnosis/` | 网络连通性分层诊断（ICMP→TCP→应用协议定位断点；识破 TUN 代理造成的「端口探测伪造」与「HTTP 通但 SSH 不通」选择性阻断；读 Clash 规则定位命中点；同通道对照 + 源 IP 双证据验证修复） | Bash (`ping`/`nc`/`curl`/`ssh`/`route`), Clash Verge Rev |
 | **[dev-resource-accelerator](./dev-resource-accelerator)** | `dev-resource-accelerator/` | 公开 GitHub 仓库、Release、Raw 与归档的镜像优先访问、自动回退和安全拦截 | Python, `git`, `curl` |
 | **[yt-dlp](./yt-dlp)** | `yt-dlp/` | 全能音视频下载（最高画质/音质、字幕提取、播放列表批处理、Cookie 认证） | `yt-dlp`, `ffmpeg` |
 | **[scrapling](./scrapling)** | `scrapling/` | 本地网页正文提取（Fast/Stealth 无头双模式，自动修复懒加载图片 `data-src`） | Python `scrapling`, `html2text`, `browserforge` |
