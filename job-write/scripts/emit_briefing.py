@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-emit_briefing.py —— 从 ijob「jobs.db」生成写稿用的 BRIEFING（给 AI 的投料单）
+emit_briefing.py —— 从 ijob 稳定只读契约生成写稿用的 BRIEFING（给 AI 的投料单）
 
 为什么要有这个脚本
 ==================
@@ -11,13 +11,15 @@ emit_briefing.py —— 从 ijob「jobs.db」生成写稿用的 BRIEFING（给 A
   - 质量的角度：找不到时模型会「合理补全」——这正是 09-18 紫金稿翻车的机理
     （非官方口径 60 名 / 11-02 截止被当成事实写进正文）。
 
-所以把「确定性部分」从提示词里拿走：由脚本从主档搬字段 + 显式标出缺口，
+所以把「确定性部分」从提示词里拿走：由脚本从 ijob 搬字段 + 显式标出缺口，
 模型只做「表达转换」，不做信息检索，也不被允许推测。
 
-数据源（2026-09-21 起）
+数据源（2026-09-25 起）
 ======================
-**唯一事实源 = `/Users/zhugx/src/ijob/data/jobs.db`（SQLite）**。
-⛔ 旧主档 `工具/公司主数据.csv` 及其构建脚本已作废，不要再读、不要再改。
+**唯一事实源 = 用户级 ijob 技能的 `brief` 只读契约**（`ijob.public` v1）。
+本脚本通过 `IJOB_SKILL_SCRIPT` 环境变量或标准安装位置发现技能入口，
+只消费稳定业务对象，**不感知 ijob 的存储、路径、库表或 SQL**。
+批次总量在 `data.total`，单页上限 100，本脚本按页自动拉完。
 
 用法
 ====
@@ -30,97 +32,114 @@ emit_briefing.py —— 从 ijob「jobs.db」生成写稿用的 BRIEFING（给 A
   # 多条一起（批量开稿前先看缺口全景）
   python3 emit_briefing.py "国网" "南瑞" --gap-only
 
-  # 列出所有「硬信息已够、可以动笔」的单位（选题用；**自动与草稿箱对账**）
+  # 列出所有「硬信息已够、库内未成稿、草稿箱未命中候选」的单位（选题用）
   python3 emit_briefing.py --ready
 
-  # 只对账、不改名单：逐条打印「草稿标题 → DB 对应批次 + 稿件状态」
+  # 只对账、不改名单：逐条打印「草稿标题 → 候选批次 + 库内稿件状态」
   python3 emit_briefing.py --draftbox-audit
 
   # 换公众号账号对账（默认 mashang=码上职业）
   python3 emit_briefing.py --ready --profile mashang
 
+  # 指定 ijob 技能入口（默认自动发现）
+  IJOB_SKILL_SCRIPT=/path/to/ijob/scripts/ijob.py python3 emit_briefing.py --ready
+
 字段可信度三档
 ==============
-  OK     主档有确定值（含具体日期/具体人数）
-  VAGUE  主档是软词（待核/预计/滚动/招满即止/暂无）→ 不得写进正文，必须回官方补
-  EMPTY  主档为空
+  OK     批次对象有确定值（含具体日期/具体人数）
+  VAGUE  批次对象是软词、哨兵日或历史「发布日 +30 天」占位 → 不得写进正文，必须回官方补
+  EMPTY  批次对象为空
 
-⛔ 改动主档的口径：事实数据一律进 `jobs.db`
-（`companies` / `campaigns`（渠道与排雷字段已并入本表）/ `campaign_articles`（正文）/ `company_profiles` / `patrol_sources`），
-不再有 CSV 环节。详见项目 MEMORY.md。
+⛔ 补数口径：缺项一律**回 ijob 项目按其交接规则回填并复核**，
+本脚本只读、不会替 ijob 写入任何数据。
 
 草稿箱对账（2026-09-21 加）
 ==========================
-`campaigns.has_article`（= `rendered_html` 长度 >50）**只反映库里有没有稿**，
-**不等于草稿箱的真实状态** —— 推完草稿箱若忘了回填 `rendered_html`，DB 会一直显示「未排」。
-所以 `--ready` 在给名单前**强制与草稿箱对一次账**（对账键＝`campaigns.title` 与草稿标题，
-标题不匹配时再用「单位名主体前缀互含」兜底）。对上的单位不再算「待写」，单独列进
-「⚠️ 疑似已在草稿箱」区；`--include-suspect` 可把它们并回主名单。
+ijob 的 `content_state`（published / written / unwritten）**只反映 ijob 侧有没有成稿**，
+**既不等于已推微信草稿箱，更不等于已发布**。所以 `--ready` 在给名单前
+**强制与草稿箱对一次账**
+（标题精确 → 稿件正文含标题 → 批次标题主体互含 → 单位主体相似 → 人工维护简称/全称别名候选）。
+多批次歧义和后三级弱匹配都只生成人工核验候选，不会自动回填，也不会宣称确定失同步。
+歧义时优先展示进度最可证实的批次（已发布 > 库内已成稿 > 库内未排），但仍排除全部可能批次。
+对上的单位单独列进「⚠️ 草稿箱候选」区，`--include-suspect` 可在人工核实后并回主名单。
 
-⛔ 登录态失效时**只降级告警、不自动登录**（见项目 MEMORY.md §十）；
+⛔ 登录态失效时**只降级告警、不自动登录**；
 脚本取不到草稿列表会明确打印「对账跳过」，此时名单不可直接采信。
 """
 import argparse
+import json
 import os
 import re
-import sqlite3
 import subprocess
 import sys
-from datetime import datetime
+from datetime import date, datetime
 
-DEFAULT_DB = "/Users/zhugx/src/ijob/data/jobs.db"
 # 草稿箱取数脚本（mp-publish 技能内，唯一权威位置）
 DRAFT_SCRIPT = os.path.join(
     os.path.expanduser("~"), ".workbuddy/skills/mp-publish/scripts/wx_draft.py")
 DEFAULT_PROFILE = "mashang"
 
-DB_PATH = DEFAULT_DB
+# ijob 技能入口发现顺序：显式环境变量 → 用户级技能 → 与 job-write 同仓库的兄弟技能
+IJOB_SCRIPT_ENV = "IJOB_SKILL_SCRIPT"
+IJOB_RELATIVE_SCRIPT = os.path.join("ijob", "scripts", "ijob.py")
+IJOB_USER_SCRIPT = os.path.join("~", ".workbuddy", "skills", "ijob", "scripts", "ijob.py")
+# brief 单页硬上限（与 ijob 契约一致）；分页拉全量，避免只取第一页。
+BRIEF_PAGE_LIMIT = 100
+IJOB_CALL_TIMEOUT = 300
+MAX_PAGES = 200  # 防御性上限，远大于真实批次数；超出会显式报错而不是静默截断。
 
 # 占位截止日：ijob 对「尚未核实截止日」的批次统一用该日期占位，
 # 判定时必须结合 batch_type / title 的「待核」字样降级为 VAGUE，否则会把占位日当事实写进正文。
 PLACEHOLDER_DEADLINE = "2026-12-31"
 
-SQL = """
-SELECT
-  co.name                AS company,
-  co.full_name           AS full_name,
-  co.nature              AS nature,
-  co.industry_catalog    AS industry_catalog,
-  co.headquarters_city   AS headquarters_city,
-  co.official_site       AS official_site,
-  c.id                   AS cid,
-  c.title                AS title,
-  c.batch_type           AS batch_type,
-  c.line                 AS line,
-  c.target_graduates     AS target_graduates,
-  c.min_degree           AS min_degree,
-  c.total_vacancies      AS total_vacancies,
-  c.employment_nature    AS employment_nature,
-  c.city                 AS city,
-  c.publish_date         AS publish_date,
-  c.deadline             AS deadline,
-  c.status               AS status,
-  c.verdict_summary      AS verdict_summary,
-  c.apply_url            AS apply_url,
-  c.announcement_url     AS announcement_url,
-  c.consulting_phone     AS consulting_phone,
-  c.wechat_url           AS wechat_url,
-  c.has_article          AS has_article,
-  length(coalesce(a.rendered_html, ''))    AS html_len,
-  c.age_limit            AS age_limit,
-  c.cet_requirement      AS cet_requirement,
-  c.computer_cert_requirement AS computer_cert_requirement,
-  c.chsi_valid_date      AS chsi_valid_date,
-  c.medical_veto_rules   AS medical_veto_rules,
-  c.allocation_rules     AS allocation_rules,
-  c.pitfall_warnings     AS pitfall_warnings
-FROM campaigns c
-JOIN companies co ON co.id = c.company_id
-LEFT JOIN campaign_articles a ON a.campaign_id = c.id
-WHERE c.status != '已截止'
-"""
 
-# ── 主档列 → briefing 字段 的映射（左=DB 键, 右=(briefing键, 展示名)）
+class IjobContractError(RuntimeError):
+    """ijob 技能不可用 / 契约不合法 / 调用失败。必须显式报错，绝不降级成「空数据」。"""
+
+    def __init__(self, code, message, *, details=None):
+        super().__init__(message)
+        self.code = code
+        self.message = message
+        self.details = details or {}
+
+
+# ── 契约字段 → 脚本内部 legacy row 的映射（领域逻辑只认 legacy 键）──
+# 只在这里出现契约字段名：cid / html_len / rh / id 等历史键由适配层负责合成。
+LEGACY_FROM_ITEM = {
+    "company": "company",
+    "full_name": "full_name",
+    "nature": "nature",
+    "industry_catalog": "industry_catalog",
+    "headquarters_city": "headquarters_city",
+    "official_site": "official_site",
+    "title": "title",
+    "batch_type": "batch_type",
+    "line": "line",
+    "target_graduates": "target_graduates",
+    "min_degree": "min_degree",
+    "total_vacancies": "total_vacancies",
+    "employment_nature": "employment_nature",
+    "city": "city",
+    "publish_date": "publish_date",
+    "deadline": "deadline",
+    "status": "status",
+    "verdict_summary": "verdict_summary",
+    "apply_url": "apply_url",
+    "announcement_url": "announcement_url",
+    "consulting_phone": "consulting_phone",
+    "wechat_url": "wechat_url",
+    "age_limit": "age_limit",
+    "cet_requirement": "cet_requirement",
+    "computer_cert_requirement": "computer_cert_requirement",
+    "chsi_valid_date": "chsi_valid_date",
+    "medical_veto_rules": "medical_veto_rules",
+    "allocation_rules": "allocation_rules",
+    "pitfall_warnings": "pitfall_warnings",
+}
+# 契约允许 null（结构化红线未做），legacy row 内部一律用空串，避免 (row[k] or "") 之外的分支。
+_TEXT_ITEM_KEYS = set(LEGACY_FROM_ITEM)
+
+# ── 主档列 → briefing 字段 的映射（左=legacy 键, 右=(briefing键, 展示名)）
 FIELD_MAP = [
     ("full_name",         ("unit",         "单位全称")),
     ("line",              ("line",         "线(A校招/B编制)")),
@@ -138,7 +157,7 @@ FIELD_MAP = [
 ]
 
 # 写稿「必填事实」：缺一项就写不出不误导的招聘稿。
-# key -> (展示名, DB 键, 出现在哪一段)
+# key -> (展示名, legacy row 键, 出现在哪一段)
 REQUIRED = {
     "unit":          ("单位全称",     "full_name",        "段4 单位来头"),
     "deadline":      ("报名截止",     "deadline",         "段3 宫格 / SEO摘要 / 钩子"),
@@ -174,15 +193,31 @@ def grade(val):
     return "OK"
 
 
+def deadline_is_derived_placeholder(row):
+    """识别历史导入的「发布日 + 30 天」占位日期。
+
+    旧导入曾把无法核实的报名截止批量写成公告日后 30 天。仅靠日期格式无法
+    区分真实截止与占位；生产库已有大量此类记录，因此写稿入口必须降级复核。
+    """
+    publish = (row["publish_date"] or "").strip()[:10]
+    deadline = (row["deadline"] or "").strip()[:10]
+    if not publish or not deadline:
+        return False
+    try:
+        return (date.fromisoformat(deadline) - date.fromisoformat(publish)).days == 30
+    except ValueError:
+        return False
+
+
 def grade_deadline(row):
-    """截止日专判：占位日期 + 「待核」字样 → VAGUE，避免把占位日当事实"""
+    """截止日专判：明确待核词、哨兵日或发布日 +30 天占位均降级为 VAGUE。"""
     v = (row["deadline"] or "").strip()
     if not v:
         return "EMPTY"
     blob = f"{row['batch_type'] or ''}{row['title'] or ''}{row['verdict_summary'] or ''}"
     if "待核" in blob or "待官方公告" in blob or "未披露" in blob:
         return "VAGUE"
-    if v == PLACEHOLDER_DEADLINE:
+    if v == PLACEHOLDER_DEADLINE or deadline_is_derived_placeholder(row):
         return "VAGUE"
     return grade(v)
 
@@ -194,12 +229,197 @@ def grade_gates(row):
 
 
 def draft_state(row):
-    """稿件进度（由 ijob 字段推导，替代旧 CSV「稿件」五态）"""
-    if (row["wechat_url"] or "").strip() and len(row["wechat_url"].strip()) > 10:
+    """按可证实程度返回稿件状态，绝不把 ijob 侧正文推断为已推微信草稿箱。
+
+    优先用契约的 ``content_state``（published / written / unwritten）；
+    老载荷缺该字段时回退到「可发布链接 + 正文长度」自证。
+    """
+    state = (row.get("content_state") or "").strip()
+    if state == "published":
         return "已发布"
-    if (row["html_len"] or 0) > 50:
-        return "已推草稿箱"
-    return "未排"
+    if state == "written":
+        return "库内已成稿"
+    if state == "unwritten":
+        return "库内未排"
+    wechat = (row.get("wechat_url") or "").strip()
+    if len(wechat) > 10:
+        return "已发布"
+    if (row.get("article_length") or row.get("html_len") or 0) > 50:
+        return "库内已成稿"
+    return "库内未排"
+
+
+# ─────────────────────────────────────────────────────────────
+# ijob 稳定只读契约适配（2026-09-25 加）
+# ─────────────────────────────────────────────────────────────
+def find_ijob_script():
+    """发现 ijob 技能入口脚本；找不到时抛结构化错误，绝不静默返回空数据。"""
+    candidates = []
+    env_path = os.environ.get(IJOB_SCRIPT_ENV)
+    if env_path:
+        candidates.append(("环境变量 " + IJOB_SCRIPT_ENV, os.path.expanduser(env_path)))
+    candidates.append(("用户级技能目录", os.path.expanduser(IJOB_USER_SCRIPT)))
+    # 与 job-write 同一 skills 仓库的兄弟技能：<repo>/ijob/scripts/ijob.py
+    here = os.path.dirname(os.path.abspath(__file__))  # <repo>/job-write/scripts
+    repo_root = os.path.dirname(os.path.dirname(here))
+    candidates.append(("同仓库兄弟技能", os.path.join(repo_root, IJOB_RELATIVE_SCRIPT)))
+    tried = []
+    for origin, path in candidates:
+        if not path:
+            continue
+        if os.path.isfile(path):
+            return path, origin
+        tried.append(f"{origin}：{path}")
+    raise IjobContractError(
+        "ijob_skill_not_found",
+        "未发现 ijob 技能入口，无法取数（禁止把「找不到 ijob」当成「没有批次」）",
+        details={"checked": tried,
+                 "hint": f"请安装 ijob 技能，或设置 {IJOB_SCRIPT_ENV} 指向其 scripts/ijob.py"},
+    )
+
+
+def _validate_envelope(payload, origin):
+    """校验 ijob 公共只读契约与技能错误外壳；不合法一律抛错。
+
+    成功载荷只接受 ``ijob.public``。``ijob.skill`` 只是技能适配层在定位
+    运行时或调用契约之前产生的错误外壳，不能冒充成功批次数据。
+    """
+    if not isinstance(payload, dict):
+        raise IjobContractError("ijob_invalid_response",
+                                f"ijob 技能未返回 JSON 对象（来源：{origin}）")
+
+    contract = payload.get("contract")
+    operation = payload.get("operation")
+    if operation != "brief":
+        raise IjobContractError(
+            "ijob_operation_mismatch",
+            f"ijob 响应不是 brief 操作（来源：{origin}）",
+            details={"operation": operation})
+
+    if "error" in payload:
+        if contract not in ("ijob.public", "ijob.skill"):
+            raise IjobContractError(
+                "ijob_contract_mismatch",
+                f"ijob 错误外壳不受支持（来源：{origin}）",
+                details={"contract": contract})
+        err = payload.get("error")
+        if not isinstance(err, dict):
+            raise IjobContractError("ijob_contract_error", "ijob 返回的 error 结构不合法")
+        raise IjobContractError(
+            str(err.get("code") or "ijob_contract_error"),
+            str(err.get("message") or "ijob 契约返回错误"),
+            details=err.get("details") if isinstance(err.get("details"), dict) else {})
+
+    if contract != "ijob.public":
+        raise IjobContractError(
+            "ijob_contract_mismatch",
+            f"ijob 成功响应必须使用 ijob.public 契约（来源：{origin}）",
+            details={"contract": contract})
+
+    schema_version = payload.get("schema_version")
+    if not isinstance(schema_version, str) or not re.fullmatch(r"1\.\d+\.\d+", schema_version):
+        raise IjobContractError(
+            "ijob_contract_incompatible",
+            f"ijob 契约版本不受支持（来源：{origin}）",
+            details={"schema_version": schema_version})
+
+    meta = payload.get("meta")
+    if not isinstance(meta, dict) or meta.get("read_only") is not True or meta.get("source") != "ijob":
+        raise IjobContractError(
+            "ijob_invalid_response",
+            f"ijob brief 响应缺少可信的只读元数据（来源：{origin}）",
+            details={"meta": meta})
+    return payload
+
+
+def call_ijob_brief_page(script, offset, limit, *, timeout=IJOB_CALL_TIMEOUT):
+    """调用 ijob 技能 brief 并返回校验后的 data 段。"""
+    cmd = [sys.executable, script, "brief", "--limit", str(limit), "--offset", str(offset)]
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, check=False)
+    except subprocess.TimeoutExpired as exc:
+        raise IjobContractError(
+            "ijob_timeout",
+            f"ijob 技能调用超时（>{timeout}s，offset={offset}）") from exc
+    except OSError as exc:
+        raise IjobContractError(
+            "ijob_spawn_failed", f"无法启动 ijob 技能脚本：{exc}") from exc
+    try:
+        payload = json.loads(proc.stdout)
+    except json.JSONDecodeError as exc:
+        raise IjobContractError(
+            "ijob_invalid_response",
+            "ijob 技能未返回有效 JSON",
+            details={"exit_code": proc.returncode,
+                     "stderr_tail": (proc.stderr or "").strip()[-400:]}) from exc
+    payload = _validate_envelope(payload, os.path.basename(script))
+    data = payload.get("data")
+    if not isinstance(data, dict):
+        raise IjobContractError("ijob_invalid_response", "ijob brief 响应缺少 data 段")
+    if "items" not in data or not isinstance(data.get("items"), list):
+        raise IjobContractError("ijob_invalid_response", "ijob brief 响应缺少 data.items")
+    if not isinstance(data.get("total"), int):
+        raise IjobContractError("ijob_invalid_response", "ijob brief 响应缺少 data.total")
+    if proc.returncode != 0:
+        raise IjobContractError(
+            "ijob_process_failed", "ijob 技能进程返回非零退出码",
+            details={"exit_code": proc.returncode,
+                     "stderr_tail": (proc.stderr or "").strip()[-400:]})
+    return data
+
+
+def to_legacy_row(item):
+    """把契约批次对象适配成脚本内部 legacy row。
+
+    领域逻辑（可信度分级、草稿状态、缺口清单、投料单渲染）只认 legacy 键，
+    契约字段名只在本函数与映射表内出现。
+    """
+    row = {}
+    for legacy_key, item_key in LEGACY_FROM_ITEM.items():
+        if item_key in _TEXT_ITEM_KEYS:
+            row[legacy_key] = (item.get(item_key) or "")
+    # 批次标识：cid 是历史键，id 供歧义候选与排序使用。
+    cid = item.get("campaign_id")
+    row["cid"] = cid
+    row["id"] = cid
+    # 正文长度与可检索正文：优先契约字段，兼容旧长度键。
+    row["article_length"] = item.get("article_length") or 0
+    row["html_len"] = row["article_length"]
+    row["rh"] = item.get("article_search_text") or ""
+    # 状态：契约已给出结论；旧载荷缺失时由 draft_state 自证回退。
+    row["content_state"] = (item.get("content_state") or "").strip()
+    return row
+
+
+def fetch_brief_items(*, script=None, page_limit=BRIEF_PAGE_LIMIT, max_pages=MAX_PAGES):
+    """按页拉完 ijob brief 全量批次并返回 legacy row 列表。
+
+    brief 单页上限 100；``data.total`` 才是总量，必须翻页到拉完，
+    否则「看起来有数据」实则只取第一页，会静默漏批次。
+    """
+    if script is None:
+        script, _origin = find_ijob_script()
+    page_limit = max(1, min(int(page_limit), BRIEF_PAGE_LIMIT))
+    items, seen_cids, offset, total = [], set(), 0, None
+    for _page in range(max_pages):
+        data = call_ijob_brief_page(script, offset, page_limit)
+        page_items = data["items"]
+        if total is None:
+            total = data["total"]
+        for item in page_items:
+            row = to_legacy_row(item)
+            cid = row["cid"]
+            if cid in seen_cids:
+                continue
+            seen_cids.add(cid)
+            items.append(row)
+        offset += len(page_items)
+        if not page_items or offset >= total:
+            return items
+    raise IjobContractError(
+        "ijob_paging_exhausted",
+        f"ijob brief 分页超过 {max_pages} 页仍未拉完（已取 {offset}/{total}），疑似分页口径异常",
+        details={"fetched": offset, "total": total})
 
 
 # ─────────────────────────────────────────────────────────────
@@ -240,12 +460,19 @@ def _norm(s):
 
 
 def _cjk_brand(text):
-    """从稿题粗提「单位名主体」：去【】前缀 → 切到年份/校招等词 → 取最长中文串。
-    例：『1200+岗！江苏农商行系统2027校招启动…』→『江苏农商行系统』"""
+    """从稿题粗提「单位名主体」，只用于对账候选。
+
+    先去掉方括号前缀，再在年份、招聘动作词和标点前截断；返回最靠前的
+    连续中文主体，避免把「智能网联算法落户江宁」这类后半段卖点当单位名。
+    """
     t = re.sub(r"^[【\[][^】\]]*[】\]]", "", text or "").strip()
-    t = re.split(r"20\d\d|校招|校园招聘|秋季|春季|秋招|春招|招聘", t)[0]
+    t = re.split(
+        r"20\d{2}|(?:校招|校园招聘|秋季|春季|秋招|春招|招聘|招考|招录|招募|直聘|报名)",
+        t, maxsplit=1)[0]
+    t = re.split(r"[：:！!，,。｜|—\-]", t, maxsplit=1)[0]
+    t = re.sub(r"(?:全面|正式|已经|已)?(?:开启|启动)(?:招聘|招募)?$", "", t.strip())
     runs = re.findall(r"[\u4e00-\u9fa5]{2,}", t)
-    return max(runs, key=len) if runs else ""
+    return runs[0] if runs else ""
 
 
 # 「同前缀但属不同法人/子公司」的后缀：命中则不算同一单位（防 华泰证券资管≈华泰证券 这类误报）
@@ -280,36 +507,224 @@ def norm_apply_url(v):
     return u.strip().strip("/")
 
 
-def reconcile_draftbox(conn, titles):
-    """对账：逐条草稿标题 → DB 对应批次 + 稿件状态。
-    返回 (rows, unmatched, desync)；desync = 草稿有、DB 却显示「未排」（需回填）。"""
-    cur = conn.cursor()
-    cur.execute("""SELECT c.id, co.name AS company, co.full_name AS full_name, c.title,
-                          c.has_article, c.wechat_url,
-                          length(coalesce(a.rendered_html,'')) AS html_len,
-                          coalesce(a.rendered_html,'') AS rh
-                   FROM campaigns c JOIN companies co ON co.id=c.company_id
-                   LEFT JOIN campaign_articles a ON a.campaign_id=c.id""")
-    cols = [d[0] for d in cur.description]
-    all_rows = [dict(zip(cols, r)) for r in cur.fetchall()]
-    by_title = {_norm(r["title"]): r for r in all_rows}
-    matched, unmatched, desync = [], [], []
+def _semantic_draft_brand(text):
+    """粗提草稿标题里的单位主体，供 DB 对账兜底；只用于候选，不直接回填。"""
+    b = _cjk_brand(text)
+    if b:
+        return b
+    # 标题常在“单位·行业/子公司/地点”结构中，取最长的 2~24 字中文连续段。
+    runs = re.findall(r"[\u4e00-\u9fa5·]{4,}", text or "")
+    return max(runs, key=len).strip("·") if runs else ""
+
+
+# 标题常用简称，ijob 批次对象可能保存全称；只作人工候选，不自动回填。
+# 值为批次对象文本中必须同时出现的关键词组；不把“疾病预防控制中心/血液中心”
+# 这类跨城市通用词放入别名表，避免把南京红十字血液中心误认成江苏省血液中心。
+_SEMANTIC_ALIASES = {
+    "华为南研所": (("华为技术有限公司", "南京研究所"),),
+    "中移苏研": (("中移苏研",),),
+    "南瑞集团": (("南瑞集团",),),
+    "国药集团": (("国药集团",),),
+    "中国融通集团": (("中国融通集团",),),
+    "省沿海开发集团": (("沿海开发集团",),),
+    "沿海开发集团": (("沿海开发集团",),),
+    "润和软件": (("润和软件",),),
+    "长安汽车": (("长安汽车", "南京研发中心"),),
+    "东方电气集团": (("东方电气",),),
+    # 精确长标题别名：草稿中的“所属8家事业单位”与批次主体“所属事业单位”不互含，
+    # 不用通用词“卫健委”兜底，避免跨城市误配。
+    "南京市卫健委所属8家事业单位": (("南京市卫健委所属事业单位",),),
+}
+
+
+def _semantic_alias_hits(text):
+    """返回标题命中的别名及其关键词组，仅用于人工核验。"""
+    nt = _norm(text)
+    hits = []
+    for alias, keyword_groups in _SEMANTIC_ALIASES.items():
+        if _norm(alias) in nt:
+            hits.extend((alias, group) for group in keyword_groups)
+    return hits
+
+
+def _match_strength(how):
+    """草稿→批次匹配证据等级；数值越小，证据越强。"""
+    if how.startswith("标题精确"):
+        return 0
+    if how.startswith("正文含标题") or how.startswith("正文多批次候选"):
+        return 1
+    if how.startswith("标题多批次候选"):
+        return 2
+    if how.startswith("标题主体包含") or how.startswith("标题主体多批次候选"):
+        return 3
+    if how.startswith("主体相似"):
+        return 4
+    if how.startswith("主体多批次候选"):
+        return 5
+    if how.startswith("别名候选"):
+        return 6
+    if how.startswith("别名多批次候选"):
+        return 7
+    return 99
+
+
+def _is_candidate_match(how):
+    return (how.startswith("正文多批次候选")
+            or how.startswith("标题多批次候选")
+            or how.startswith("标题主体")  # 含“标题主体多批次候选”
+            or how.startswith("主体相似")
+            or how.startswith("主体多批次候选")
+            or how.startswith("别名候选")
+            or how.startswith("别名多批次候选"))
+
+
+def _is_ambiguous_match(how):
+    return "多批次候选" in how
+
+
+def _select_candidate(rows):
+    """多批次歧义时优先展示进度最可证实的记录：已发布 > 库内成稿 > 未排。"""
+    rank = {"已发布": 2, "库内已成稿": 1, "库内未排": 0}
+    return min(rows, key=lambda x: (
+        -rank.get(draft_state(x), 0),
+        -(x.get("html_len") or 0),
+        x["id"],
+    ))
+
+
+def match_marker(state, how):
+    """审计行标记：候选不得同时显示为“确定失同步”。"""
+    parts = []
+    if state == "库内未排" and not _is_candidate_match(how):
+        parts.append("⛔确定失同步")
+    if _is_candidate_match(how):
+        parts.append("⚠️仅候选")
+    return "  " + "  ".join(parts) if parts else ""
+
+
+def _match_candidate_cids(item):
+    """从 how 字段提取歧义候选 ID；无歧义时只返回当前映射批次。"""
+    how = item[4] or ""
+    m = re.search(r"(?:^|:)(\d+(?:,\d+)*)$", how)
+    if m:
+        return [int(x) for x in m.group(1).split(",")]
+    return [item[1]]
+
+
+def _best_draft_matches(matched):
+    """构建 campaign_id → 最强草稿证据；歧义候选排除所有可能批次。"""
+    result = {}
+    for item in matched:
+        for cid in _match_candidate_cids(item):
+            old = result.get(cid)
+            if old is None or _match_strength(item[4]) < _match_strength(old[4]):
+                result[cid] = item
+    return result
+
+
+def reconcile_draftbox(all_rows, titles):
+    """对账草稿标题与 ijob 批次对象。
+
+    ``all_rows`` 是 ijob brief 适配出的 legacy row 列表（含 id / title /
+    full_name / company / wechat_url / html_len / rh）。
+
+    返回 ``(matched, unmatched, desync, semantic_matches)``。
+    匹配顺序：标题精确 → 稿件正文含标题 → 批次标题主体互含 →
+    单位主体与批次单位主体互含 → 人工维护的简称/全称别名。
+    多批次命中与后两级兜底均显式标记为候选，只供人工核验，不会回填任何数据。
+    """
+    all_rows = [dict(r) for r in all_rows]
+    for r in all_rows:
+        r.setdefault("id", r.get("cid"))
+        r.setdefault("html_len", r.get("article_length") or 0)
+        r.setdefault("rh", "")
+    by_title = {}
+    for row in all_rows:
+        by_title.setdefault(_norm(row["title"]), []).append(row)
+    matched, unmatched, desync, semantic_matches = [], [], [], []
+    # 精确/正文命中可视为确定映射；标题主体包含、主体相似、别名命中
+    # 始终保留为“仅候选”，即使当前只命中一条，也必须人工核对公告和入口。
     for t in titles:
         nt = _norm(t)
-        r, how = by_title.get(nt), "标题精确"
+        exact_rows = by_title.get(nt, [])
+        # 同一标题对应多个历史批次时不能冒充“精确唯一命中”；继续走候选兜底，
+        # 至少让报告显式暴露歧义，禁止误把某条旧批次当成确定映射。
+        r = exact_rows[0] if len(exact_rows) == 1 else None
+        how = "标题精确"
         if r is None:  # 兜底：正文包含该标题
             probe = nt[:18]
             cand = [x for x in all_rows if probe and x["html_len"] > 0 and probe in _norm(x["rh"])]
             if cand:
-                r, how = max(cand, key=lambda x: x["html_len"]), "正文含标题"
+                r = _select_candidate(cand)
+                how = "正文含标题"
+                if len(cand) > 1:
+                    how = f"正文多批次候选:{','.join(str(x['id']) for x in cand)}"
+        if r is None and exact_rows:
+            # 标题完全相同却对应多个历史批次：显式暴露歧义，不冒充精确命中。
+            r = _select_candidate(exact_rows)
+            how = f"标题多批次候选:{','.join(str(x['id']) for x in exact_rows)}"
+        if r is None:
+            # 先按批次标题与草稿标题的互相包含关系找候选，可覆盖
+            # 「南京鼓楼医院」→「南京鼓楼医院中医科」「中国电科」→下属院所
+            # 等主体前缀关系；同一品牌多条时仍显式标成多批次候选。
+            title_candidates = []
+            ntitle = _norm(t)
+            for x in all_rows:
+                nct = _norm(x["title"])
+                if nct and (nct in ntitle or ntitle in nct):
+                    title_candidates.append(x)
+            if title_candidates:
+                r = _select_candidate(title_candidates)
+                how = "标题主体包含"
+                if len(title_candidates) > 1:
+                    how = f"标题主体多批次候选:{','.join(str(x['id']) for x in title_candidates)}"
+        if r is None:
+            brand = _semantic_draft_brand(t)
+            if brand:
+                candidates = []
+                for x in all_rows:
+                    unit = x["full_name"] or x["company"] or ""
+                    hit = draft_hit(unit, {brand})
+                    if hit:
+                        candidates.append(x)
+                if candidates:
+                    # 多批次命中时全部列入歧义集合，交给人工确认是哪条公告。
+                    r = _select_candidate(candidates)
+                    how = f"主体相似:{brand}"
+                    if len(candidates) > 1:
+                        how = f"主体多批次候选:{','.join(str(x['id']) for x in candidates)}"
+        if r is None:
+            # 常见简称/全称不是互含关系时，命中人工维护的别名表；仍只生成候选。
+            for alias, keywords in _semantic_alias_hits(t):
+                cand = []
+                for x in all_rows:
+                    hay = " ".join((x["title"] or "", x["full_name"] or "", x["company"] or ""))
+                    if all(_norm(k) in _norm(hay) for k in keywords):
+                        cand.append(x)
+                if cand:
+                    r = _select_candidate(cand)
+                    how = f"别名候选:{alias}"
+                    if len(cand) > 1:
+                        how = f"别名多批次候选:{','.join(str(x['id']) for x in cand)}"
+                    break
         if r is None:
             unmatched.append(t)
             continue
         st = draft_state(r)
-        matched.append((t, r["id"], r["full_name"] or r["company"], st, how))
-        if st == "未排":
-            desync.append((r["id"], r["full_name"] or r["company"], t))
-    return matched, unmatched, desync
+        item = (t, r["id"], r["full_name"] or r["company"], st, how)
+        matched.append(item)
+        if _is_candidate_match(how):
+            semantic_matches.append(item)
+
+    # 所有语义/别名候选都只是“草稿有稿、某批次未排”的提示，不自动宣称
+    # 真失同步；这是审计层保守口径，真失同步由逐条人工确认后单独计数。
+    for item in matched:
+        if _is_candidate_match(item[4]):
+            continue
+        if item[3] == "库内未排":
+            desync.append((item[1], item[2], item[0]))
+
+    return matched, unmatched, desync, semantic_matches
 
 
 def pick_sources(row):
@@ -338,13 +753,13 @@ def build_briefing(row, today):
 
     L.append(f"# BRIEFING · {kname}")
     L.append("")
-    L.append(f"> 机器生成于 {today} ｜ 数据源：`ijob/data/jobs.db`（唯一事实源）｜ "
+    L.append(f"> 机器生成于 {today} ｜ 数据源：ijob 稳定只读契约（批次对象）｜ "
              f"**本文件不是核实结论，是核实起点**")
     L.append(f"> 批次ID `{row['cid']}` ｜ 稿件进度：**{draft_state(row)}**")
     L.append("")
 
-    # ── A. 主档已有值
-    L.append("## A. 主档硬信息（可直接引用，但需与官方公告逐字对照）")
+    # ── A. ijob 已确认值
+    L.append("## A. ijob 已确认硬信息（可直接引用，但需与官方公告逐字对照）")
     L.append("")
     L.append("| 字段 | 值 | 可信度 |")
     L.append("|---|---|---|")
@@ -387,9 +802,9 @@ def build_briefing(row, today):
         g = grade_deadline(row) if col == "deadline" else grade(val)
         if g == "OK":
             continue
-        gaps.append((label, where, "主档为空" if g == "EMPTY" else f"主档为软词「{val[:30]}」"))
+        gaps.append((label, where, "ijob 未记录" if g == "EMPTY" else f"ijob 为软词「{val[:30]}」"))
     if not gaps:
-        L.append(f"✅ {len(REQUIRED)} 项必填事实主档均已确定，可直接开写（仍建议抽查 2 项复核）。")
+        L.append(f"✅ {len(REQUIRED)} 项必填事实在 ijob 均已确定，可直接开写（仍建议抽查 2 项复核）。")
     else:
         L.append("| 缺什么 | 用在哪一段 | 现状 |")
         L.append("|---|---|---|")
@@ -402,7 +817,7 @@ def build_briefing(row, today):
             L.append("")
     L.append("**补数红线**：")
     L.append("- ⛔ 培训号/聚合站的日期与人数一律不采（已实证 yinhangzhaopin.com 六大行日期 6/6 全错）")
-    L.append("- ✅ 认官方公告原文、报名站接口、政府网附件 xlsx；补完**回填 `jobs.db`**，不要只写进稿件")
+    L.append("- ✅ 认官方公告原文、报名站接口、政府网附件 xlsx；补完**回 ijob 项目按其交接规则回填并复核**，不要只写进稿件")
     L.append("- ✅ 官方没写的（薪酬/食宿/经费渠道/专业明细）→ 正文写「**公告未披露**」，不代为断言")
     L.append("")
 
@@ -420,7 +835,8 @@ def build_briefing(row, today):
         L.append("⚠️ 「网络报名」≠ 在线系统：须回公告 §报名办法 逐字核（09-17 无锡实证：实为邮箱投递、以收件时间为准）。")
         L.append("⚠️ `--source-url` 优先级：网申系统 > 报名邮箱所在公告页 > 官网栏目页。")
     else:
-        L.append("⛔ ijob 无任何官方入口 —— 补数前先在 `campaigns` 补 `apply_url` / `announcement_url` 这两项。")
+        L.append("⛔ ijob 无任何官方入口 —— 补数前先**回 ijob 项目按其交接规则**补齐"
+                 "网申入口与公告原文这两项。")
     L.append("")
 
     # ── D. 装配指令：机器算好的，别让模型猜
@@ -432,8 +848,9 @@ def build_briefing(row, today):
              f"（判据：线={line or '未标'}；面向 2027 届应届生=校招，面向社会/编制=社招）")
     L.append("- **主色**：⛔ 必须先跑 `logo 众数色` 取色，**严禁沿用上一篇色板**（09-17 南京银行误用江苏银行蓝）")
     if blocked:
-        L.append(f"- ⛔ **暂不可动笔**：报名截止仍是软词「{dl or '空'}」，定不了标题钩子与 SEO 摘要。先回官方钉死，"
-                 f"并把结果写回 `jobs.db` 的 `campaigns.deadline`。")
+        L.append(f"- ⛔ **暂不可动笔**：报名截止为软词、空值、哨兵日或历史「发布日 +30 天」占位"
+                 f"（当前值「{dl or '空'}」），定不了标题钩子与 SEO 摘要。先回官方钉死，"
+                 f"并**回 ijob 项目按其交接规则回填并复核**该批次的报名截止。")
     else:
         L.append(f"- ✅ 报名截止已确定（{dl}），可动笔；三宫格、摘要、标题钩子用这个值。")
     L.append("")
@@ -441,29 +858,25 @@ def build_briefing(row, today):
     return "\n".join(L)
 
 
-def fetch_rows(conn, keyword=None):
-    cur = conn.cursor()
-    cur.execute(SQL)
-    cols = [d[0] for d in cur.description]
-    rows = [dict(zip(cols, r)) for r in cur.fetchall()]
+def filter_rows(all_rows, keyword=None):
+    """按关键词模糊过滤批次，并按 (截止日, 批次ID) 稳定排序。"""
+    rows = all_rows
     if keyword:
         kw = keyword.strip()
         rows = [r for r in rows if kw in " ".join(str(r.get(k) or "") for k in
                 ("company", "full_name", "title", "city", "batch_type", "industry_catalog"))]
-    rows.sort(key=lambda r: (r["deadline"] or "9999-12-31", r["cid"]))
-    return rows
+    return sorted(rows, key=lambda r: (r["deadline"] or "9999-12-31", r["cid"]))
 
 
 def main():
-    ap = argparse.ArgumentParser(description="从 ijob jobs.db 生成写稿 BRIEFING")
+    ap = argparse.ArgumentParser(description="从 ijob 稳定只读契约生成写稿 BRIEFING")
     ap.add_argument("keywords", nargs="*", help="单位关键词，模糊匹配 公司名/标题/城市")
-    ap.add_argument("--db", default=DEFAULT_DB, help="jobs.db 路径（默认 ijob 中枢）")
     ap.add_argument("--out", metavar="DIR", help="写到该目录（文件名=单位.md）；不传则打印到 stdout")
     ap.add_argument("--gap-only", action="store_true", help="只打印缺口一行式摘要")
     ap.add_argument("--ready", action="store_true",
-                    help="列出必填事实已齐、**且尚未动笔**的单位（选题池；默认先与草稿箱对账）")
+                    help="列出必填事实已齐、库内未成稿且草稿箱未命中候选的单位（选题池）")
     ap.add_argument("--include-done", action="store_true",
-                    help="配合 --ready：把已发布/已推草稿箱的也列出来（防止重复写）")
+                    help="配合 --ready：把已发布/库内已成稿的也列出来（防止重复写）")
     ap.add_argument("--profile", default=DEFAULT_PROFILE,
                     help=f"公众号账号别名（默认 {DEFAULT_PROFILE}=码上职业）")
     ap.add_argument("--no-draftbox", dest="draftbox", action="store_false",
@@ -474,19 +887,27 @@ def main():
                     help="--ready 不按网申入口合并明细行（默认合并：同入口=1 个写作单位）")
     ap.add_argument("--draftbox-audit", action="store_true",
                     help="只做草稿箱对账并逐条打印映射，不改名单")
+    ap.add_argument("--ijob-script", metavar="PATH",
+                    help="覆盖 ijob 技能入口路径（默认按 IJOB_SKILL_SCRIPT / 标准位置发现）")
     ap.set_defaults(draftbox=True)
     ap.add_argument("--limit", type=int, default=3, help="每个关键词最多匹配几条，默认3")
     a = ap.parse_args()
 
-    if not os.path.exists(a.db):
-        sys.exit(f"找不到主档：{a.db}\n用 --db <路径> 显式指定，或确认 ijob 中枢已就位。")
-
-    conn = sqlite3.connect(f"file:{a.db}?mode=ro", uri=True)
     today = datetime.now().strftime("%Y-%m-%d %H:%M")
-    all_rows = fetch_rows(conn)
+    try:
+        all_rows = fetch_brief_items(script=a.ijob_script)
+    except IjobContractError as exc:
+        detail = ""
+        if exc.details:
+            detail = "\n细节：" + json.dumps(exc.details, ensure_ascii=False)
+        sys.exit(f"⛔ ijob 取数失败 [{exc.code}]：{exc.message}{detail}\n"
+                 "   本次没有任何批次数据，**不得把失败当成「没有可写单位」**。"
+                 "请先修复 ijob 技能后重试。")
 
     # ── 草稿箱对账（--ready / --draftbox-audit 共用）
-    draft_titles = draft_brands = None
+    draft_titles = None
+    draft_audit = None
+    draft_matches = {}
     if a.draftbox and (a.ready or a.draftbox_audit):
         draft_titles, _mids = fetch_draft_titles(a.profile)
         if draft_titles is None:
@@ -496,39 +917,53 @@ def main():
                   "`wx_draft.py list --profile %s` 确认；"
                   "**此名单不可直接采信**。" % a.profile, file=sys.stderr)
         else:
-            draft_brands = {b for b in (_cjk_brand(t) for t in draft_titles) if b}
+            draft_audit = reconcile_draftbox(all_rows, draft_titles)
+            # 同一批次可能被多条相似标题命中；只保留证据最强的一条。
+            draft_matches = _best_draft_matches(draft_audit[0])
             print(f"[draftbox] profile={a.profile} 取到 {len(draft_titles)} 篇草稿，"
-                  f"提取 {len(draft_brands)} 个单位名主体，参与对账", file=sys.stderr)
+                  f"形成 {len(draft_matches)} 个候选批次，参与对账", file=sys.stderr)
 
     if a.draftbox_audit:
-        if draft_titles is None:
+        if draft_audit is None:
             sys.exit("草稿箱对账失败，无法审计。先修复登录态再试。")
-        matched, unmatched, desync = reconcile_draftbox(conn, draft_titles)
+        matched, unmatched, desync, semantic_matches = draft_audit
+        desync_cids = {cid for cid, _name, _t in desync}
+        desync_titles = {_norm(t) for _cid, _name, t in desync}
+        candidate_items = semantic_matches
+        candidate_cids = {cid for item in candidate_items for cid in _match_candidate_cids(item)}
+        candidate_titles = {_norm(item[0]) for item in candidate_items}
+        ambiguous_titles = {_norm(item[0]) for item in candidate_items
+                            if _is_ambiguous_match(item[4])}
         print(f"# 草稿箱对账 · profile={a.profile} · {today}")
-        print(f"# 草稿 {len(draft_titles)} 篇 → 命中 DB {len(matched)} ｜ 无对应 {len(unmatched)} "
-              f"｜ ⛔ 失同步(草稿有/DB显示未排) {len(desync)}\n")
-        print(f"{'草稿标题':<52} {'DB批次':<14} 稿件状态")
+        print(f"# 草稿 {len(draft_titles)} 行 / {len(set(map(_norm, draft_titles)))} 个唯一标题"
+              f" → 匹配候选 {len(matched)} 行 / {len({x[1] for x in matched})} 个批次"
+              f" ｜ 无对应候选 {len(unmatched)} 行 / {len(set(map(_norm, unmatched)))} 个唯一标题"
+              f" ｜ ⛔ 确定失同步 {len(desync)} 行 / {len(desync_titles)} 个唯一标题"
+              f" / {len(desync_cids)} 个批次 ｜ 语义/别名候选 {len(candidate_items)} 行"
+              f" / {len(candidate_titles)} 个唯一标题 / {len(candidate_cids)} 个候选批次"
+              f"（其中多批次歧义 {len(ambiguous_titles)} 个标题）\n")
+        print(f"{'草稿标题':<52} {'候选批次':<14} 稿件状态")
         print("-" * 104)
         for t, cid, name, st, how in matched:
-            print(f"{t[:50]:<52} cid={cid:<10} {st}" + ("  ⛔失同步" if st == "未排" else ""))
+            print(f"{t[:50]:<52} cid={cid:<10} {st}{match_marker(st, how)}")
         if unmatched:
-            print(f"\n--- 无 DB 对应的草稿 {len(unmatched)} 篇（多为内容型稿件 / 单位尚未入库）---")
+            print(f"\n--- 无对应候选的草稿 {len(unmatched)} 篇（内容型稿件 / 单位尚未入库，或仍需人工映射）---")
             for t in unmatched:
                 print("  -", t)
         if desync:
-            print(f"\n⛔ 失同步 {len(desync)} 条 —— 草稿箱已有稿但 DB 仍显示「未排」，"
-                  "须回填 `campaign_articles.rendered_html` 并置 `campaigns.has_article=1`：")
+            print(f"\n⛔ 确定失同步 {len(desync)} 行"
+                  f"（{len(desync_titles)} 个唯一草稿标题 / {len(desync_cids)} 个候选批次）"
+                  " —— 人工核对公告/报名入口后，**回 ijob 项目按其交接规则回填并复核**"
+                  "该批次稿件；语义/别名候选不自动计入：")
             for cid, name, t in desync:
                 print(f"  - cid={cid} {name} ← {t[:44]}")
-        conn.close()
         return
 
     if a.ready:
-        # ⚠️ 「硬信息齐」≠「还没写」。稿件进度由 ijob 推导
-        # （wechat_url 非空=已发布；rendered_html 非空=已推草稿箱）。
-        # 不过滤就会把写完的单位混进选题池，导致重复劳动。
-        # 但渲染稿未回填时 DB 会误判「未排」→ 故再用草稿箱标题做一次对账。
-        DONE = ("已发布", "已推草稿箱")
+        # ⚠️ 「硬信息齐」≠「还没写」。稿件进度由 ijob 的 content_state 推导
+        # （published=已发布；written=库内已成稿；unwritten=库内未排）。
+        # 不过滤就会把成稿单位混进选题池；草稿箱标题只作人工核验候选。
+        DONE = ("已发布", "库内已成稿")
         ready, done, suspect = [], [], []
         for r in all_rows:
             if any((grade_deadline(r) if c == "deadline" else grade(r[c])) != "OK"
@@ -539,9 +974,9 @@ def main():
             if rec[2] in DONE:
                 done.append(rec)
                 continue
-            hit = draft_hit(name, draft_brands) if draft_brands else None
-            if hit:
-                suspect.append(rec + (hit,))
+            item = draft_matches.get(r["cid"])
+            if item is not None:
+                suspect.append(rec + (item[0], item[4]))
             else:
                 ready.append(rec + (norm_apply_url(r["apply_url"]),))
         ready.sort()
@@ -550,9 +985,11 @@ def main():
         if a.include_suspect:
             ready = sorted(ready + [s[:3] + ("",) for s in suspect])
             suspect = []
-        print(f"必填 {len(REQUIRED)} 项已齐 **且尚未动笔** 的单位：{len(ready)} 条"
-              f"（另有 {len(done)} 条已发布/已推草稿箱，用 --include-done 一并列出）"
-              + (f"；{len(suspect)} 条疑似已在草稿箱已单列" if suspect else ""))
+        trust_note = "" if draft_titles is not None else "（⚠️ 草稿箱取数失败，以下未排除线上草稿，不可直接采信）"
+        print(f"必填 {len(REQUIRED)} 项已齐、库内未成稿且草稿箱未命中候选的单位：{len(ready)} 条"
+              f"（另有 {len(done)} 条已发布/库内已成稿，用 --include-done 一并列出）"
+              + (f"；{len(suspect)} 条草稿箱候选已单列" if suspect else "")
+              + trust_note)
         for dl, name, ds, _u in ready:
             print(f"  {dl or '—':<12} {name:<40} 稿件={ds}")
         # ── 同网申入口合并：同一入口 = 1 个写作单位（如 60 家农商行法人共用一个 51job 专题）
@@ -569,16 +1006,15 @@ def main():
                 print(f"  {dl or '—':<12} {u:<44} ×{len(names):<3} "
                       f"如：{names[0]}…{names[-1] if len(names) > 1 else ''}")
         if suspect:
-            print(f"\n⚠️ 疑似**已在草稿箱**、但 DB 显示未排 —— 动笔前先核实"
-                  f"（{len(suspect)} 条；确认已发就回填 rendered_html，"
-                  f"确未发用 --include-suspect 并回主名单）：")
-            for dl, name, _ds, hit in suspect:
-                print(f"  {dl or '—':<12} {name:<40} ≈草稿「{hit}」")
+            print(f"\n⚠️ 草稿箱有对应候选、但 ijob 显示库内未排 —— 先人工核实"
+                  f"（{len(suspect)} 条；确认同一公告后回 ijob 项目按其交接规则回填并复核该批次稿件，"
+                  f"确未发再用 --include-suspect 并回主名单）：")
+            for dl, name, _ds, draft_title, how in suspect:
+                print(f"  {dl or '—':<12} {name:<40} 草稿「{draft_title[:30]}」 [{how}]")
         if a.include_done:
             print(f"\n--- 已完成（勿重复写）{len(done)} 条 ---")
             for dl, name, ds in done:
                 print(f"  {dl or '—':<12} {name:<40} 稿件={ds}")
-        conn.close()
         return
 
     if not a.keywords:
@@ -588,7 +1024,7 @@ def main():
     if a.gap_only:
         print(f"{'单位':<40} {'缺':<6} 缺口")
         for kw in a.keywords:
-            for r in fetch_rows(conn, kw)[: a.limit]:
+            for r in filter_rows(all_rows, kw)[: a.limit]:
                 miss = []
                 for _k, (lbl, c, _w) in REQUIRED.items():
                     if (grade_deadline(r) if c == "deadline" else grade(r[c])) != "OK":
@@ -599,9 +1035,9 @@ def main():
         return
 
     for kw in a.keywords:
-        hits = fetch_rows(conn, kw)
+        hits = filter_rows(all_rows, kw)
         if not hits:
-            print(f"[miss] 主档无匹配：{kw}", file=sys.stderr)
+            print(f"[miss] ijob 无匹配批次：{kw}", file=sys.stderr)
             continue
         for r in hits[: a.limit]:
             txt = build_briefing(r, today)
@@ -614,8 +1050,6 @@ def main():
             else:
                 print(txt)
                 print("\n" + "=" * 70 + "\n")
-
-    conn.close()
 
 
 if __name__ == "__main__":

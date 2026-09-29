@@ -115,7 +115,7 @@ const txt = await js(String.raw`(() => document.body.innerText.replace(/\n{2,}/g
   | ⚠️ **legacy TLS** | 报 `UNSAFE_LEGACY_RENEGOTIATION` / SSL 握手失败 | 换 `/usr/bin/curl`（LibreSSL）或 `--ciphers 'DEFAULT:@SECLEVEL=1'` | 农行 `career.abchina.com.cn`、交行 `job.bankcomm.com` |
   | ◐ **纯 SPA / 有盾** | 前端 200 但无内容；或 412/403 | `ego-browser` 渲染后读 DOM 或同源 fetch | 工行 `job.icbc.com.cn`、建行 `job.ccb.com`、南京银行 `job.njcb.com.cn`、江苏银行（412） |
 
-  > **逐家的入口 URL 不写在这里**——每家银行的 `网申入口` 字段存在唯一主档 `ijob/data/jobs.db`（`campaigns.apply_url` / `campaigns.announcement_url`），本技能只记"**怎么取**"。接口逆向见**附录 C**。
+  > **逐家的入口 URL 不写在这里**——先通过用户级 `ijob` 技能的 `info --query` 或 `brief` 获取稳定业务对象；需要补录时回 ijob 项目按内部 SOP 执行。内容技能不读取数据库字段或表结构。接口逆向见**附录 C**。
 - ⛔ **来源黑名单（2026-09-16 实证，银行专题）**：`yinhangzhaopin.com`《国有六大行2027秋招备考时间线》**六大行截止日期 6/6 全错**（中行写 10-10/官方 10-09、交行写 10-12/官方 10-18、邮储写 9-30/官方 10-07、工 10-09/官方 10-08、农 10-09/官方 10-08、建 10-10/官方 10-08）→ 该站一切日期/人数不用，其"6.4 万人缩招"等行业数据引用一律降级为"媒体估算"。上岸鸭/高顿/中公推算页同理，只当线索。
 - **银行公告直抓可行性**（09-16 实测）：中行官网公告页 ✅ `boc.cn/aboutboc/bi4/` 可 curl 直抓；邮储官网 ✅；农行 `career.abchina.com.cn` / 交行 `job.bankcomm.com` ❌ SSL 证书链/旧重协商屏障 → 改走"高校就业网镜像 + 官方号长海报 img alt + 多源交叉"钉死（三路原文一致即可升 ✅）。`mp.weixin.qq.com` 官方公告 WebFetch 只出标题（JS 渲染），opencli download 需浏览器扩展在跑，不稳 → 优先搜镜像站。
 - ⭐ **银行「分行级公告」的取数链路（2026-09-17 中行江苏实证，最完整的一条）**：总行全球公告 ≠ 分行公告，**真正的岗位矩阵与分行专属填报路径只在分行公告里**，而分行公告**官网上往往没有**。三步打通：
@@ -171,48 +171,43 @@ const txt = await js(String.raw`(() => document.body.innerText.replace(/\n{2,}/g
 
 ---
 
-## 二、信息源清单与每日巡检（引擎在 `ijob` 仓库：`/Users/zhugx/src/ijob/patrol/recruit_scan.py`）
+## 二、信息源清单与每日巡检（由 ijob 项目内部维护）
 
-招聘是**强时效**品类，靠人工想起来去搜必然漏。本技能配一个**零依赖巡检脚本**，每天自动回答"今天新出了哪些招聘信息"。
+招聘是**强时效**品类，靠人工想起来去搜必然漏。ijob 项目内部配了**零依赖巡检管线**，每天自动回答"今天新出了哪些招聘信息"。
 
-> 2026-09-24 起巡检引擎与去重/健康缓存**收进 ijob 仓库**（本技能目录不再存副本）。
-> **日常请优先跑总控** `python3 /Users/zhugx/src/ijob/patrol/run.py --daily`，它会串起届别同步 + 探活 + 双通道抓取。
-> 缓存落点：`/Users/zhugx/src/ijob/data/patrol_state/`。
+> 2026-09-24 起巡检引擎与去重/健康缓存**收进 ijob 仓库**；2026-09-25 起巡检源清单、
+> 去重缓存与巡检命令**全部从本技能移出**，本技能不再持有任何巡检入口或源表访问权。
+>
+> **本技能只做一件事**：通过 `ijob` 技能的只读契约消费线索。
+> ```bash
+> export IJOB=~/.workbuddy/skills/ijob/scripts/ijob.py
+> python3 $IJOB inbox          # 待分拣线索
+> python3 $IJOB backlog        # 待补当前届批次的公司
+> python3 $IJOB cycle-status   # 届别三态总览
+> ```
+> **巡检运行已通过写网关开放**（不必再切目录）：`python3 $IJOB write --write-op daily --apply`。
+> 但**加源、调巡检策略、改源健康缓存、跑探活排障**仍须回 ijob 项目执行其内部 SOP。
 
-### 2.1 双通道设计（都是免登录）
+### 2.1 双通道设计（都是免登录；由 ijob 项目内部维护）
+
+> 以下是**机制说明**，用于判断线索可信度与时效性；**不在本技能执行**。
 
 | 通道 | 手段 | 覆盖 | 速度 |
 |---|---|---|---|
-| `--mode wx` | **HTTP 直抓搜狗微信搜索页**并解析结果块（`--wx-engine sogou`，默认） | 全网公众号里的招聘文章，**能发现知识库里没有的新公告** | 秒级（4 组关键词约 15s） |
-| `--mode wx`（备选） | `--wx-engine opencli` 调 `opencli weixin search`（浏览器） | 同上 | 首次 ~60s；⚠️ **第 2 次起必被搜狗限流超时**，仅作备用 |
-| `--mode web` | **三层管线**（源取自 `jobs.db:patrol_sources`）：①列表扫描（政府专栏/企业招聘站/hotjob，当前 enabled ~177 个）→ ②招考适配器（zkapi 直拉**岗位数组**）→ ③哨兵（SPA hash 变更告警，当前 enabled 15 个） | 官方一手公告 + 岗位级增量 + SPA 变更探测 | 随源数而定 |
+| 公众号通道 | HTTP 直抓搜狗微信搜索页并解析结果块（备选：浏览器搜索接口） | 全网公众号里的招聘文章，**能发现知识库里没有的新公告** | 秒级 |
+| 官网通道 | **三层管线**：①列表扫描（政府专栏/企业招聘站）→ ②招考适配器（直拉**岗位数组**）→ ③哨兵（SPA hash 变更告警） | 官方一手公告 + 岗位级增量 + SPA 变更探测 | 随源数而定 |
 
-```bash
-# 日常首选：总控（届别同步 + 探活 + 双通道抓取，源取自 ijob/jobs.db 的 patrol_sources 表）
-python3 /Users/zhugx/src/ijob/patrol/run.py --daily
+- **去重靠状态文件**：见过的标题集合由 ijob 内部维护，只报**首次出现**的 → 每天跑、隔天跑都不重复刷屏。
+- **时效过滤必开**：公众号搜索按**相关度**排序，不加过滤会把陈旧文章当成新信息（实测「南京 校招」10 条命中里时效内 0 条，全是旧文）。
+- **搜狗结果里的链接是跳转链**（有时效/反爬，正文解析不可靠）→ 只作"发现"，原文链接另行溯源。
 
-# 只跑引擎（--state 缺省即 ijob/data/patrol_state/.scan-state.json，可不传）
-python3 /Users/zhugx/src/ijob/patrol/recruit_scan.py --mode both --wx-days 30 \
-  --state "/Users/zhugx/src/ijob/data/patrol_state/.scan-state.json" \
-  --out   "<vault>/码上职业/巡检记录/$(date +%F)-新增招聘.md"
-# 分线扫 / 回退内置源 / 站点批量探活
-python3 /Users/zhugx/src/ijob/patrol/recruit_scan.py --mode web --line B   # 或 --line A
-python3 /Users/zhugx/src/ijob/patrol/recruit_scan.py --mode web --no-sources
-python3 /Users/zhugx/src/ijob/patrol/run.py --probe
-```
+### 2.2 选源原则（配置驱动，源数据在 ijob 内部，不在本技能）
 
-- **去重靠状态文件**：见过的标题集合存在 `--state` 里（留最近 4000 条），只报**首次出现**的 → 每天跑、隔天跑都不重复刷屏。
-- **时效过滤 `--wx-days`（默认 30 天）必开**：⚠️ 搜狗按**相关度**排序，不加过滤会把 2016–2024 的陈旧文章当成新信息（实测「南京 校招」10 条命中里时效内 0 条，全是旧文）。
-- **首次建库**用 `--all` 忽略状态输出全部命中。
-- 搜狗结果里的链接是 `link?url=...` **跳转链**（有时效/反爬，正文解析不可靠）→ 只作"发现"，原文链接另行溯源。
-
-### 2.2 选源原则（配置驱动，源数据在 jobs.db 不在代码）
-
-- **源清单唯一真源 = `/Users/zhugx/src/ijob/data/jobs.db` 的 `patrol_sources` 表**（ijob 工程中枢；2026-09-21 起废弃 `sources.yaml`）：字段 `id/name/company_id/probe_url/kind/line(A|B)/tier/enabled/http_code/is_alive/consecutive_fail`；**加源 = 插一行 + 重跑探活**，不改代码。
-- **kind 分流**：`gov_list|gov_bm|self_list|hotjob|company_site` → 列表扫描；`zhaokao` → `recruit_adapters.scan_zhaokao`（智联招考三步法拉岗位数组）；`self_spa` → 哨兵；其余（beisen/moka/job51/chinahr/zhaopin_gen/zhaopin_fix）→ 停用或待适配（脚本会**逐条列名**，不静默跳过）。
-- **要"招聘专栏列表页"，不要网站首页**；HIT/NOISE 正则过滤 + 排除栏目导航链接（同前）。
-- **源健康告警**：`sources-health.json` 记 last_ok_at / consecutive_fail / last_code；**连续失败 ≥3 在报告顶部列「🚨 源告警」**——防止"源坏了但报告显示无新增"的静默失效（最危险）。
-- **平台族结论（2026-09-17 实测，勿再走弯路）**：①**北森 `*.zhiye.com` 22 家大半已死**（Not Found/重定向他司，按届租用站点过期即漂）→ 只能靠公众号首发；②智联子站分三型：**招考型**（zkapi 通，附录 A）、**企业型**（前端 200 但 SPA → 哨兵）、**按届 403**（公告期人工核）；③银行站 legacy TLS 用 `/usr/bin/curl`（LibreSSL）可过。
+- **源清单唯一真源在 ijob 项目内**，由其巡检源表维护（2026-09-21 起废弃 `sources.yaml`）。字段含 `name/probe_url/kind/line(A|B)/tier/enabled/http_code/is_alive/consecutive_fail`；**加源 = 在 ijob 侧登记 + 重跑探活**，本技能不碰。
+- **kind 分流**：`gov_list|gov_bm|self_list|hotjob|company_site` → 列表扫描；`zhaokao` → 招考适配器（直拉岗位数组）；`self_spa` → 哨兵；其余（beisen/moka/job51/chinahr/zhaopin_*）→ 停用或待适配（ijob 会**逐条列名**，不静默跳过）。
+- **要"招聘专栏列表页"，不要网站首页**；HIT/NOISE 正则过滤 + 排除栏目导航链接。
+- **源健康告警**：连续失败 ≥3 会在 ijob 侧报告顶部列「🚨 源告警」——防止"源坏了但报告显示无新增"的静默失效（最危险）。
+- **平台族结论（2026-09-17 实测，勿再走弯路）**：①**北森 `*.zhiye.com` 22 家大半已死**（Not Found/重定向他司，按届租用站点过期即漂）→ 只能靠公众号首发；②智联子站分三型：**招考型**（适配器通）、**企业型**（前端 200 但 SPA → 哨兵）、**按届 403**（公告期人工核）；③银行站 legacy TLS 需 curl(LibreSSL) 兜底。
 - 巡检只做「**发现 + 登记**」，不自动写稿、不自动推送；岗位明细：招考型已直拉，其余进站取（`--source-url` 用官方源）。
 
 ### 2.3 分拣方法（2026-09-16 首巡 43 条实测，报告出来的下一步怎么做）
@@ -251,18 +246,16 @@ python3 /Users/zhugx/src/ijob/patrol/run.py --probe
 | `mp-search account` 报 `Page.goto: Page crashed` | Playwright **自带 Chromium** 在沙箱下渲染 mp.weixin.qq.com 必崩（浏览器本身能开 example.com，只微信站点崩，`--no-sandbox` 也无效） | 走系统 Chrome：`launch(channel="chrome")`，按 [系统 Chrome → 自带 Chromium] 顺序探测 |
 | urllib 抓政府网 `CERTIFICATE_VERIFY_FAILED` | 沙箱代理证书链问题（curl 正常） | 放宽 SSL 校验（只读公开页，`--verify-ssl` 可切回严格） |
 | `mp-search account` 要扫码 | 需**公众号管理员**扫码，无法无人值守 | 日常别用它；每周人工补一次号内全量列表 |
-| urllib 抓银行/企业站报 `UNSAFE_LEGACY_RENEGOTIATION` / `SSL_ERROR_SYSCALL` | TLS 指纹/旧重协商被拒（本机代理节点也会掐 TLS） | `fetch()` 已内置 **`/usr/bin/curl`（LibreSSL）兜底**；仍失败的源在本机关代理复核 `ijob/patrol/run.py --probe` |
+| urllib 抓银行/企业站报 `UNSAFE_LEGACY_RENEGOTIATION` / `SSL_ERROR_SYSCALL` | TLS 指纹/旧重协商被拒（本机代理节点也会掐 TLS） | ijob 侧 `fetch()` 已内置 **`/usr/bin/curl`（LibreSSL）兜底**；仍失败的源回 ijob 项目复核探活 |
 | `-w "%CURLCODE%{http_code}"` 解析恒为 0 | curl 把 `%CURLCODE%` 输出成 `%CURLCODE200`（**无尾 %**） | rfind 标记不要带尾 `%`（探活脚本已修） |
-| 智联按届子站（`{品牌}{年份}.zhaopin.com`）403 | 届次站带反爬且过期即废 | 勿硬爬：公告首发看「江苏国资」公众号，拿到新址更新 `patrol_sources` |
+| 智联按届子站（`{品牌}{年份}.zhaopin.com`）403 | 届次站带反爬且过期即废 | 勿硬爬：公告首发看「江苏国资」公众号，拿到新址后**回 ijob 项目更新源清单** |
 
-### 2.5 落地位置（本项目）
+### 2.5 落地位置（全部在 ijob 项目内，本技能不持入口）
 
-- **源配置（唯一真源）**：`/Users/zhugx/src/ijob/data/jobs.db` 的 `patrol_sources` 表 ｜ 探活：`python3 /Users/zhugx/src/ijob/patrol/run.py --probe`
-- 巡检脚本：`/Users/zhugx/src/ijob/patrol/recruit_scan.py`（源读 DB；`--db` 可换库）
-- 巡检报告：`码上职业/巡检记录/YYYY-MM-DD-新增招聘.md`（探活报告同目录）
-- 去重状态：`/Users/zhugx/src/ijob/data/patrol_state/.scan-state.json` ｜ 源健康：同目录 `sources-health.json` ｜ 北森：同目录 `beisen-state.json`（2026-09-24 从 vault 迁入，换机务必整体迁移，否则历史公告会重复入库）
-- ⛔ 旧入口 `00-信息源清单与每日巡检.md` / `01-官方站点源总表.md` 与 `工具/sources.yaml`、`工具/probe_sources.py` **已于 2026-09-21 废弃删除**，功能迁入 ijob（`patrol_sources` 表 + `patrol/run.py`）。
-- ⚠️ 当前**无** WorkBuddy 定时任务跑本巡检 → 巡检按需手动触发。（数据复盘的 09:40 定时任务已于 2026-09-24 核查确认同样不存在，见 `mp-ops/references/analytics-mashang.md` §八）
+- **巡检源清单、去重缓存、源健康缓存、巡检命令**：一律在 ijob 项目内部（巡检模块 + 其状态目录），**本技能不再暴露路径或命令**。
+- **巡检报告**：`码上职业/巡检记录/YYYY-MM-DD-新增招聘.md`（探活报告同目录）—— 这是**产出物落点**，不是 ijob 状态。
+- ⛔ 旧入口 `00-信息源清单与每日巡检.md` / `01-官方站点源总表.md` 与 `工具/sources.yaml`、`工具/probe_sources.py` **已于 2026-09-21 废弃删除**。
+- ⚠️ 当前**无** WorkBuddy 定时任务跑巡检 → 按需手动触发，触发方式是回 ijob 项目执行其内部总控。（数据复盘的 09:40 定时任务已于 2026-09-24 核查确认同样不存在，见 `mp-ops/references/analytics-mashang.md` §八）
 
 ---
 
@@ -365,4 +358,87 @@ python3 /Users/zhugx/src/ijob/patrol/run.py --probe
 1. **`grep -a "@@@"` 会截断多行输出** —— 只有含 `@@@` 的那一行被打印，多行 `cliLog`（如 pretty-print 的 JSON）**全部丢失**，会让你误判「接口/资源不存在」。**调试时把输出压成单行**（`JSON.stringify(x)` 不加缩进参数）。
 2. `performance.getEntriesByType('resource')` 在这类门户上**拿不到业务接口**（条数很少）→ **别在这上面耗时间，直接读 DOM**。
 3. 候选 REST 路径（`/api/portal/job/list` 等）会**返回 SPA 外壳**（状态 200、内容 = index.html）—— **200 不代表接口存在**，用「返回长度 ≈ 外壳长度」当判据。
-4. 同类入口（ATS 已核实为北森）：南瑞继保 `nrec.zhiye.com/campus`；中核华兴 `cnecc.zhiye.com`、中国核电 `cnnc.zhiye.com`（见 `jobs.db:patrol_sources` 的 `beisen` 类源）。
+4. 同类入口（ATS 已核实为北森）：南瑞继保 `nrec.zhiye.com/campus`；中核华兴 `cnecc.zhiye.com`、中国核电 `cnnc.zhiye.com`（ijob 侧已登记的北森类源）。
+
+---
+
+## 中国电信招聘官网（`job.chinatelecom.com.cn`，2026-09-28 实测打通）
+
+**站点形态**：Vue SPA，`corpCode=TELE`。后端根是 **`https://wejob.chinatelecom.com.cn/wt`**，但实际可用的公告接口在同源路径 `/wt/web/platform/mvc/officialWeb/*`（从 `app.*.js` 里 grep 到 `basicConfig.wejobUrl` 与 `officialWeb/xxx` 常量）。
+
+**⛔ 先说打不通的**：
+- `/wt/postinquiry`、`/wt/recruitmentnotice`、`/wt/internRecruitment` —— 无论 GET/POST，一律返回 `{"s":200,"body":"抱歉！您没有权限操作！"}`（11 字节）。**别再试**。
+- `/recruitmentnotice`（不带 `/wt`）返回 **412 + 24 万字符混淆 JS**（WAF）。
+- 岗位明细列表接口**未找到**（`getPostList`/`postList`/`queryPost`/`getRecruitPost` 等全 404）。⇒ **具体岗位名/人数拿不到**，只能到「公告 + 用人单位清单」这一层。写稿时必须写「公告未披露具体岗位名与名额」，⛔ 不得自造岗位名。
+
+**✅ 两个真正可用的接口**（在官网页面内同源 `fetch(..., {credentials:'include'})`，免鉴权）：
+1. **`GET /wt/web/platform/mvc/officialWeb/briefContent?corpCode=TELE`** → **~106KB 全量结构化 JSON**（`data[].f_value` 里装着集团《2027年度校园招聘公告》全文 + 23 条官方 FAQ + 优才计划 + 公司简介 + 温馨提示）。**这是最有价值的一手源**：招聘对象、岗位九大类、笔试面试组织方式、志愿数量规则、户籍、成绩单、文件大小限制全在里面。
+2. **`GET /wt/web/platform/mvc/officialWeb/getFilterOptions?corpCode=TELE&recruitType=-1`** → 筛选字典（工作地点 dicCode 形如 `0/4/135`）。
+- 另有 `getNavMenu` / `getShowRecruitOrg` / `getNextOrgByID` / `basicConfig` / `getPresentationInfo` / `getIllustration`（`getShowRecruitOrg` 不带参数返「参数异常」）。
+
+**⭐ 拿「省级分公司公告全文 + 用人单位清单」的正确姿势（本次关键突破）**：
+1. 开首页 `#/`，等 8~9 秒（`岗位页不带筛选条件时恒显示「暂无岗位」`，别被误导成"没岗位"）。
+2. 找到目标省公司文本节点（如「中国电信江苏公司」）→ **`.click()` 无效**（Vue 事件绑在父层，且元素常在视口外）→ 必须 **`el.scrollIntoView({block:'center'})` 之后用 `document.elementFromPoint(x,y).click()`**。
+3. 跳转到 `#/postinquiry?data=eyJrZXkiOjU4MTYwMiwidHlwZSI6IjEiLCJyZWNydWl0UHJvamVjdCI6IiIsInJlY3J1aXRQcm9qZWN0TmFtZSI6IiJ9`（`data` = base64(`{"key":<orgId>,"type":"1",...}`)，江苏 = `key:581602`）→ 页面即渲染**该省分公司公告全文**（江苏 4050 字，与高校就业网转载件逐字一致），**页面底部还挂着完整用人单位清单**（省本部专业单位 + 13 地市 + 区县分公司）。
+
+**集团 FAQ 里两条最容易写错的硬信息**（写稿必查，别沿用旧稿）：
+- **志愿数量**：官方是「每位学生可申请**不多于 5 个子（分）公司，每个子（分）公司申请**不多于 2 个职位」；「温馨提示」复述为「最多投五家单位，每个单位最多投递 2 个岗位」。⛔ 旧稿写成「江苏范围内 2 个志愿」是错的。
+- **改投**：「**简历被筛选后将不能改投**，我们会根据你最后申请的职位筛选」。⛔ 旧稿写成「第一志愿未过自动流转第二志愿」与官方**直接矛盾**。
+- 另：集团「统一职位申请时间**截止到 12 月底**，具体职位可能调整」；而各省公告另给本省截止日（江苏 = **10 月 12 日**）→ **两个日期并存，必须写清各自出处**。
+- 笔试口径：「除集团集中组织的秋季线上统一笔试外（**部分单位参与，以后续通知为准**），由分子公司自行组织笔试面试」→ ⛔ 别写「全集团统一机考」。
+
+**ego 三个坑**：
+1. **注入 `window.fetch` hook 会污染当前页作用域** —— 之后所有 `js()` 里出现 `const res` 都会报 `res is not defined`（hook 里的闭包变量名冲突）。**hook 完必须换一个新 task space**再继续。
+2. `performance.getEntriesByType('resource')` 在这里**能拿到**真实业务接口（与南瑞门户相反），但**事后 hook 抓不到**（axios 早已持有 fetch/XHR 引用）→ **抓接口 URL 用 performance，抓请求体才需要提前 hook**。
+3. 页面文本里的「展开全部」「搜索」等**带尾部空格**，`textContent === '展开全部'` 全落空 → 一律先 `.replace(/\s/g,'')` 再比。
+
+---
+
+## 中国移动招聘官网（`job.10086.cn`，2026-09-28 实测打通）
+
+**入口**：`https://job.10086.cn/personal/campus/campus_job_list.html?cId=21`（`cId=21` = 江苏公司；换 `cId` 切省）。
+
+### 关键结构
+
+- **列表页**：`section`/`div` 卡片，**不是 `<table>`**。列＝职位名称/招聘单位/工作地点/职位类别/工作经验/学历要求/工作性质/**招聘人数**/发布时间，**每页 20 条**，需点页码翻页才得全量。
+- ⚠️ **列表页没有「截止时间」列**，只有「发布时间」。截止时间只在**详情页**。
+- **详情页**（`/personal/job/detail.html?id=<uuid>&typess=1`）：`<span>` 全是**空壳**，值由 JS 异步填充；直接 `curl` 拿到的 HTML 里 `<span></span>` 是空的。
+  - 页面内的渲染逻辑可用来**反推字段语义**：`recruitNumber = job.recruitCount; if(!recruitNumber){显示「若干」} else {显示「N人」}` → **字段为空即显示「若干」**，列表页对应列显示「不限」。两者都表示"未披露具体人数"。
+  - `edu` 是**编码**不是文字：实测 `25`=大学本科、`15`=硕士研究生（用列表页文字列交叉确认）。
+  - `type`=招聘类型（`1`=校园招聘），**不是**职位类别；职位类别（技术类/市场类/综合类）只在**列表页**文字里。
+
+### ⭐ 拿全量详情字段的正解（免逐页翻 88 次）
+
+详情数据走 **`POST /job-app/job/viewJob.do`**，请求体带**签名头**：
+
+```js
+{ serviceName: "viewJob",
+  header: { version: getVersion(),
+            timestamp: t,
+            digest: getDigest(t, getSecret()),
+            conversationId: getConversationId(t) },
+  data: { id: "<uuid>" } }
+```
+
+`getSecret / getDigest / getVersion / getConversationId` **只在详情页作用域内**（列表页没有）。
+
+> 🔑 **正解**：用 ego 打开**任意一个**详情页 → 在**页面内** `fetch` 循环 POST 全部 id →
+> ```
+> fetch("/job-app/job/viewJob.do", {method:"POST",
+>   headers:{"Content-Type":"application/json"}, body: JSON.stringify(json), credentials:"include"})
+> ```
+> 一次拿到全量结构化字段（本次 88/88 条 `code=0000`，17655 字节），**避免 20 条/页翻 5 页**。
+> ⛔ 不要试着自己复刻 digest 算法（secret 是页面内部状态），直接复用页面函数最省事。
+
+### 集团公告（总简章）vs 省公司
+
+- 集团公告列表接口：`POST /job-app/notice/...`（返回 75 条记录：`素材/官方留档/中国移动2027/集团75条公告列表-证明江苏无独立简章.json`）。**2027 届只有山西/北京/海南/四川/安徽/黑龙江/中移金科七家有独立简章，江苏没有** → 江苏硬信息**只能以职位系统字段为准**。
+- 集团公告正文常由**图片**构成（嵌套结构提取不到文字）→ 需提取 `data-src` 下载信息图后走 **macOS Vision OCR**。
+- 集团流程口径（OCR 留档）：9 月初投递 → 9—10 月宣讲 → **10/24 在线统一笔试** → 10—12 月面试 → 11—12 月体检与 offer → 2027 年 1—8 月入职。三个报名入口：`job.10086.cn` / `zgyd2027.zhaopin.com` / `xyzp.51job.com/zgyd`。
+
+### 踩坑
+
+- `job.10086.cn` 在系统 python 下 `urllib` 报 `SSL: UNSAFE_LEGACY_RENEGOTIATION_DISABLED` → **用 `curl` 或 ego 页面内 fetch**，别用裸 `urllib`。
+- 职位名形如「`苏州市公司`-`网络运维工程师`」，**城市与岗位族都要从名称前缀切分**；同城还有 `区公司`/`县公司（昆山/吴江）` 两档。
+- 归档落 `素材/官方留档/中国移动2027/`（`江苏公司-88条职位详情核验.json` + 生成器目录）。
+
