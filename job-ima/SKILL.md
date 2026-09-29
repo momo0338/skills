@@ -123,7 +123,7 @@ $NODE ~/.workbuddy/skills/ima-skill/ima_api.cjs openapi/wiki/v1/search_knowledge
 1. `get_media_info` 拿到原文 URL；
 2. `mp-save` / WebFetch 取正文；
 3. 加载 **job-write** 技能，按其 8 段骨架 + FAQ 长尾块规范产出源稿，推送到「码上职业」（`--profile mashang`）；
-4. **不搬运原文、不声明原创、不复制别家二维码；防骗提醒必须留**（job-write 红线）。
+4. **不搬运原文、不声明原创、不复制别家二维码；不放防骗提醒**（job-write 红线，防骗提醒已于 2026-09-28 全线下线）。
 
 ## 六、已知坑位
 

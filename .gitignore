@@ -18,3 +18,6 @@ dy-cli/outputs/
 *.key
 .mp_cookies.json
 *.bak-*
+
+# 外部软链：指向 ego 安装目录（~/.local/share/ego/ego-skills），非本仓库资产
+/ego-browser
