@@ -1,6 +1,6 @@
 # Momo Skills Core Library (AI Agent 技能库)
 
-> 包含 **46 个通用与专项 AI Agent 技能**，覆盖大模型自主浏览器操作、全站深度爬虫、网页正文提取、智能视频看懂抽帧、媒体音视频下载、万站 CLI 操作、抖音专项 CLI、抖音「我的」个人数据整理、抖音带货翻拍、抖音小店经营数据、千川投流决策、研发资源加速、网络代理管理、网络连通性诊断、企业情报深度调研、微信公众号采集、本地视频语音转写、GitHub 仓库深度数据调研、公众号技术专栏自动化采写及跨 AI 项目交接体系搭建等场景。
+> 包含 **51 个通用与专项 AI Agent 技能**，覆盖大模型自主浏览器操作、全站深度爬虫、网页正文提取、智能视频看懂抽帧、媒体音视频下载、万站 CLI 操作、抖音专项 CLI、抖音「我的」个人数据整理、抖音带货翻拍、抖音小店经营数据、千川投流决策、研发资源加速、网络代理管理、网络连通性诊断、企业情报深度调研、微信公众号采集、本地视频语音转写、GitHub 仓库深度数据调研、公众号技术专栏自动化采写、ijob 招聘数据独立访问、本地 xlsx 数据治理与安全迁移、**医院与卫健系统招聘图文（hospital-write）**及跨 AI 项目交接体系搭建等场景。
 
 ---
 
@@ -45,9 +45,14 @@
 | **[geomap](./geomap)** | `geomap/` | 高转化自媒体地图图说海报生成（省市地铁/高校分布/品牌门店，GeoJSON + D3 投影，1080×2160 竖屏信息图） | Python, GeoJSON, D3-geo |
 | **[github-cli](./github-cli)** | `github-cli/` | 基于 gh CLI 的 GitHub 仓库数据提取（issue/PR/release/workflow/API） | `gh` (GitHub CLI) |
 | **[guide-write](./guide-write)** | `guide-write/` | 通用场馆攻略采写（公园/景区/博物馆/高校，五步骨架 + 长尾标题 + 去 AI 味） | Python `PIL`（EXIF 提取，可选 pillow-heif） |
+| **[geographic-point-audit](./geographic-point-audit)** | `geographic-point-audit/` | 地理点位母表审计（行政区边界、官方证据分层、室内外去重、已发覆盖度与数字脚本闭合） | Python 3（标准库） |
 | **[ima-skill](./ima-skill)** | `ima-skill/` | IMA 知识库/笔记 OpenAPI 技能（笔记管理、知识库上传/搜索/订阅） | IMA OpenAPI, `~/.config/ima/` 凭证 |
+| **[xlsx-governance](./xlsx-governance)** | `xlsx-governance/` | 本地 xlsx 数据治理与安全迁移 SOP（删行/拆 sheet/归档、动表前机检排雷、Counter 多重集四分类归因、zip 外科手术修复空 rgb/dimension、编辑器并发 flush 多时点备份链、交付文档实拉重生） | Python `openpyxl`（venv）, 标准库 zipfile/ElementTree |
 | **[job-ima](./job-ima)** | `job-ima/` | ima 知识库「招聘」专用操作封装（随时浏览/搜索/读取/导出招聘库素材，衔接 job-write 落稿「码上职业」；基于 ima-mcp connector） | ima-mcp connector (`ima-mcp`) |
+| **[ijob](./ijob)** | `ijob/` | ijob 招聘数据中枢独立访问层：运行时发现、版本化 JSON 契约校验，提供 status/backlog/inbox/next/info/cycle-status 等纯只读业务意图 | Python（标准库）, ijob `ijob.public` 1.x 契约 |
 | **[job-write](./job-write)** | `job-write/` | 招聘/校招/招考类公众号图文专项采写（实拉岗位→要点提炼型原创汇编→原生方言排版→招聘风封面→推草稿并服务端验收，内建招考站接口取数与合规红线） | `mp-html`, `mp-publish`, Python `PIL` |
+| **[hospital-write](./hospital-write)** | `hospital-write/` | 医院/卫健系统招聘图文引擎（**双生产线**：L1 公告稿＋L2 医学升学择业稿；内建岗位核减差集比对、长期招聘收官判定五步、身份三分法与岗位序列证书词典、医疗类专属合规红线、封面用招聘主体医院 logo） | `job-write`, `mp-html`, `mp-publish` |
+| **[school-write](./school-write)** | `school-write/` | 教育系统（学校）招聘图文引擎（幼儿园→高校；**另设教育招聘 7 段骨架**，不套 job-write；内建长期招聘「招满即止」vs 定期截止**两种窗口形态判别**、省属 **14 列岗位表模板**解析、高校**年龄四档**与应届生·择业期定义、**四段式报名时间轴**、教育类合规红线、封面校徽**取色四级兜底**；自带 `verify_school_draft.py` 四道门禁含**数字门禁**） | `job-write`, `mp-html`, `mp-publish` |
 | **[mp-html](./mp-html)** | `mp-html/` | 微信公众号原生方言排版规范与组件库（强制 section、禁 position、对话气泡/引言框/斑马纹表格） | HTML/CSS（无外部依赖） |
 | **[mp-ops](./mp-ops)** | `mp-ops/` | 公众号运营数据一体化：刷新发表记录（后台接口）/ 12 维量化分析（粉丝曲线·公域放大倍数·标题特征·稳健性复核）/ 搜一搜数据（独立数据中心 `wsad.weixin.qq.com` + 单篇渠道构成）/ 生成自包含 HTML 报告（ECharts 内联）/ 发布后归档勾稽（三态清单）/ 单号每日流量复盘口径（references/）。**跑公众号数据一律先调本技能**；⛔ 写稿类技能不含数据分析 | Python（标准库）, `GZH_*` 环境变量 |
 | **[mp-publish](./mp-publish)** | `mp-publish/` | 微信公众号内容中台（草稿·发布·数据分析三模块）：排版稿直推草稿箱（HTML→微信 CDN 转存→draft/add，原生方言校验 + 长尾 SEO）+ 草稿增删改查与备份回滚 + 发布提交与状态跟踪 + 用户/图文/消息/接口四类数据分析（21 个 datacube 接口，跨度自动分段） | Python（标准库）, `curl`, 微信草稿·发布·数据 API, WX_APPID/WX_APPSECRET |

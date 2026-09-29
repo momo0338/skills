@@ -43,6 +43,9 @@ HOME_DIR = os.path.expanduser("~")
 SKILL_DEPS = {
     "competition-write": {},
     "geomap": {},
+    "geographic-point-audit": {
+        "bins": ["python3"],
+    },
     "github-cli": {
         "bins": ["gh"],
         "brew_bins": ["gh"],
@@ -51,13 +54,40 @@ SKILL_DEPS = {
         },
     },
     "guide-write": {},
+    "hospital-write": {},
+    "ijob": {
+        "bins": ["python3"],
+        "env": ["IJOB_HOME"],
+    },
     "ima-skill": {},
     "job-ima": {},
     "job-write": {},
-    "mp-html": {},
+    "mp-html": {
+        # wx_dialect_check.py 硬依赖 bs4；job-write/school-write 的门禁脚本经 subprocess 调它
+        "pip": ["beautifulsoup4"],
+        "install_cmds": {
+            "pip": "pip install beautifulsoup4",
+        },
+    },
     "mp-ops": {},
     "mp-publish": {},
     "mp-save": {},
+    "school-write": {
+        # 门禁脚本 verify_school_draft.py 用 Pillow 校验封面 900x383 RGB；方言校验经 mp-html 走 bs4
+        "bins": ["python3"],
+        "pip": ["pillow", "beautifulsoup4"],
+        "install_cmds": {
+            "pip": "pip install pillow beautifulsoup4",
+        },
+    },
+    "xlsx-governance": {
+        # xlsx_counterdiff.py 惰性 import openpyxl；系统 python 无此包，须 venv
+        "bins": ["python3"],
+        "pip": ["openpyxl"],
+        "install_cmds": {
+            "pip": "pip install openpyxl",
+        },
+    },
     "dy-cli": {
         "bins": ["dy"],
         "pip": ["dy-cli", "playwright"],
