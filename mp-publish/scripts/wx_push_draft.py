@@ -41,6 +41,18 @@ ap.add_argument("--index", type=int, default=0,
                 help="配合 --update-media-id：更新多图文中的第几篇（第一篇为 0，默认 0）")
 args = ap.parse_args()
 
+# ── 护栏：--update-media-id 必须是完整 media_id（2026-09-28 实测踩坑）──────────────
+# 从 `wx_draft.py list` 的人读输出里抄 media_id 时极易只抄到前 24 字符；而 draft/update
+# 收到截断值**可能返回 errcode:0 却静默 no-op**（内容其实没更新），脚本照样打印
+# 「草稿就地更新成功」——最容易骗过人的一种失败。正常 media_id 长度 ≥64（实测 43 篇 min=64），
+# 故在此早失败，且早于封面上传，避免白造素材。
+if args.update_media_id and len(args.update_media_id) < 40:
+    print(f"[FAIL] --update-media-id 疑似被截断：长度={len(args.update_media_id)}（正常 ≥64）"
+          f" 值={args.update_media_id!r}")
+    print("       正解：先 `wx_draft.py list --json /tmp/drafts.json` 落盘，"
+          "再从 JSON 取完整 media_id；切勿从人读输出里手抄。")
+    sys.exit(1)
+
 # 账号选择必须早于任何凭据读取；只有显式传了 --profile 才覆盖 WX_PROFILE 的语义。
 if args.profile:
     set_profile(args.profile)
@@ -96,6 +108,21 @@ def wx_api(path, extra=None, tries=2):
 PAYLOAD_FILE = os.path.join(RUN_DIR, "wx_draft_payload.json")
 DRAFT_RETRY_ERRCODES = (40007, -1)   # 40007 亦可能是「素材刚上传未同步」，重试一次成本极低
 
+def _peek_thumb(payload):
+    """从 payload 里安全取出 thumb_media_id。
+
+    draft/update 的 articles 是 **dict**（含 item 列表），draft/add 才是 list。
+    旧代码写成 payload['articles'][0] 会在 40007 分支抛 KeyError: 0，
+    把真正的错误码掩盖掉 —— 这里两种结构都兼容，且绝不抛异常。
+    """
+    arts = payload.get("articles")
+    if isinstance(arts, dict):
+        arts = arts.get("item") or []
+    if not isinstance(arts, list) or not arts:
+        return "(空)"
+    first = arts[0]
+    return first.get("thumb_media_id", "(空)") if isinstance(first, dict) else "(空)"
+
 def draft_write(action, payload, tries=3, delay=2.5, done=""):
     """提交 draft/add 或 draft/update：落盘 -> 发送 -> 校验 -> 失败重试。
 
@@ -129,7 +156,7 @@ def draft_write(action, payload, tries=3, delay=2.5, done=""):
         print(">>> 40007 排查顺序：① 本账号 thumb_media_id 是否为空（草稿必须有封面素材）；")
         print("    ② 该媒体素材是否属于当前账号（跨账号 media_id 一律无效）；")
         print("    ③ 素材刚 add_material 上传、尚未同步 —— 等几秒重试即可。")
-        print(f"    本次发送的 thumb_media_id: {payload.get('articles',[{}])[0].get('thumb_media_id','(空)')}")
+        print(f"    本次发送的 thumb_media_id: {_peek_thumb(payload)}")
         print(f"    实际发送的 payload 文件: {PAYLOAD_FILE}")
     sys.exit(1)
 
@@ -182,6 +209,24 @@ content = open(args.content_file, encoding="utf-8").read()
 for k, v in urls.items():
     content = content.replace(k, v)
 assert "{{IMG" not in content, "存在未回填占位符"
+
+# 🔴 门禁：正文里绝不能残留 base64 内嵌图（2026-09-29 实测事故，见下）
+# 事故经过：有人绕过 wx_prep_content.py，把**排版 HTML 原文件**当 --content-file 直接喂进来
+#   （该文件里二维码还是 data:image/png;base64 长串，imgmap 为空 ⇒ 占位符替换全部落空）。
+#   draft/add **照样返回 errcode:0**，草稿静静躺在草稿箱里，但微信存储层会剥掉 base64，
+#   回读只剩 `<img style="..."/>`（无任何 src）⇒ **二维码整块消失**，手机端白卡一片。
+#   更毒的是 wx_pipeline 的 STEP 4 验收只查「正文长度/section 数/空 style/div」，
+#   `img_count` 只统计不判断有没有 URL ⇒ 这一稿当时报「✅ 质量验收通过」。
+# 为什么这里必须硬失败：图片没了是**内容事故**（CTA 无法完成），
+#   而非排版事故；草稿一旦推上去、朱总在后台不逐图细看就会直接群发。
+if "data:image" in content:
+    _b64_left = content.count("data:image/")
+    print(f"[FAIL] 正文仍残留 {_b64_left} 处 base64 内嵌图（data:image/...）——微信存储层会剥掉它，"
+          f"图片在真机上不显示。")
+    print("       正确链路：先跑 wx_prep_content.py（抽 base64 → {{IMGn}} → 上传换 mmbiz URL），")
+    print("       或直接用 wx_pipeline.py（自动串联预处理）。别把排版 HTML 原文件当 --content-file。")
+    sys.exit(1)
+
 content = re.sub(r'\s*class="[^"]*"', "", content)
 content = re.sub(r'>\s+<', "><", content)
 

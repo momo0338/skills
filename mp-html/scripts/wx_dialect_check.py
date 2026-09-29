@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """微信公众号草稿正文方言校验器
-基于「微信排版原生方言规范」逐条断言；返回违例清单（exit 0=全过，1=有违例）
+基于「微信排版原生方言规范」逐条断言；返回违例清单（exit 0=全过，1=有违例，2=用法错误）
 用法: python wx_dialect_check.py <正文HTML文件路径>
 """
 import re, sys
@@ -73,9 +73,31 @@ def check(content):
         print("\n✅ 方言校验通过")
     return 1 if fails else 0
 
+USAGE = """用法: python wx_dialect_check.py <content.html>
+
+微信草稿正文原生方言校验器。逐条断言 mp-html 规范，输出违例清单。
+退出码: 0=全过 / 1=有违例 / 2=用法错误
+
+校验项:
+  - <a href>       正文链接会被微信剥光，链接改用文字或文末列出
+  - position:*     position:relative/absolute/fixed/sticky 均被静默剥除
+  - style=""       空 style 属性一般是实体或无效值导致属性被清空
+  - class= 残留    无渲染作用（styles 已内联），非阻断建议
+  - <div> 含块级子  微信渲染下布局塌陷，块级内容改用 <section>"""
+
 if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        print("用法: python wx_dialect_check.py <content.html>")
+    args = sys.argv[1:]
+    if any(a in ("-h", "--help") for a in args):
+        print(USAGE)
+        sys.exit(0)
+    if len(args) != 1:
+        print(USAGE, file=sys.stderr)
         sys.exit(2)
-    content = open(sys.argv[1], encoding="utf-8").read()
+    html_path = args[0]
+    try:
+        with open(html_path, encoding="utf-8") as f:
+            content = f.read()
+    except OSError as e:
+        print(f"❌ 无法读取文件: {html_path}\n   {e}", file=sys.stderr)
+        sys.exit(2)
     sys.exit(check(content))

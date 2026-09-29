@@ -286,7 +286,14 @@ def main():
             break
         news = items[0]
         content = news.get("content", "") or ""
-        img_count = content.count("<img")
+        img_tags = re.findall(r"<img[^>]*>", content)
+        img_count = len(img_tags)
+        # 🔴 2026-09-29 事故补门禁：原来 img_count 只统计**数量**，
+        # 遇到「<img> 标签在、但 src/data-src 全被微信剥掉」照样报「✅ 验收通过」。
+        # 实测该形态来自 base64 未换 URL 就入库（二维码整块消失，手机端白卡）。
+        img_with_url = sum(1 for t in img_tags if "data-src=" in t or "src=" in t)
+        img_broken = img_count - img_with_url
+        leftover_b64 = content.count("data:image/")
         section_count = content.count("<section")
         empty_styles = content.count('style=""')
         div_count = content.count("<div")
@@ -302,12 +309,17 @@ def main():
             problems.append(f"{empty_styles} 处空 style（推送会丢样式）")
         if div_count > 0:
             problems.append(f"{div_count} 处残留 <div>（微信会溶解样式）")
+        if img_broken > 0:
+            problems.append(f"{img_broken}/{img_count} 处 <img> 缺 src/data-src —— 图片在真机不显示"
+                            f"（多半是 base64 未换 URL 就入库）")
+        if leftover_b64 > 0:
+            problems.append(f"正文残留 {leftover_b64} 处 data:image base64 内嵌图（微信会剥掉）")
         if problems:
             print("❌ draft/get 质量验收未通过：")
             for p in problems:
                 print(f"    · {p}")
             sys.exit(1)
-        log("VERIFY", f"✅ draft/get 质量验收通过（标题/正文/容器/样式四项硬校验）")
+        log("VERIFY", f"✅ draft/get 质量验收通过（标题/正文/容器/样式/图片URL 五项硬校验）")
         verify_ok = True
         break
     if not verify_ok:

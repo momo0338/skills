@@ -158,7 +158,84 @@ assert stored.count("<div") == 0
 - 规则：外层只放排版属性（font/size/color/line-height），**不设水平 padding**；`.page` 容器水平方向清零（保留纵向呼吸，prep 已自动归一化为 `padding:8px 0 40px`，卡片贴边仅留自身 border）。
 - 此条已写进 `wx_prep_content.py`（写文件前归一化 .page），并配套方言校验器无需额外规则。
 
+### 五.5.1、⚠️ 本地预览留白必须先对照同线旧稿（2026-09-25 二次修正）
+
+**§五.5 的「水平归零」只针对推送内容，不针对本地预览。** 两者必须分开看，否则两头出错：
+
+| 层面 | 留白来源 | 怎么处理 |
+|---|---|---|
+| **微信真机** | 微信阅读页容器**自带**水平内边距（375px 屏下视觉约 16px/侧） | **保持根 section 水平 padding = 0**（§五.5），别再叠加 |
+| **本地预览** | 我们自己的 `<body>`，不模拟就等于贴屏幕边 | **先量同线旧稿的 375px 首段左右距离，再选本页预览值**；平台通用值只作参考，不能替代本项目风格 |
+
+**通用平台参考值（2026-09-25 查证，只作参考）**：两侧边距 5–15px、8–12px 常见；行间距 1.75；段间距 10–20px。
+⚠️ **本项目不是所有稿件都用同一个边距**。2026-09-25 375×812 实测：
+
+| 稿件类型 | 代表旧稿 | 首段距屏幕左 | 页面背景 | 本地预览做法 |
+|---|---|---:|---|---|
+| **C 线系统性文章** | 选调生 2027、强基计划 2026、校招第一性原理 | **8px** | 白底 | **对齐 8px**；不额外套灰底白卡 |
+| **A 线单单位招聘稿** | 直招军官旧稿、江苏省铁路集团 | **约 36px** | 灰底，根容器满宽 | 每个模块根层 `padding:0 14px`，内容卡自身再加左右内边距 |
+| **误加预览壳的当前稿** | 直招军官 2027 总览（修复前） | **16px** | 灰底 + 343px 白卡 | 白岛 + 16px 显得窄、散，不对齐 C 线旧稿，已判为不采用 |
+
+→ **本项目教训：不要只查“平台建议 8–12px”，更不能直接把 16px 写成标准。** 本地预览的最终基准是**同线、同长度类型的旧稿**；当前系统性文章应对齐 C 线约 8px，而不是 A 线的模块化 36px，也不是通用值中值 16px。
+
+**落地后的强制坐标对照（2026-09-25 09:18 修正版）**：
+- C 线旧稿：375px 下 `body/root/firstText = left 8, right 367, width 359`；表格 `left 9, right 366, width 357`。
+- 当前稿修复后：同样为 `left 8, right 367, width 359`；表格同样为 `left 9, right 366, width 357`；`hOverflow=false`。
+- **验收容差 ≤1px**。只写“8–12px 符合平台规范”不算通过，必须给出当前稿与同线旧稿的逐项坐标。
+- C 线预览外壳用 `body{margin:8px;padding:0;background:#ffffff;}`；根 section 不加白底、不加水平 padding。A 线不能用这个壳，照旧采用模块自身 `padding:0 14px` 的结构。
+
+### 五.5.2、⚠️ 自检脚本自身的四类假阳性（2026-09-25 连续踩坑后扩充）
+
+写剥壳验证时，下面几种写法都会**误报 FAIL**，浪费一轮排查。**判据必须精确到属性归属，不能只做泛化子串匹配**：
+
+| ❌ 错误判据 | 为什么假阳性 | ✅ 正确判据 |
+|---|---|---|
+| `assert "padding" not in content` | 正文里本来就有 `padding:12px 14px` 的卡片、`padding:16px` 的 CTA 卡，命中的是**它们**，不是 body 泄漏 | `body_style not in {el.get("style") for el in soup.body.find_all(True) if el.get("style")}` |
+| `assert "background:#ffffff" not in content` | 表格单元格、提示卡本来就有白底，命中的是**正文元素**；若拿它判断预览底色是否泄漏会误报 | 检查 **body style 整串**是否泄漏 + `<body` 标签是否为 0；必要时再用具体预览色 `#f2f2f2` 做辅助扫描 |
+| `assert body_style not in content` | 若 body 整串与某个元素 style 相同，泛化子串会误报；语义上也没有说明白是哪次替换 | 同上（集合归属判定） |
+| 反向：**元素 `right` 坐标当宽度** | 根容器 `margin:0 auto` 居中，`right=979` 是**绝对坐标**不是宽度，会误报几百个元素溢出 | `documentElement.scrollWidth > clientWidth`（判滚动溢出） |
+
+**通用原则**：自检报错时，先分清是「产物有问题」还是「判据本身有问题」。子串匹配断言在有大量相似值的文档里几乎必然假阳性。
+
 ## 六、Prep 流水线（`wx_prep_content.py`）必做
+
+> ### ⚠️ 排版稿必须带 HTML 外壳，否则本地预览全篇乱码（2026-09-24 实测踩坑）
+>
+> **现象**：排版稿只写 `<section>…</section>` 纯 fragment（无 `<html>/<head>/<meta charset>`）时，
+> **用浏览器直接打开或走本地 HTTP 预览，中文全部乱码**；但推草稿箱却完全正常。
+> 原因：文件没有编码声明，浏览器只能猜（中文平台常落到 GBK/latin-1），而微信接口按 UTF-8 收。
+>
+> **坑点在于「照抄旧稿」**：本项目三篇已发布 C 线排版稿（强基 / 校招第一性原理 / 选调）
+> 全是纯 fragment，**它们只在推草稿箱环节用，从没被当作浏览器预览文件打开过**，
+> 所以这个坑一直隐形。新稿若继续照抄结构，就会复现乱码。
+>
+> **正确做法：排版稿一律带完整外壳**。示例采用 C 线系统文章的 8px 白底预览基准（`body margin:8px`）；**A 线稿不要机械套用**，仍按本线旧稿的模块化 `padding:0 14px` 处理：
+> ```html
+> <!DOCTYPE html>
+> <html lang="zh-CN">
+> <head>
+> <meta charset="utf-8">
+> <meta name="viewport" content="width=device-width,initial-scale=1">
+> <title>文章标题</title>
+> </head>
+> <body style="margin:8px;padding:0;background:#ffffff;">
+> <section style="max-width:677px;...">…正文…</section>
+> </body>
+> </html>
+> ```
+>
+> **外壳不会污染推送内容**：`wx_prep_content.py` 第 127 行取 `soup.body or soup`、
+> 第 160 行用 `body.decode_contents()`，`<html>/<head>/<title>/<meta>/<link>` 全部被剥掉，
+> 推送出去仍是纯 section fragment。2026-09-24 实测：加壳后方言校验仍 ✅ 通过，
+> 剥壳后 content 长度 95974、首尾均为 `<section`、`<section>` 计数 31 一致、base64 图片完好。
+>
+> **加壳后必跑两项验证**：
+> 1. `wx_dialect_check.py` → 仍须 ✅ 通过（外壳会多 1 个 style，不影响判定）
+> 2. 剥壳模拟：`soup.body.decode_contents().strip()` → 断言无 `<html`/`<head`/`<meta`/`doctype`，且以 `<section` 开头
+>
+> **浏览器实测判据**（乱码 vs 正常）：`document.characterSet === "UTF-8"`、
+> 替换字符 `U+FFFD` 计数 = 0、正文关键词（如「直招军官」）能被 `textContent.includes()` 命中。
+> ⚠️ 只看「文件能按 UTF-8 解码」**不够**——文件一直是好的 UTF-8，乱码发生在浏览器解码侧。
 
 1. **CSS 剥注释 + 展 `var(--x)` + 按特异性内联**（避免 class 依赖）
 2. **`::before/::after` 伪元素转真实节点**（微信不渲染伪元素）
@@ -565,6 +642,94 @@ assert stored.count("<div") == 0
 
 ---
 
+## 十四·五、横向溢出（2026-09-26 新增，最容易被误诊的一类问题）
+
+**与 §十五 方言校验的区别**：方言校验管"微信会不会剥掉我的语法"；横向溢出管"手机上会不会撑破"。
+后者**肉眼看截图基本看不出来**（6px 偏差肉眼无法分辨），必须用脚本逐元素量。
+
+### 14.5.1、检测：`scripts/wx_overflow_check.py`
+
+```bash
+python scripts/wx_overflow_check.py 排版稿.html              # 320/360/375/414/677 五档
+python scripts/wx_overflow_check.py 排版稿.html --locate     # 逐字符定位越界字符
+python scripts/wx_overflow_check.py 排版稿.html 375,414      # 指定宽度
+```
+
+**为什么不能只看 `documentElement.scrollWidth`**：它常常返回 `false`，但子元素真实溢出。
+必须遍历元素逐个比较 `scrollWidth > clientWidth + 1`（1px 容差规避亚像素舍入）。
+**`docOverflow=false` 不代表子元素无溢出**——这一条已经坑过三轮。
+
+### 14.5.2、⚠️ CJK 行首禁则标点＝溢出的头号元凶（2026-09-26 血泪定位）
+
+**现象**：字段行在 320/360/375px 下稳定溢出 2~5px，`docOverflow` 却是 `false`。
+
+**决定性诊断**（`--locate` 的 Range 逐字符 `getBoundingClientRect`）：
+越界的最右字符**恒为** `）`(U+FF09) / `」`(U+300D) / `』`(U+300F)，超出容器 1.5~5.45px。
+
+**根因**：这三个是 **CJK 行首禁则标点**，规范上不能出现在行首。
+浏览器宁可**撑破容器**也不肯在它们之前换行。
+
+**所有 CSS 断行属性对它们统统无效**（逐项实验，全部实测）：
+
+| 尝试 | 结果 |
+|---|---|
+| `word-break:break-all` | ❌ 无效 |
+| `overflow-wrap:anywhere` | ❌ 无效 |
+| `overflow-wrap:break-word` | ❌ 无效 |
+| `line-break:anywhere` | ⚠️ 部分有效但不彻底（320/375px 仍漏） |
+| ZWSP 零宽空格插在括号前 | ❌ 无效（且改 `innerHTML` 会破坏 `<strong>` 结构） |
+| 缩小字号 / 收 padding | ❌ 无效（甚至更糟） |
+| **全角括号引号 → 半角/直角** | ✅ **360/375/414/677px 溢出全清零** |
+
+**正解**：在**输出层**做字符映射，数据层保留全角（源数据可读性不受影响）：
+
+```python
+CJK_PUNCT_MAP = {
+    "（": "(", "）": ")",      # 全角括号 → 半角
+    "「": "『", "」": "』",  # 直角引号 → 书名引号（非禁则）
+    "『": "『", "』": "』",      # 幂等兜底，必须显式写！
+}
+def esc(s):
+    for zh, half in CJK_PUNCT_MAP.items():
+        s = s.replace(zh, half)
+    ...
+```
+
+⚠️ **映射表必须"一次到位"**：`dict` 按插入序迭代，先 `「」`→`『』` 之后**新产生的** `『』` 不会被二次处理。
+必须显式补上 `『`/`』` 的幂等条目，否则 320px 下 U+300F 仍撑破 2px。
+（这个坑我实际踩了一次才补上。）
+
+### 14.5.3、⚠️ `letter-spacing` 是累积量，末行必溢出
+
+`letter-spacing` **每字符都加**。一段 80 字的中文正文加 `0.3px` 字距 = 末行多出 24px 的潜在溢出。
+**字段行一律 `letter-spacing:0`**，呼吸感靠 `line-height:2` 补，不要靠字距。
+（实测：`0.3px`→`0` 后单行溢出从 2px 归零；但这不是唯一元凶，禁则标点仍在。）
+
+### 14.5.4、⚠️ 窄屏"整行不换行"临界宽度
+
+短标题行（如 19 个汉字）在 320px 下可能 `字号 × 字数 ≈ 容器宽度`，**整行根本不换行**，
+于是溢出 1.5~2px。这不是标点问题，是纯宽度临界——降 1px 字号（15→14）即解决。
+**判断方法**：`--locate` 若报 `lines`（ASCII 串）为空且只有 1 行溢出，就是这个情况。
+
+### 14.5.5、验收基线
+
+```
+320px  360px  375px  414px  677px   五个宽度「子元素溢出」全部为 0 才算过
+```
+375/414 是微信 iOS/Android 主力宽度，320 是老机型下限。
+
+**排障顺序（别再乱试 CSS）**：
+1. 先跑 `--locate` 看越界字符是什么 → 若是禁则标点，走 14.5.2
+2. 若是单行不换行的短文本，走 14.5.4
+3. 确认 `letter-spacing:0`，走 14.5.3
+4. 以上都排除，再考虑 flex/`min-width:0` 等布局问题
+
+**反向验证纪律**：写完检测脚本必须**注入一个已知故障**（如把半角括号还原成全角）确认它真会 FAIL。
+用"预设为正确"的样本验证＝验证了个寂寞。本轮就发生过一次：注入正则被 `<` 截断，
+脚本对故障样本报"全部通过"，差点让假保险留在技能里。
+⚠️ 注入时**只替换标签之外的文本节点**（`re.split(r'(<[^>]*>)', src)` 取偶数索引），
+否则会连 `style="..."` 里的语法括号一起替换，注入等于没注入。
+
 ## 十五、官方方言校验器（scripts/wx_dialect_check.py）
 
 > 📌 **定位**：微信公众号排版原生方言的**本地静态语法检查器（Linter）**，由 `mp-html` 统一维护。任何排版稿（无论属于哪个业务技能或专栏）在本地产出 HTML 后，均应首先调用本脚本进行零违规断言，**在本地写作阶段即完成合规闭环**，避免拖延到发布推送期才暴露问题。
@@ -603,9 +768,10 @@ assert stored.count("<div") == 0
 
 ## 十七、去"AI 味"排版纪律（2026-09-18 定，写稿排版必守）
 
-**色板（低饱和中式）**：正文 `#2b2b2b` / 辅助 `#8c8c8c` / 主色黛青 `#33566b` /
-强调砖赭 `#a5503f` / 正向 `#4b6b52` / 墨灰 `#4a4a4a` / 浅底宣纸米 `#f6f4f1` /
-收藏卡暖米 `#faf6ec` / 边框 `#e3ded7`。
+**色板（低饱和中式）**：正文 `#2b2b2b` / 辅助 `#8c8c8c` / 黛青 `#33566b`（通用主题） /
+军绿 `#2F5D3A`（军警、征兵、国防等军事专题的专用主题） / 深绿辅助 `#1B3A25` /
+浅底军绿 `#F1F6F2` 或 `#F7FAF8` / 边框军绿 `#E3ECE5` / 宣纸米 `#f6f4f1` /
+收藏卡暖米 `#faf6ec` / 边框宣纸 `#e3ded7`。
 
 **三个"一眼 AI 感"的破绽，全部禁止**：
 1. ❌ 全套 Tailwind 预设色板（AI 生成 HTML 的默认反射，最大破绽）；
@@ -614,3 +780,104 @@ assert stored.count("<div") == 0
 
 **规则**：无渐变；左边框 2–3px 且只用于关键处；视觉元素 ≤4 种；**序号用色块数字，不用 emoji**；
 表格只留横线、无深色表头无斑马纹；字号 15.5 / 行高 1.8 / 段距 20px / 字距 0.3px。
+
+### 十七.1、军事专题军绿色板（2026-09-25 实测固化）
+
+> 适用：直招军官、军队文职、征兵、国防教育等与军队身份直接相关的专题。**优先复用同题材旧稿色板，不凭模型印象另造“绿色”。**
+
+| 用途 | 基准色 |
+|---|---|
+| 主色（章节竖条、标题强调、表头、数据强调） | `#2F5D3A` |
+| 深绿辅助（导语正文、重点数字、说明卡正文） | `#1B3A25` |
+| 浅绿底（表格斑马纹、提示卡、导语底） | `#F1F6F2` / `#F7FAF8` |
+| 绿色边框 | `#E3ECE5`（需要更强分区时用 `#D8E4DA`） |
+
+- ⚠️ **军绿色是主题，不等于所有警示都染绿**：误读、边界、风险、防骗等语义警示仍可保留砖赭/红色（例如底 `#FAF3F1`、边线 `#a5503f`、正文 `#7A3B2E`）。这样既有军事专题识别度，又不会削弱警示层级。
+- 同一篇只保留一套主色与一套警示色；先做旧稿取色，再做全量等长色值替换，最后必须确认正文文字与结构未变化。
+
+
+---
+
+## 十八、合规组件范例：场馆盘点卡片（序号色块 + 标题条 + 灰底内容区）
+
+> 来源：2026-09-26 用户指定参考南京本地宝《南京适合带孩子的 N 个神仙遛娃场馆》排版。
+> **本组件的价值是"每馆/每点位一张可截图卡片"**——盘点类长文的核心资产是清单，一张卡一个点位，读者能逐条截。
+
+### 视觉规格（从参考稿 HTML 实测提取，非目测）
+
+| 要素 | 值 |
+|---|---|
+| 序号块 | `background:#ffb82e;color:#fff;font-size:16px;padding:8px 10px`；`border-radius:0 25px 25px 25px`（**左上直角**，全篇识别特征） |
+| 序号容器 | `display:flex;margin-bottom:-14px`（负边距让序号块"挂"在标题条上） |
+| 标题条 | `background:#28975c;color:#fff;padding:10px 20px;margin:0 3px 0 14px;flex:1;text-align:center` |
+| 内容区 | `background:#f4f4f4;padding:14px;border-radius:0 0 8px 8px` |
+| 看点正文 | `#3f3f3f` / `15px` / `line-height:2em` / `letter-spacing:1px` / `text-align:justify` |
+| 字段行 | `#5a5a5a` / `13px` / `line-height:1.9`；字段名 `<strong>` 用主题绿 `#28975c` |
+| 待核行 | `12.5px` / `#8c8c8c`；"待核："二字用 `#c0392b` 警示红 |
+| 章节条 | `border-left:4px solid <主色>` + 18px 粗标题 + 12.5px 灰副标题 |
+
+### 合规 HTML 模板（单张卡片，直接复制改文字）
+
+```html
+<section style="margin-bottom:28px;">
+  <!-- 标题行：序号色块 + 标题条（负边距咬合） -->
+  <section style="display:flex;justify-content:flex-start;align-items:flex-start;margin-bottom:-14px;">
+    <section style="font-size:16px;letter-spacing:1.5px;color:#ffffff;background-color:#ffb82e;border-radius:0 25px 25px 25px;padding:8px 10px;box-sizing:border-box;flex-shrink:0;">
+      <strong>01</strong>
+    </section>
+    <section style="background-color:#28975c;padding:10px 20px;margin:0 3px 0 14px;box-sizing:border-box;flex:1;">
+      <section style="font-size:16px;color:#ffffff;text-align:center;line-height:1.5;">
+        <strong>点位名称</strong>
+      </section>
+    </section>
+  </section>
+
+  <!-- 内容区 -->
+  <section style="padding:14px;background-color:#f4f4f4;box-sizing:border-box;border-radius:0 0 8px 8px;">
+    <p style="margin:0 0 8px;font-size:15px;line-height:2em;letter-spacing:1px;color:#3f3f3f;text-align:justify;">核心看点写在第一段，两端对齐。</p>
+    <p style="margin:0;font-size:13px;line-height:1.9;color:#5a5a5a;">
+      <strong style="color:#28975c;">位置：</strong>某某路 xx 号（某街道）
+    </p>
+    <p style="margin:0;font-size:13px;line-height:1.9;color:#5a5a5a;">
+      <strong style="color:#28975c;">费用：</strong>免费
+      <strong style="color:#28975c;">&nbsp;&nbsp;适合年龄：</strong>3–12
+      <strong style="color:#28975c;">&nbsp;&nbsp;本号：</strong>写过
+    </p>
+    <p style="margin:6px 0 0;font-size:12.5px;line-height:1.8;color:#8c8c8c;">
+      <strong style="color:#c0392b;">待核：</strong>收费与开放时间以官方公告为准
+    </p>
+  </section>
+</section>
+```
+
+### 使用注意
+
+1. **序号用色块数字，禁用 emoji**（§十七 去 AI 味纪律）。两位补零（`01`–`35`）比单数字视觉对齐更稳。
+2. **「待核」字段用警示红，但只有"待核："二字染红**，整行染色会拉低可读性。
+3. **零 emoji 是硬要求**：覆盖度标记 ✅❌🟡⚠️ 在微信正文会变形，改纯文字（`本号写过` / `本号没写过` / `本号顺带提过`）。PIL 出图时同样禁彩色 emoji。
+4. **卡片字段顺序固定**：看点 → 位置 → 费用+年龄+覆盖度 → 待核。看点放第一段，因为读者只扫一眼。
+5. **一个点位一张卡，不要合并**。参考稿只有 7 个所以显得宽松；35 个点位时若合并成表格就失去"可截图清单"的价值（对照 2025-08-31《南京各类遛娃地点大汇总》4317 阅读 / 308 分享，正是靠这个）。
+6. 章节条用两个色轮换（室外用主色、室内用次色）区分大类，读者能快速定位。
+7. `margin-bottom:-14px` 是标题行与内容区的咬合值，**改成 0 会脱开**，负太多会盖住标题条文字。
+
+### 抓取参考稿排版的标准流程（踩坑记录）
+
+```bash
+# ❌ 只给 markdown，看不到任何样式
+opencli weixin download --url "https://mp.weixin.qq.com/s/xxx" --output /tmp/ref.md
+
+# ✅ 抓原始 HTML 自己切正文
+curl -sL -A "Mozilla/5.0 ..." "https://mp.weixin.qq.com/s/xxx" -o /tmp/ref_raw.html
+python3 -c "
+import re,pathlib
+h=pathlib.Path('/tmp/ref_raw.html').read_text(encoding='utf-8',errors='ignore')
+m=re.search(r'<div class="rich_media_content[^>]*id="js_content"[^>]*>(.*?)</div>\s*<script',h,re.S)
+pathlib.Path('/tmp/ref_body.html').write_text(m.group(1),encoding='utf-8')"
+# 然后用正则统计真实取值，别目测
+# color / background / font-size / border-radius / border / padding 各跑一遍 Counter
+```
+
+⚠️ **三个坑**：
+- ego-browser 预览 `file://` 页面会**缓存**，改完 HTML 截图仍是旧版 → URL 必须加 `?v=Date.now()` 强制刷新，否则会误判"改动没生效"。
+- `http://` + 裸中文路径会 **404**，必须 percent-encoding，或直接用 `file://` + 编码。
+- 核对文件内容**用 Python 读，不要用 grep**（本项目多次出现 grep 返回"无"而 Python 返回"有"）。

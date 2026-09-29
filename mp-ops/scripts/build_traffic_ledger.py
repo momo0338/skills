@@ -10,7 +10,12 @@ refresh_publish_records.py 落盘），本脚本**只做解析与排版，不联
 一、字段取法（2026-09-24 实测，踩过坑）
 ══════════════════════════════════════════════════════════════════════
 
-- `publish_page` 是 **JSON 字符串**，需二次 `json.loads`，不是 dict。
+- ⚠️ **两种源格式并存，必须自动识别**（refresh_publish_records.py 已改用扁平
+  `publish_list` 落盘，不再包 `publish_page`）：
+  - 【旧格式】顶层 `publish_page`（JSON 字符串，需二次 `json.loads`）
+    → 2026-09-21 前的旧脚本落盘
+  - 【新格式】顶层 `publish_list`（批次数组，`publish_info` 仍为 JSON 字符串）
+    → 2026-09-25 起 `refresh_publish_records.py` 的标准输出
 - 发布性质：`publish_list[i].publish_type`
     - **101 = 群发**（占每日 1 次额度，通知粉丝）
     - **1   = 发表·不通知**（不占额度，有永久链接）
@@ -20,6 +25,9 @@ refresh_publish_records.py 落盘），本脚本**只做解析与排版，不联
 - `read_num` / `share_num` 是**当前累计值**，每天取数要**直接覆盖**，
   ⛔ 绝不能自己累加（后台给的就是累计数，累加会越滚越错）。
 - `is_deleted=true` 的稿**仍留在列表里**，要标出来而不是当正常数据用。
+- ⚠️ **账号名前缀会随 `GZH_WORK_DIR` 目录名漂移**：刷新脚本用
+  `os.path.basename(work)` 落盘，本号目录名是「码上职业」，但历史缓存多以
+  `mashang_` 前缀落盘。源文件选取必须**同时匹配两种前缀**，否则默认总取旧缓存。
 
 ══════════════════════════════════════════════════════════════════════
 二、用法
@@ -51,28 +59,34 @@ def pick_source(explicit=""):
         if not os.path.exists(explicit):
             sys.exit(f"源文件不存在：{explicit}")
         return explicit
-    pats = [os.path.join(CACHE, "mashang_发表记录_*.json")]
+    pats = [os.path.join(CACHE, "mashang_发表记录_*.json"),
+            os.path.join(CACHE, "码上职业_发表记录_*.json")]
     hits = []
     for p in pats:
         hits.extend(glob.glob(p))
     if not hits:
-        sys.exit(f"没找到发表记录 JSON（{CACHE}/mashang_发表记录_*.json）。\n"
+        sys.exit(f"没找到发表记录 JSON（{CACHE}/{{mashang,码上职业}}_发表记录_*.json）。\n"
                  f"请先跑 mp-ops/scripts/refresh_publish_records.py 抓取。")
     return max(hits, key=os.path.getmtime)
 
 
 def parse(src: str) -> list:
-    """解析发表记录 → 行列表（每篇文章一行）。"""
+    """解析发表记录 → 行列表（每篇文章一行）。兼容新旧两种源格式。"""
     with open(src, encoding="utf-8") as f:
         raw = json.load(f)
-    page = raw.get("publish_page")
-    if isinstance(page, str):
-        page = json.loads(page)          # ⛔ 二次解析，字符串不是 dict
-    if not page:
-        sys.exit("publish_page 为空，源文件可能不是有效响应。")
+    # 兼容：旧格式顶层 publish_page（JSON 字符串）；新格式顶层 publish_list（批次数组）
+    if raw.get("publish_list"):
+        batches = raw["publish_list"]
+    else:
+        page = raw.get("publish_page")
+        if isinstance(page, str):
+            page = json.loads(page)          # ⛔ 二次解析，字符串不是 dict
+        if not page:
+            sys.exit("publish_page 与 publish_list 均为空，源文件可能不是有效响应。")
+        batches = page.get("publish_list", [])
 
     rows = []
-    for item in page.get("publish_list", []):
+    for item in batches:
         ptype = item.get("publish_type")
         nature = "群发" if ptype == 101 else ("发表·不通知" if ptype == 1 else f"未知({ptype})")
         pinfo = item.get("publish_info")
@@ -81,7 +95,7 @@ def parse(src: str) -> list:
         pinfo = pinfo or {}
         # ⛔ 不通知稿没有 sent_info，日期只能从 line_info.send_time 取
         sent = pinfo.get("sent_info") or {}
-        batch_ts = sent.get("send_time")
+        batch_ts = sent.get("time") or sent.get("send_time")   # sent_info 的键是 time
         for art in pinfo.get("appmsg_info", []) or []:
             li = art.get("line_info") or {}
             ts = li.get("send_time") or batch_ts
@@ -93,6 +107,7 @@ def parse(src: str) -> list:
                 "read": art.get("read_num", 0) or 0,
                 "share": art.get("share_num", 0) or 0,
                 "like": art.get("like_num", 0) or 0,
+                "haokan": art.get("old_like_num", 0) or 0,   # old_like_num=在看，不是点赞
                 "url": art.get("content_url") or "",
                 "deleted": bool(art.get("is_deleted")),
             })
@@ -135,14 +150,14 @@ def render(rows: list, src: str) -> str:
     L.append("")
 
     L.append("## 全量明细（按日期倒序）\n")
-    L.append("| 日期 | 文章 | 性质 | 阅读 | 分享 | 在看 | 链接 |")
-    L.append("|---|---|---|---|---|---|---|")
+    L.append("| 日期 | 文章 | 性质 | 阅读 | 分享 | 点赞 | 在看 | 链接 |")
+    L.append("|---|---|---|---|---|---|---|---|")
     for r in rows:
         t = r["title"][:40] + ("…" if len(r["title"]) > 40 else "")
         flag = " ⛔已删" if r["deleted"] else ""
         link = f"[原文]({r['url']})" if r["url"] else "—"
         L.append(f"| {r['date']}{flag} | {t} | {r['nature']} | {r['read']:,} | "
-                 f"{r['share']:,} | {r['like']:,} | {link} |")
+                 f"{r['share']:,} | {r['like']:,} | {r['haokan']:,} | {link} |")
     L.append("")
     L.append("---")
     L.append("")

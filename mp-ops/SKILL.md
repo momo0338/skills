@@ -196,11 +196,12 @@ E 合集资产价值 / F 行动清单 / **G 真实长尾水位（剔爆款）** 
 把后台发表记录 JSON 解析成「线上已发布台账」（日期/标题/性质/阅读/分享/在看/链接），
 写到码上职业 `运营/01-线上已发布台账.md`。**只读缓存、只写 vault，不联网、不碰 `jobs.db`。**
 
-解析要点（2026-09-24 实测，已在 docstring 详记）：
+解析要点（2026-09-24 实测，2026-09-25 补修）：
 ⛔ `publish_page` 是 **JSON 字符串**需二次 `json.loads`；
 ⛔ 发表·不通知**没有 `sent_info`**，日期取 `line_info.send_time`；
 ⛔ 一条 `publish_list` 可能含**多篇** `appmsg_info`（多图文）要展开；
-⛔ `read_num`/`share_num` 是**当前累计值**，每天**覆盖不累加**。
+⛔ `read_num`/`share_num` 是**当前累计值**，每天**覆盖不累加**；
+⚠️ **2026-09-25 修 4 个 bug**：① 兼容 `refresh_publish_records.py` 新改用的扁平 `publish_list` 格式（此前只认 `publish_page`，显式 `--src` 新文件会报 `publish_page 为空`）；② 源文件 glob 原只匹配 `mashang_` 前缀，但刷新脚本按 `GZH_WORK_DIR` 目录名落盘（本号＝**「码上职业」**），导致默认总取旧缓存 → 已改为同时匹配两种前缀；③ 群发稿日期读 `sent_info.send_time`，实际字段是 `sent_info.time`；④ 渲染时「在看」列误填 `like_num` → 已拆为「点赞/在看」两列，在看取 `old_like_num`。
 
 ---
 
