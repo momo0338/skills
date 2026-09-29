@@ -46,3 +46,4 @@ jobs:
           python -m pytest -o addopts='' -q dy-fanpai/tests
           python -m pytest -o addopts='' -q dev-resource-accelerator/tests
           python -m pytest -o addopts='' -q open-kimi-ppt/tests
+          python -m pytest -o addopts='' -q job-write/tests
