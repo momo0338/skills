@@ -74,6 +74,12 @@ SKILL_DEPS = {
     "mp-ops": {},
     "mp-publish": {},
     "mp-save": {},
+    "patrol-to-publish": {
+        # 自身脚本纯标准库；openpyxl 经 job-write/emit_briefing.py → workspace_source
+        # 读「单位与招聘信息总表.xlsx」，venv python 是 AGENTS.md 硬门禁
+        "bins": ["python3"],
+        "pip": ["openpyxl"],
+    },
     "school-write": {
         # 门禁脚本 verify_school_draft.py 用 Pillow 校验封面 900x383 RGB；方言校验经 mp-html 走 bs4
         "bins": ["python3"],
@@ -119,6 +125,11 @@ SKILL_DEPS = {
         },
     },
     "project-handover": {},
+    "recruit-monitor": {
+        # 巡检脚本工程读「单位与招聘信息总表.xlsx」（openpyxl）；ego-browser 仅空壳兜底
+        "bins": ["python3"],
+        "pip": ["openpyxl"],
+    },
     "yt-dlp": {
         "bins": ["yt-dlp", "ffmpeg"],
         "pip": ["yt-dlp"],
