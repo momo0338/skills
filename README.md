@@ -1,6 +1,6 @@
 # Momo Skills Core Library (AI Agent 技能库)
 
-> 包含 **51 个通用与专项 AI Agent 技能**，覆盖大模型自主浏览器操作、全站深度爬虫、网页正文提取、智能视频看懂抽帧、媒体音视频下载、万站 CLI 操作、抖音专项 CLI、抖音「我的」个人数据整理、抖音带货翻拍、抖音小店经营数据、千川投流决策、研发资源加速、网络代理管理、网络连通性诊断、企业情报深度调研、微信公众号采集、本地视频语音转写、GitHub 仓库深度数据调研、公众号技术专栏自动化采写、ijob 招聘数据独立访问、本地 xlsx 数据治理与安全迁移、**医院与卫健系统招聘图文（hospital-write）**及跨 AI 项目交接体系搭建等场景。
+> 包含 **51 个通用与专项 AI Agent 技能**，覆盖大模型自主浏览器操作、全站深度爬虫、网页正文提取、智能视频看懂抽帧、媒体音视频下载、万站 CLI 操作、抖音专项 CLI、抖音「我的」个人数据整理、抖音带货翻拍、抖音小店经营数据、千川投流决策、研发资源加速、网络代理管理、网络连通性诊断、企业情报深度调研、微信公众号采集、本地视频语音转写、GitHub 仓库深度数据调研、公众号技术专栏自动化采写、ijob 招聘数据独立访问（⚠️ 计划废弃）、本地 xlsx 数据治理与安全迁移、**医院与卫健系统招聘图文（hospital-write）**及跨 AI 项目交接体系搭建等场景。
 
 ---
 
@@ -49,7 +49,7 @@
 | **[ima-skill](./ima-skill)** | `ima-skill/` | IMA 知识库/笔记 OpenAPI 技能（笔记管理、知识库上传/搜索/订阅） | IMA OpenAPI, `~/.config/ima/` 凭证 |
 | **[xlsx-governance](./xlsx-governance)** | `xlsx-governance/` | 本地 xlsx 数据治理与安全迁移 SOP（删行/拆 sheet/归档、动表前机检排雷、Counter 多重集四分类归因、zip 外科手术修复空 rgb/dimension、编辑器并发 flush 多时点备份链、交付文档实拉重生） | Python `openpyxl`（venv）, 标准库 zipfile/ElementTree |
 | **[job-ima](./job-ima)** | `job-ima/` | ima 知识库「招聘」专用操作封装（随时浏览/搜索/读取/导出招聘库素材，衔接 job-write 落稿「码上职业」；基于 ima-mcp connector） | ima-mcp connector (`ima-mcp`) |
-| **[ijob](./ijob)** | `ijob/` | ijob 招聘数据中枢独立访问层：运行时发现、版本化 JSON 契约校验，提供 status/backlog/inbox/next/info/cycle-status 等纯只读业务意图 | Python（标准库）, ijob `ijob.public` 1.x 契约 |
+| **[ijob](./ijob)** ⚠️ | `ijob/` | ijob 招聘数据中枢独立访问层：运行时发现、版本化 JSON 契约校验，提供 status/backlog/inbox/next/info/cycle-status 等纯只读业务意图。<br>⚠️ **2026-09-30 起：`job-write` 已与其彻底解耦**（改读本工作区总表/巡检报告/`内容状态.json`）；该技能**计划废弃**，新工作不要再依赖它。 | Python（标准库）, ijob `ijob.public` 1.x 契约 |
 | **[job-write](./job-write)** | `job-write/` | 招聘/校招/招考类公众号图文专项采写（实拉岗位→要点提炼型原创汇编→原生方言排版→招聘风封面→推草稿并服务端验收，内建招考站接口取数与合规红线） | `mp-html`, `mp-publish`, Python `PIL` |
 | **[hospital-write](./hospital-write)** | `hospital-write/` | 医院/卫健系统招聘图文引擎（**双生产线**：L1 公告稿＋L2 医学升学择业稿；内建岗位核减差集比对、长期招聘收官判定五步、身份三分法与岗位序列证书词典、医疗类专属合规红线、封面用招聘主体医院 logo） | `job-write`, `mp-html`, `mp-publish` |
 | **[school-write](./school-write)** | `school-write/` | 教育系统（学校）招聘图文引擎（幼儿园→高校；**另设教育招聘 7 段骨架**，不套 job-write；内建长期招聘「招满即止」vs 定期截止**两种窗口形态判别**、省属 **14 列岗位表模板**解析、高校**年龄四档**与应届生·择业期定义、**四段式报名时间轴**、教育类合规红线、封面校徽**取色四级兜底**；自带 `verify_school_draft.py` 四道门禁含**数字门禁**） | `job-write`, `mp-html`, `mp-publish` |

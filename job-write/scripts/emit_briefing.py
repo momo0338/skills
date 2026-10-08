@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-emit_briefing.py —— 从 ijob 稳定只读契约生成写稿用的 BRIEFING（给 AI 的投料单）
+emit_briefing.py —— 从「码上职业」本工作区数据源生成写稿用 BRIEFING（给 AI 的投料单）
 
 为什么要有这个脚本
 ==================
@@ -11,15 +11,18 @@ emit_briefing.py —— 从 ijob 稳定只读契约生成写稿用的 BRIEFING�
   - 质量的角度：找不到时模型会「合理补全」——这正是 09-18 紫金稿翻车的机理
     （非官方口径 60 名 / 11-02 截止被当成事实写进正文）。
 
-所以把「确定性部分」从提示词里拿走：由脚本从 ijob 搬字段 + 显式标出缺口，
+所以把「确定性部分」从提示词里拿走：由脚本从**本工作区台账**搬字段 + 显式标出缺口，
 模型只做「表达转换」，不做信息检索，也不被允许推测。
 
-数据源（2026-09-25 起）
-======================
-**唯一事实源 = 用户级 ijob 技能的 `brief` 只读契约**（`ijob.public` v1）。
-本脚本通过 `IJOB_SKILL_SCRIPT` 环境变量或标准安装位置发现技能入口，
-只消费稳定业务对象，**不感知 ijob 的存储、路径、库表或 SQL**。
-批次总量在 `data.total`，单页上限 100，本脚本按页自动拉完。
+数据源（2026-09-30 起 —— 与本工作区「自闭环」口径对齐）
+======================================================
+**全部来自工作区自有事实源**（实现见同目录 `workspace_source.py`）：
+  ① `单位与招聘信息总表.xlsx`：`招聘信息`（批次台账）+ `公司信息`（单位档案）
+  ② `巡检记录/*监测.md`：最新巡检报告的在架分层（有效 / 长期 / 待核）
+  ③ `内容状态.json`：「写没写过 / 推没推草稿箱 / 发没发」的**唯一真源**
+
+⛔ **不依赖任何外部项目或外部数据库**（2026-09-29 朱总裁定）。
+⚠️ 台账里的硬信息**一律只是线索**：人数/截止/岗位/学历仍须回**官方公告原文**逐条核。
 
 用法
 ====
@@ -41,26 +44,32 @@ emit_briefing.py —— 从 ijob 稳定只读契约生成写稿用的 BRIEFING�
   # 换公众号账号对账（默认 mashang=码上职业）
   python3 emit_briefing.py --ready --profile mashang
 
-  # 指定 ijob 技能入口（默认自动发现）
-  IJOB_SKILL_SCRIPT=/path/to/ijob/scripts/ijob.py python3 emit_briefing.py --ready
+  # 指定工作区根（默认 ~/codeup/obsidian/03-工作记录/码上职业，或 JOB_WORKSPACE）
+  python3 emit_briefing.py --ready --workspace "/path/to/码上职业"
+
+  # 内容状态文件（唯一真源）：初始化 / 四方对账 / 回填 / 单向回推总表
+  python3 emit_briefing.py --state-init
+  python3 emit_briefing.py --state-audit
+  python3 emit_briefing.py --mark "国网江苏" --to written
+  python3 emit_briefing.py --state-push-xlsx
 
 字段可信度三档
 ==============
-  OK     批次对象有确定值（含具体日期/具体人数）
-  VAGUE  批次对象是软词、哨兵日或历史「发布日 +30 天」占位 → 不得写进正文，必须回官方补
-  EMPTY  批次对象为空
+  OK     台账/状态文件里有确定值（含具体日期/具体人数）
+  VAGUE  软词、哨兵日或历史「发布日 +30 天」占位 → 不得写进正文，必须回官方补
+  EMPTY  为空
 
-⛔ 补数口径：缺项一律**回 ijob 项目按其交接规则回填并复核**，
-本脚本只读、不会替 ijob 写入任何数据。
+⛔ 补数口径：缺项一律**回官方公告原文核实**，核实结论写回 `内容状态.json` 的
+facts 袋（`--mark … --facts`）或人工维护该文件；本脚本只读总表，不替你改总表。
 
 草稿箱对账（2026-09-21 加）
 ==========================
-ijob 的 `content_state`（published / written / unwritten）**只反映 ijob 侧有没有成稿**，
-**既不等于已推微信草稿箱，更不等于已发布**。所以 `--ready` 在给名单前
+`内容状态.json` 的 state（unwritten / written / draft / published）**只是本工作区自己记的
+进度**，**不等于微信草稿箱里一定没有、更不等于线上一定没发**。所以 `--ready` 在给名单前
 **强制与草稿箱对一次账**
 （标题精确 → 稿件正文含标题 → 批次标题主体互含 → 单位主体相似 → 人工维护简称/全称别名候选）。
 多批次歧义和后三级弱匹配都只生成人工核验候选，不会自动回填，也不会宣称确定失同步。
-歧义时优先展示进度最可证实的批次（已发布 > 库内已成稿 > 库内未排），但仍排除全部可能批次。
+歧义时优先展示进度最可证实的批次（已发布 > 已推草稿箱 > 库内已成稿 > 库内未排），但仍排除全部可能批次。
 对上的单位单独列进「⚠️ 草稿箱候选」区，`--include-suspect` 可在人工核实后并回主名单。
 
 ⛔ 登录态失效时**只降级告警、不自动登录**；
@@ -74,70 +83,20 @@ import subprocess
 import sys
 from datetime import date, datetime
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import workspace_source as wsrc  # noqa: E402  （同目录：本工作区数据源适配层）
+
 # 草稿箱取数脚本（mp-publish 技能内，唯一权威位置）
 DRAFT_SCRIPT = os.path.join(
     os.path.expanduser("~"), ".workbuddy/skills/mp-publish/scripts/wx_draft.py")
 DEFAULT_PROFILE = "mashang"
 
-# ijob 技能入口发现顺序：显式环境变量 → 用户级技能 → 与 job-write 同仓库的兄弟技能
-IJOB_SCRIPT_ENV = "IJOB_SKILL_SCRIPT"
-IJOB_RELATIVE_SCRIPT = os.path.join("ijob", "scripts", "ijob.py")
-IJOB_USER_SCRIPT = os.path.join("~", ".workbuddy", "skills", "ijob", "scripts", "ijob.py")
-# brief 单页硬上限（与 ijob 契约一致）；分页拉全量，避免只取第一页。
-BRIEF_PAGE_LIMIT = 100
-IJOB_CALL_TIMEOUT = 300
-MAX_PAGES = 200  # 防御性上限，远大于真实批次数；超出会显式报错而不是静默截断。
-
-# 占位截止日：ijob 对「尚未核实截止日」的批次统一用该日期占位，
+# 占位截止日：台账历史导入曾把「尚未核实截止日」的批次统一写成该日期，
 # 判定时必须结合 batch_type / title 的「待核」字样降级为 VAGUE，否则会把占位日当事实写进正文。
 PLACEHOLDER_DEADLINE = "2026-12-31"
 
-
-class IjobContractError(RuntimeError):
-    """ijob 技能不可用 / 契约不合法 / 调用失败。必须显式报错，绝不降级成「空数据」。"""
-
-    def __init__(self, code, message, *, details=None):
-        super().__init__(message)
-        self.code = code
-        self.message = message
-        self.details = details or {}
-
-
-# ── 契约字段 → 脚本内部 legacy row 的映射（领域逻辑只认 legacy 键）──
-# 只在这里出现契约字段名：cid / html_len / rh / id 等历史键由适配层负责合成。
-LEGACY_FROM_ITEM = {
-    "company": "company",
-    "full_name": "full_name",
-    "nature": "nature",
-    "industry_catalog": "industry_catalog",
-    "headquarters_city": "headquarters_city",
-    "official_site": "official_site",
-    "title": "title",
-    "batch_type": "batch_type",
-    "line": "line",
-    "target_graduates": "target_graduates",
-    "min_degree": "min_degree",
-    "total_vacancies": "total_vacancies",
-    "employment_nature": "employment_nature",
-    "city": "city",
-    "publish_date": "publish_date",
-    "deadline": "deadline",
-    "status": "status",
-    "verdict_summary": "verdict_summary",
-    "apply_url": "apply_url",
-    "announcement_url": "announcement_url",
-    "consulting_phone": "consulting_phone",
-    "wechat_url": "wechat_url",
-    "age_limit": "age_limit",
-    "cet_requirement": "cet_requirement",
-    "computer_cert_requirement": "computer_cert_requirement",
-    "chsi_valid_date": "chsi_valid_date",
-    "medical_veto_rules": "medical_veto_rules",
-    "allocation_rules": "allocation_rules",
-    "pitfall_warnings": "pitfall_warnings",
-}
-# 契约允许 null（结构化红线未做），legacy row 内部一律用空串，避免 (row[k] or "") 之外的分支。
-_TEXT_ITEM_KEYS = set(LEGACY_FROM_ITEM)
+# 数据源错误类型由 workspace_source 提供（`wsrc.SourceError`）：
+# 「找不到工作区 / 状态文件」必须显式报错，绝不降级成「没有批次」。
 
 # ── 主档列 → briefing 字段 的映射（左=legacy 键, 右=(briefing键, 展示名)）
 FIELD_MAP = [
@@ -167,8 +126,8 @@ REQUIRED = {
     "location":      ("工作地点",     "city",             "段5 岗位表"),
     "announce_date": ("公告发布日",   "publish_date",     "时效标注"),
 }
-# 「资格与禁入红线」= **建议项，不阻塞动笔**（ijob 只对部分批次做了结构化，
-# 绝大多数批次该组为空，若纳入 REQUIRED 会把全部单位误判为「不可动笔」）。
+# 「资格与禁入红线」= **建议项，不阻塞动笔**（本地台账默认不登记该组，
+# 绝大多数批次为空，若纳入 REQUIRED 会把全部单位误判为「不可动笔」）。
 ADVISORY = {
     "gates": ("资格与禁入红线", "__gates__", "段5 资格与禁入"),
 }
@@ -229,14 +188,16 @@ def grade_gates(row):
 
 
 def draft_state(row):
-    """按可证实程度返回稿件状态，绝不把 ijob 侧正文推断为已推微信草稿箱。
+    """按可证实程度返回稿件状态；绝不把「本地有正文」推断成「已推微信草稿箱」。
 
-    优先用契约的 ``content_state``（published / written / unwritten）；
-    老载荷缺该字段时回退到「可发布链接 + 正文长度」自证。
+    优先用 `内容状态.json` 的 state（unwritten / written / draft / published）；
+    缺该字段时回退到「可发布链接 + 正文长度」自证。
     """
     state = (row.get("content_state") or "").strip()
     if state == "published":
         return "已发布"
+    if state == "draft":
+        return "已推草稿箱"
     if state == "written":
         return "库内已成稿"
     if state == "unwritten":
@@ -250,176 +211,26 @@ def draft_state(row):
 
 
 # ─────────────────────────────────────────────────────────────
-# ijob 稳定只读契约适配（2026-09-25 加）
+# 本工作区数据源适配（2026-09-30 起：数据全部来自工作区内部，无外部项目依赖）
 # ─────────────────────────────────────────────────────────────
-def find_ijob_script():
-    """发现 ijob 技能入口脚本；找不到时抛结构化错误，绝不静默返回空数据。"""
-    candidates = []
-    env_path = os.environ.get(IJOB_SCRIPT_ENV)
-    if env_path:
-        candidates.append(("环境变量 " + IJOB_SCRIPT_ENV, os.path.expanduser(env_path)))
-    candidates.append(("用户级技能目录", os.path.expanduser(IJOB_USER_SCRIPT)))
-    # 与 job-write 同一 skills 仓库的兄弟技能：<repo>/ijob/scripts/ijob.py
-    here = os.path.dirname(os.path.abspath(__file__))  # <repo>/job-write/scripts
-    repo_root = os.path.dirname(os.path.dirname(here))
-    candidates.append(("同仓库兄弟技能", os.path.join(repo_root, IJOB_RELATIVE_SCRIPT)))
-    tried = []
-    for origin, path in candidates:
-        if not path:
-            continue
-        if os.path.isfile(path):
-            return path, origin
-        tried.append(f"{origin}：{path}")
-    raise IjobContractError(
-        "ijob_skill_not_found",
-        "未发现 ijob 技能入口，无法取数（禁止把「找不到 ijob」当成「没有批次」）",
-        details={"checked": tried,
-                 "hint": f"请安装 ijob 技能，或设置 {IJOB_SCRIPT_ENV} 指向其 scripts/ijob.py"},
-    )
+def load_workspace(workspace=None):
+    """定位工作区并载入批次台账 + 巡检在架条目。
 
-
-def _validate_envelope(payload, origin):
-    """校验 ijob 公共只读契约与技能错误外壳；不合法一律抛错。
-
-    成功载荷只接受 ``ijob.public``。``ijob.skill`` 只是技能适配层在定位
-    运行时或调用契约之前产生的错误外壳，不能冒充成功批次数据。
+    返回 ``(ws, state, rows, patrol_entries, patrol_reports)``。
+    任何一步失败都抛 ``wsrc.SourceError`` —— **绝不返回空数据**，
+    因为「取不到」被当成「没有可写单位」正是凭空写稿的起点。
     """
-    if not isinstance(payload, dict):
-        raise IjobContractError("ijob_invalid_response",
-                                f"ijob 技能未返回 JSON 对象（来源：{origin}）")
-
-    contract = payload.get("contract")
-    operation = payload.get("operation")
-    if operation != "brief":
-        raise IjobContractError(
-            "ijob_operation_mismatch",
-            f"ijob 响应不是 brief 操作（来源：{origin}）",
-            details={"operation": operation})
-
-    if "error" in payload:
-        if contract not in ("ijob.public", "ijob.skill"):
-            raise IjobContractError(
-                "ijob_contract_mismatch",
-                f"ijob 错误外壳不受支持（来源：{origin}）",
-                details={"contract": contract})
-        err = payload.get("error")
-        if not isinstance(err, dict):
-            raise IjobContractError("ijob_contract_error", "ijob 返回的 error 结构不合法")
-        raise IjobContractError(
-            str(err.get("code") or "ijob_contract_error"),
-            str(err.get("message") or "ijob 契约返回错误"),
-            details=err.get("details") if isinstance(err.get("details"), dict) else {})
-
-    if contract != "ijob.public":
-        raise IjobContractError(
-            "ijob_contract_mismatch",
-            f"ijob 成功响应必须使用 ijob.public 契约（来源：{origin}）",
-            details={"contract": contract})
-
-    schema_version = payload.get("schema_version")
-    if not isinstance(schema_version, str) or not re.fullmatch(r"1\.\d+\.\d+", schema_version):
-        raise IjobContractError(
-            "ijob_contract_incompatible",
-            f"ijob 契约版本不受支持（来源：{origin}）",
-            details={"schema_version": schema_version})
-
-    meta = payload.get("meta")
-    if not isinstance(meta, dict) or meta.get("read_only") is not True or meta.get("source") != "ijob":
-        raise IjobContractError(
-            "ijob_invalid_response",
-            f"ijob brief 响应缺少可信的只读元数据（来源：{origin}）",
-            details={"meta": meta})
-    return payload
+    ws = wsrc.discover_workspace(workspace)
+    state = wsrc.load_state(ws)          # 缺状态文件 → 报错并提示 --state-init
+    rows = wsrc.load_batches(ws, state)
+    entries, reports = wsrc.load_patrol(ws)
+    return ws, state, rows, entries, reports
 
 
-def call_ijob_brief_page(script, offset, limit, *, timeout=IJOB_CALL_TIMEOUT):
-    """调用 ijob 技能 brief 并返回校验后的 data 段。"""
-    cmd = [sys.executable, script, "brief", "--limit", str(limit), "--offset", str(offset)]
-    try:
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, check=False)
-    except subprocess.TimeoutExpired as exc:
-        raise IjobContractError(
-            "ijob_timeout",
-            f"ijob 技能调用超时（>{timeout}s，offset={offset}）") from exc
-    except OSError as exc:
-        raise IjobContractError(
-            "ijob_spawn_failed", f"无法启动 ijob 技能脚本：{exc}") from exc
-    try:
-        payload = json.loads(proc.stdout)
-    except json.JSONDecodeError as exc:
-        raise IjobContractError(
-            "ijob_invalid_response",
-            "ijob 技能未返回有效 JSON",
-            details={"exit_code": proc.returncode,
-                     "stderr_tail": (proc.stderr or "").strip()[-400:]}) from exc
-    payload = _validate_envelope(payload, os.path.basename(script))
-    data = payload.get("data")
-    if not isinstance(data, dict):
-        raise IjobContractError("ijob_invalid_response", "ijob brief 响应缺少 data 段")
-    if "items" not in data or not isinstance(data.get("items"), list):
-        raise IjobContractError("ijob_invalid_response", "ijob brief 响应缺少 data.items")
-    if not isinstance(data.get("total"), int):
-        raise IjobContractError("ijob_invalid_response", "ijob brief 响应缺少 data.total")
-    if proc.returncode != 0:
-        raise IjobContractError(
-            "ijob_process_failed", "ijob 技能进程返回非零退出码",
-            details={"exit_code": proc.returncode,
-                     "stderr_tail": (proc.stderr or "").strip()[-400:]})
-    return data
 
 
-def to_legacy_row(item):
-    """把契约批次对象适配成脚本内部 legacy row。
-
-    领域逻辑（可信度分级、草稿状态、缺口清单、投料单渲染）只认 legacy 键，
-    契约字段名只在本函数与映射表内出现。
-    """
-    row = {}
-    for legacy_key, item_key in LEGACY_FROM_ITEM.items():
-        if item_key in _TEXT_ITEM_KEYS:
-            row[legacy_key] = (item.get(item_key) or "")
-    # 批次标识：cid 是历史键，id 供歧义候选与排序使用。
-    cid = item.get("campaign_id")
-    row["cid"] = cid
-    row["id"] = cid
-    # 正文长度与可检索正文：优先契约字段，兼容旧长度键。
-    row["article_length"] = item.get("article_length") or 0
-    row["html_len"] = row["article_length"]
-    row["rh"] = item.get("article_search_text") or ""
-    # 状态：契约已给出结论；旧载荷缺失时由 draft_state 自证回退。
-    row["content_state"] = (item.get("content_state") or "").strip()
-    return row
 
 
-def fetch_brief_items(*, script=None, page_limit=BRIEF_PAGE_LIMIT, max_pages=MAX_PAGES):
-    """按页拉完 ijob brief 全量批次并返回 legacy row 列表。
-
-    brief 单页上限 100；``data.total`` 才是总量，必须翻页到拉完，
-    否则「看起来有数据」实则只取第一页，会静默漏批次。
-    """
-    if script is None:
-        script, _origin = find_ijob_script()
-    page_limit = max(1, min(int(page_limit), BRIEF_PAGE_LIMIT))
-    items, seen_cids, offset, total = [], set(), 0, None
-    for _page in range(max_pages):
-        data = call_ijob_brief_page(script, offset, page_limit)
-        page_items = data["items"]
-        if total is None:
-            total = data["total"]
-        for item in page_items:
-            row = to_legacy_row(item)
-            cid = row["cid"]
-            if cid in seen_cids:
-                continue
-            seen_cids.add(cid)
-            items.append(row)
-        offset += len(page_items)
-        if not page_items or offset >= total:
-            return items
-    raise IjobContractError(
-        "ijob_paging_exhausted",
-        f"ijob brief 分页超过 {max_pages} 页仍未拉完（已取 {offset}/{total}），疑似分页口径异常",
-        details={"fetched": offset, "total": total})
 
 
 # ─────────────────────────────────────────────────────────────
@@ -517,7 +328,7 @@ def _semantic_draft_brand(text):
     return max(runs, key=len).strip("·") if runs else ""
 
 
-# 标题常用简称，ijob 批次对象可能保存全称；只作人工候选，不自动回填。
+# 标题常用简称，台账里可能存的是全称；只作人工候选，不自动回填。
 # 值为批次对象文本中必须同时出现的关键词组；不把“疾病预防控制中心/血液中心”
 # 这类跨城市通用词放入别名表，避免把南京红十字血液中心误认成江苏省血液中心。
 _SEMANTIC_ALIASES = {
@@ -623,9 +434,9 @@ def _best_draft_matches(matched):
 
 
 def reconcile_draftbox(all_rows, titles):
-    """对账草稿标题与 ijob 批次对象。
+    """对账草稿标题与本工作区台账批次。
 
-    ``all_rows`` 是 ijob brief 适配出的 legacy row 列表（含 id / title /
+    ``all_rows`` 是工作区适配出的 legacy row 列表（含 id / title /
     full_name / company / wechat_url / html_len / rh）。
 
     返回 ``(matched, unmatched, desync, semantic_matches)``。
@@ -746,20 +557,36 @@ def clean_url(v):
     return v, ""
 
 
-def build_briefing(row, today):
+def _patrol_lines(entries):
+    """把巡检在架条目渲染成 Markdown 表格行（无命中返回空列表）。"""
+    if not entries:
+        return []
+    out = ["| 状态 | 报名截止 | 标题 | 来源 | 报告 |", "|---|---|---|---|---|"]
+    for e in entries:
+        title = (e["title"] or "")[:52]
+        link = f"[{title}]({e['url']})" if e.get("url") else title
+        out.append(f"| {e['layer']} | {e['deadline'] or '—'} | {link} | "
+                   f"{(e['source'] or '—')[:22]} | {e['report']} |")
+    return out
+
+
+def build_briefing(row, today, patrol=None):
     kname = (row["full_name"] or row["company"] or "").strip()
     line = (row["line"] or "").strip()
     L = []
 
     L.append(f"# BRIEFING · {kname}")
     L.append("")
-    L.append(f"> 机器生成于 {today} ｜ 数据源：ijob 稳定只读契约（批次对象）｜ "
+    L.append(f"> 机器生成于 {today} ｜ 数据源：**本工作区台账**"
+             f"（总表 `招聘信息` + `内容状态.json` + 巡检报告）｜ "
              f"**本文件不是核实结论，是核实起点**")
-    L.append(f"> 批次ID `{row['cid']}` ｜ 稿件进度：**{draft_state(row)}**")
+    L.append(f"> 批次ID `{row['cid']}` ｜ 稿件进度：**{draft_state(row)}**"
+             + ("" if row.get("state_known")
+                else "（⚠️ 状态文件缺该批次，进度取自总表旧列，建议先 `--state-audit`）"))
     L.append("")
 
-    # ── A. ijob 已确认值
-    L.append("## A. ijob 已确认硬信息（可直接引用，但需与官方公告逐字对照）")
+    # ── A. 台账登记值（线索，不是结论）
+    L.append("## A. 台账登记硬信息（⚠️ **只是线索**：写进正文前必须与官方公告逐字对照）")
     L.append("")
     L.append("| 字段 | 值 | 可信度 |")
     L.append("|---|---|---|")
@@ -773,7 +600,7 @@ def build_briefing(row, today):
         L.append(f"| {label} | {val_show} | {g_s} |")
     L.append("")
 
-    # ── A2. 资格与禁入红线（ijob 结构化字段，写稿核心）
+    # ── A2. 资格与禁入红线（本地只在核过官方公告并回填后才有值）
     gates = [(k, (row[k] or "").strip()) for k in GATE_KEYS if (row[k] or "").strip()]
     L.append("## A2. 资格与禁入红线（用于「段5 资格与禁入」）")
     L.append("")
@@ -786,9 +613,9 @@ def build_briefing(row, today):
         for k, v in gates:
             L.append(f"- **{GATE_LABEL.get(k, k)}**：{v[:160]}")
         L.append("")
-        L.append("⚠️ 以上为 ijob 已结构化字段，仍须与官方公告逐字对照后再写入正文。")
+        L.append("⚠️ 以上为本工作区已回填的红线字段，仍须与官方公告逐字对照后再写入正文。")
     else:
-        L.append("⛔ ijob 未结构化该批次的红线字段 —— 必须回官方公告 §报考条件 逐条核"
+        L.append("⛔ 本工作区台账未登记该批次的红线字段 —— 必须回官方公告 §报考条件 逐条核"
                  "（年龄 / 英语等级 / 计算机证 / 体检色盲色弱 / 学信验证码），"
                  "缺则正文写「公告未披露」。")
     L.append("")
@@ -802,9 +629,10 @@ def build_briefing(row, today):
         g = grade_deadline(row) if col == "deadline" else grade(val)
         if g == "OK":
             continue
-        gaps.append((label, where, "ijob 未记录" if g == "EMPTY" else f"ijob 为软词「{val[:30]}」"))
+        gaps.append((label, where,
+                     "台账未登记" if g == "EMPTY" else f"台账为软词「{val[:30]}」"))
     if not gaps:
-        L.append(f"✅ {len(REQUIRED)} 项必填事实在 ijob 均已确定，可直接开写（仍建议抽查 2 项复核）。")
+        L.append(f"✅ {len(REQUIRED)} 项必填事实在台账均已确定，可直接开写（仍建议抽查 2 项复核）。")
     else:
         L.append("| 缺什么 | 用在哪一段 | 现状 |")
         L.append("|---|---|---|")
@@ -812,12 +640,13 @@ def build_briefing(row, today):
             L.append(f"| **{label}** | {where} | {why} |")
         L.append("")
         if grade_gates(row) != "OK":
-            L.append("> ℹ️ 另有「资格与禁入红线」ijob 未结构化 —— **不阻塞动笔**，"
+            L.append("> ℹ️ 另有「资格与禁入红线」台账未登记 —— **不阻塞动笔**，"
                      "但写「段5」前须回官方公告 §报考条件 逐条核。")
             L.append("")
     L.append("**补数红线**：")
     L.append("- ⛔ 培训号/聚合站的日期与人数一律不采（已实证 yinhangzhaopin.com 六大行日期 6/6 全错）")
-    L.append("- ✅ 认官方公告原文、报名站接口、政府网附件 xlsx；补完**回 ijob 项目按其交接规则回填并复核**，不要只写进稿件")
+    L.append("- ✅ 认官方公告原文、报名站接口、政府网附件 xlsx；补完把结论**回写 `内容状态.json` "
+             "的 facts 袋**（`--mark … --facts`），不要只写进稿件")
     L.append("- ✅ 官方没写的（薪酬/食宿/经费渠道/专业明细）→ 正文写「**公告未披露**」，不代为断言")
     L.append("")
 
@@ -835,8 +664,22 @@ def build_briefing(row, today):
         L.append("⚠️ 「网络报名」≠ 在线系统：须回公告 §报名办法 逐字核（09-17 无锡实证：实为邮箱投递、以收件时间为准）。")
         L.append("⚠️ `--source-url` 优先级：网申系统 > 报名邮箱所在公告页 > 官网栏目页。")
     else:
-        L.append("⛔ ijob 无任何官方入口 —— 补数前先**回 ijob 项目按其交接规则**补齐"
-                 "网申入口与公告原文这两项。")
+        L.append("⛔ 台账里该批次没有任何官方入口 —— 补数前先回单位官网/主管局公告栏"
+                 "补齐网申入口与公告原文这两项，并回写台账。")
+    L.append("")
+
+    # ── C2. 巡检报告的在架条目（比台账更新，用于确认「今天还开着」）
+    L.append("## C2. 巡检报告·在架条目（本工作区 `巡检记录/` 最新报告）")
+    L.append("")
+    if patrol:
+        L.extend(_patrol_lines(patrol))
+        L.append("")
+        L.append("⚠️ 巡检报告的「有效/长期」是**抓取时点**的判断，发布与撤回都可能在抓取之后发生；"
+                 "写稿前仍须打开公告原文确认仍在招。")
+    else:
+        L.append(f"（巡检报告里没匹配到「{kname}」的在架条目 —— 可能是台账登记的批次较新、"
+                 "报告尚未覆盖，或该公告不在四条巡检线内。**这不等于没在招**，"
+                 "以官方公告原文为准。）")
     L.append("")
 
     # ── D. 装配指令：机器算好的，别让模型猜
@@ -850,7 +693,8 @@ def build_briefing(row, today):
     if blocked:
         L.append(f"- ⛔ **暂不可动笔**：报名截止为软词、空值、哨兵日或历史「发布日 +30 天」占位"
                  f"（当前值「{dl or '空'}」），定不了标题钩子与 SEO 摘要。先回官方钉死，"
-                 f"并**回 ijob 项目按其交接规则回填并复核**该批次的报名截止。")
+                 f"并把结论**回写 `内容状态.json`**（`--mark \"{kname}\" --to written "
+                 f"--facts deadline=YYYY-MM-DD`）。")
     else:
         L.append(f"- ✅ 报名截止已确定（{dl}），可动笔；三宫格、摘要、标题钩子用这个值。")
     L.append("")
@@ -868,15 +712,98 @@ def filter_rows(all_rows, keyword=None):
     return sorted(rows, key=lambda r: (r["deadline"] or "9999-12-31", r["cid"]))
 
 
+def _print_state_audit(rep):
+    """打印四方对账报告（只读）。"""
+    print(f"# 内容状态对账 · {datetime.now().strftime('%Y-%m-%d %H:%M')}")
+    print(f"# 真源：{rep['state_file']}")
+    print()
+    print("## 一、五个数（口径不可混用）")
+    sc = rep["state_counts"]
+    print(f"- 状态文件在册批次：**{rep['batches_in_state']}**"
+          f"（未排 {sc.get('unwritten', 0)} ｜ 已成稿 {sc.get('written', 0)}"
+          f" ｜ 已推草稿箱 {sc.get('draft', 0)} ｜ 已发布 {sc.get('published', 0)}）")
+    inv = rep["local_inventory"]
+    print(f"- 本地库存（各线 `待发布/` 稿件数）：" + "、".join(f"{k.split('/')[0]} {v}" for k, v in inv.items()))
+    arch = rep["local_archived"]
+    total_arch = sum(arch.values())
+    print(f"- 本地已归档（各线 `已发布/`）：**{total_arch}**"
+          + ("　🔴 **这一档接近空 —— 红线 11「发布当天归档」事实上未执行**" if total_arch <= 2 else ""))
+    print(f"- 总表在册批次：{rep['batches_in_xlsx']} 行（内容状态分布 {rep['xlsx_counts']}）")
+    print()
+    print("## 二、状态文件 ↔ 总表旧列")
+    mm = rep["state_xlsx_mismatch"]
+    print(f"- 两处不一致：**{len(mm)}** 行")
+    for x in mm[:20]:
+        print(f"  - {x['unit']} ｜ {x['title']} ｜ json={x['json']} xlsx={x['xlsx']}")
+    if len(mm) > 20:
+        print(f"  …另有 {len(mm) - 20} 行")
+    miss = rep["xlsx_rows_missing_in_state"]
+    print(f"- 总表有、状态文件没有：**{len(miss)}** 行"
+          + ("（⛔ 状态文件是真源，缺行会让这些批次失去进度记录）" if miss else " ✅"))
+    if miss:
+        for x in miss[:10]:
+            print(f"  - {x['unit']} ｜ {x['xlsx'] or '（空）'}")
+        print("  → 修法：`--state-init --force` 重建，或 `--mark <单位> --to <状态>` 逐条补")
+    print()
+    print("## 三、已发布 ↔ 本地归档（红线 11）")
+    na = rep["published_not_archived"]
+    print(f"- 状态=published 但 `已发布/` 里找不到：**{len(na)}** 条")
+    for u in na[:15]:
+        print(f"  - {u}")
+    if len(na) > 15:
+        print(f"  …另有 {len(na) - 15} 条")
+    print()
+    print("> ⛔ 本报告只读，不改任何文件。要推进状态用 `--mark`；要回推总表用 `--state-push-xlsx`。")
+
+
+def _apply_mark(workspace, keyword, to_state, facts_list, by):
+    """把匹配关键词的批次状态推进到 ``to_state``，可同时回填 facts（KEY=VALUE）。"""
+    facts = {}
+    for kv in facts_list:
+        if "=" not in kv:
+            raise wsrc.SourceError("facts_invalid", f"--facts 需要 KEY=VALUE 形式：{kv}")
+        k, v = kv.split("=", 1)
+        facts[k.strip()] = v.strip()
+    state = wsrc.load_state(workspace)
+    rows = wsrc.load_batches(workspace, state)
+    # 目标既可以是台账行，也可以是状态文件里已有的条目（各线目录补录的那批台账里没有），
+    # 合并去重后再落状态，避免「同一单位在状态文件里出现两条」。
+    targets = {}
+    for r in rows:
+        if keyword in " ".join(str(r.get(k) or "") for k in
+                               ("company", "full_name", "title", "city")):
+            targets[(r["full_name"] or r["company"], r["title"])] = True
+    for v in state["batches"].values():
+        if keyword in (v.get("unit") or "") or keyword in (v.get("title") or ""):
+            targets[((v.get("unit") or ""), (v.get("title") or ""))] = True
+    if not targets:  # 哪儿都没有 → 也允许直接建（本地留痕优先）
+        rec = wsrc.set_batch_state(workspace, keyword, "", to_state, by=by,
+                                   note="--mark 新建（台账与状态文件均无此批次）")
+        print(f"[ok] 新建并置为 {to_state}：{keyword}")
+        return 1
+    for unit, title in sorted(targets):
+        wsrc.set_batch_state(workspace, unit, title, to_state, by=by)
+        if facts:
+            st2 = wsrc.load_state(workspace)
+            st2["batches"][wsrc.state_key(unit, title)].setdefault("facts", {}).update(facts)
+            wsrc.save_state(workspace, st2)
+        print(f"[ok] {unit} ｜ {(title or '（无标题）')[:36]} → {to_state}"
+              + (f" ｜ facts+{','.join(facts)}" if facts else ""))
+    return len(targets)
+
+
 def main():
-    ap = argparse.ArgumentParser(description="从 ijob 稳定只读契约生成写稿 BRIEFING")
+    ap = argparse.ArgumentParser(description="从「码上职业」本工作区数据源生成写稿 BRIEFING")
     ap.add_argument("keywords", nargs="*", help="单位关键词，模糊匹配 公司名/标题/城市")
     ap.add_argument("--out", metavar="DIR", help="写到该目录（文件名=单位.md）；不传则打印到 stdout")
     ap.add_argument("--gap-only", action="store_true", help="只打印缺口一行式摘要")
     ap.add_argument("--ready", action="store_true",
-                    help="列出必填事实已齐、库内未成稿且草稿箱未命中候选的单位（选题池）")
+                    help="列出必填事实已齐、本地未成稿且草稿箱未命中候选的单位（选题池）")
+    ap.add_argument("--ready-loose", action="store_true",
+                    help="选题宽松档：只要求「单位/截止/地点/公告发布日」齐（本地台账没有"
+                         "用工性质与面向届别两列）；仍⛔必须回官方原文补齐后再动笔")
     ap.add_argument("--include-done", action="store_true",
-                    help="配合 --ready：把已发布/库内已成稿的也列出来（防止重复写）")
+                    help="配合 --ready：把已发布/已成稿/已推草稿箱的也列出来（防止重复写）")
     ap.add_argument("--profile", default=DEFAULT_PROFILE,
                     help=f"公众号账号别名（默认 {DEFAULT_PROFILE}=码上职业）")
     ap.add_argument("--no-draftbox", dest="draftbox", action="store_false",
@@ -887,28 +814,95 @@ def main():
                     help="--ready 不按网申入口合并明细行（默认合并：同入口=1 个写作单位）")
     ap.add_argument("--draftbox-audit", action="store_true",
                     help="只做草稿箱对账并逐条打印映射，不改名单")
-    ap.add_argument("--ijob-script", metavar="PATH",
-                    help="覆盖 ijob 技能入口路径（默认按 IJOB_SKILL_SCRIPT / 标准位置发现）")
+    ap.add_argument("--workspace", metavar="DIR",
+                    help=f"工作区根（默认 {wsrc.DEFAULT_WORKSPACE}；也可用环境变量 {wsrc.WORKSPACE_ENV}）")
+    ap.add_argument("--state-init", action="store_true",
+                    help="从总表与各线目录初始化 `内容状态.json`（已存在则保留，配 --force 重建）")
+    ap.add_argument("--state-audit", action="store_true",
+                    help="四方对账：内容状态.json ↔ 总表两列 ↔ 各线 待发布/已发布 ↔ 台账登记")
+    ap.add_argument("--state-push-xlsx", action="store_true",
+                    help="把内容状态.json 单向回推总表两列（改 xlsx 前强制备份到 /tmp）")
+    ap.add_argument("--mark", metavar="关键词", help="把匹配到的批次状态推进到 --to")
+    ap.add_argument("--to", choices=list(wsrc.STATES), help="配合 --mark：目标状态")
+    ap.add_argument("--facts", action="append", default=[], metavar="KEY=VALUE",
+                    help="配合 --mark：回填已核实字段（可重复，如 --facts employment_nature=合同制）")
+    ap.add_argument("--by", default="AI", help="配合 --mark：留痕人（默认 AI）")
+    ap.add_argument("--force", action="store_true", help="配合 --state-init：重建状态文件")
+    ap.add_argument("--state-import-draftbox", action="store_true",
+                    help="把微信草稿箱里的标题导入状态文件（状态=draft）；默认只预演，配 --apply 才落盘")
+    ap.add_argument("--apply", action="store_true",
+                    help="配合 --state-import-draftbox：真的写状态文件（不加则 dry-run）")
     ap.set_defaults(draftbox=True)
     ap.add_argument("--limit", type=int, default=3, help="每个关键词最多匹配几条，默认3")
     a = ap.parse_args()
 
     today = datetime.now().strftime("%Y-%m-%d %H:%M")
+
+    # ── 状态文件子命令（先于台账载入，因为它们的入口正是状态文件本身）
     try:
-        all_rows = fetch_brief_items(script=a.ijob_script)
-    except IjobContractError as exc:
+        if a.state_init:
+            _ws = wsrc.discover_workspace(a.workspace)
+            _state, info = wsrc.init_state(_ws, by=a.by, force=a.force)
+            print(f"[ok] {info['action']}：{info['path']}")
+            for k in ("seeded", "from_dirs", "batches"):
+                if k in info:
+                    print(f"     {k}: {info[k]}")
+            print("接着跑 `--state-audit` 看四方对账，把与总表旧列的差异先消掉。")
+            return
+        if a.state_audit:
+            _print_state_audit(wsrc.audit(wsrc.discover_workspace(a.workspace)))
+            return
+        if a.state_push_xlsx:
+            res = wsrc.push_state_to_xlsx(wsrc.discover_workspace(a.workspace))
+            print(f"[ok] 已回推总表：更新 {res['updated']} 行")
+            if res.get("backup"):
+                print(f"     备份 {res['backup']}\n     SHA-256 {res['sha256']}\n"
+                      f"     回滚 {res['rollback']}")
+            return
+        if a.state_import_draftbox:
+            _ws = wsrc.discover_workspace(a.workspace)
+            titles, _mids = fetch_draft_titles(a.profile)
+            if titles is None:
+                sys.exit(f"⛔ 取不到草稿箱列表（脚本缺失 / profile={a.profile} 登录态失效 / 超时）；"
+                         "先手动跑 `wx_draft.py list --profile mashang` 确认。")
+            res = wsrc.import_draft_titles(_ws, titles, apply=a.apply, by=a.by)
+            print(f"# 草稿箱导入预演 · profile={a.profile} · 草稿 {len(titles)} 篇"
+                  + ("" if not a.apply else "（已落盘）"))
+            print(f"# 与状态文件已匹配（跳过，不覆盖）：{len(res['skipped'])} 篇")
+            print(f"# 状态文件缺登记、将补为 draft：{len(res['planned'])} 篇")
+            for t in res["planned"]:
+                print(f"  + {wsrc._unit_from_title(t)[:26]:<28} ← {t[:52]}")
+            if not a.apply and res["planned"]:
+                print("\n（预演结束，未写任何文件。确认无误后加 `--apply` 落盘。）")
+            return
+        if a.mark:
+            if not a.to:
+                sys.exit("⛔ --mark 必须同时给 --to（unwritten/written/draft/published）")
+            n = _apply_mark(wsrc.discover_workspace(a.workspace), a.mark, a.to, a.facts, a.by)
+            if not n:
+                sys.exit(f"⛔ 台账与状态文件里都没有匹配「{a.mark}」的批次；"
+                         "先 `--state-init` 或核对单位专名。")
+            return
+    except wsrc.SourceError as exc:
+        detail = f"\n细节：{json.dumps(exc.details, ensure_ascii=False)}" if exc.details else ""
+        sys.exit(f"⛔ 数据源失败 [{exc.code}]：{exc.message}{detail}")
+
+    try:
+        ws, state, all_rows, patrol_entries, patrol_reports = load_workspace(a.workspace)
+    except wsrc.SourceError as exc:
         detail = ""
         if exc.details:
             detail = "\n细节：" + json.dumps(exc.details, ensure_ascii=False)
-        sys.exit(f"⛔ ijob 取数失败 [{exc.code}]：{exc.message}{detail}\n"
+        sys.exit(f"⛔ 本地取数失败 [{exc.code}]：{exc.message}{detail}\n"
                  "   本次没有任何批次数据，**不得把失败当成「没有可写单位」**。"
-                 "请先修复 ijob 技能后重试。")
+                 "修好后重试（首次使用先跑 `--state-init`）。")
+    del ws
 
     # ── 草稿箱对账（--ready / --draftbox-audit 共用）
     draft_titles = None
     draft_audit = None
     draft_matches = {}
-    if a.draftbox and (a.ready or a.draftbox_audit):
+    if a.draftbox and (a.ready or a.ready_loose or a.draftbox_audit):
         draft_titles, _mids = fetch_draft_titles(a.profile)
         if draft_titles is None:
             print("⚠️ 草稿箱对账**跳过**：取不到草稿列表"
@@ -953,21 +947,42 @@ def main():
         if desync:
             print(f"\n⛔ 确定失同步 {len(desync)} 行"
                   f"（{len(desync_titles)} 个唯一草稿标题 / {len(desync_cids)} 个候选批次）"
-                  " —— 人工核对公告/报名入口后，**回 ijob 项目按其交接规则回填并复核**"
-                  "该批次稿件；语义/别名候选不自动计入：")
+                  " —— 人工核对公告/报名入口后，用 `--mark \"<单位>\" --to draft`"
+                  "把 `内容状态.json` 推进到「已推草稿箱」；语义/别名候选不自动计入：")
             for cid, name, t in desync:
                 print(f"  - cid={cid} {name} ← {t[:44]}")
         return
 
-    if a.ready:
-        # ⚠️ 「硬信息齐」≠「还没写」。稿件进度由 ijob 的 content_state 推导
-        # （published=已发布；written=库内已成稿；unwritten=库内未排）。
+    if a.ready or a.ready_loose:
+        # ⚠️ 「硬信息齐」≠「还没写」。稿件进度取自 `内容状态.json`（唯一真源）：
+        # published=已发布；draft=已推草稿箱；written=库内已成稿；unwritten=库内未排。
         # 不过滤就会把成稿单位混进选题池；草稿箱标题只作人工核验候选。
-        DONE = ("已发布", "库内已成稿")
+        DONE = ("已发布", "已推草稿箱", "库内已成稿")
+        # 严格档＝REQUIRED 全齐；宽松档＝只要本地台账真正持有的四项
+        # （用工性质/面向届别本工作区台账没有列，永远进不了严格档）。
+        LOOSE_KEYS = {"unit", "deadline", "location", "announce_date"}
+        gate = [(_k, _l, c, _w) for _k, (_l, c, _w) in REQUIRED.items()
+                if not a.ready_loose or _k in LOOSE_KEYS]
+        today_s = datetime.now().strftime("%Y-%m-%d")
+        expired = 0
         ready, done, suspect = [], [], []
         for r in all_rows:
-            if any((grade_deadline(r) if c == "deadline" else grade(r[c])) != "OK"
-                   for _k, (_l, c, _w) in REQUIRED.items()):
+            bad = False
+            for _k, _l, c, _w in gate:
+                if _k == "unit":
+                    ok = bool((r["full_name"] or r["company"] or "").strip())
+                elif c == "deadline":
+                    ok = grade_deadline(r) == "OK"
+                else:
+                    ok = grade(r[c]) == "OK"
+                if not ok:
+                    bad = True
+                    break
+            if bad:
+                continue
+            dl10 = (r["deadline"] or "").strip()[:10]
+            if re.match(r"\d{4}-\d{2}-\d{2}$", dl10) and dl10 < today_s:
+                expired += 1          # 已过期≠选题池，必须剔除（本地台账含历史行）
                 continue
             name = r["full_name"] or r["company"] or ""
             rec = (r["deadline"] or "", name, draft_state(r))
@@ -986,10 +1001,14 @@ def main():
             ready = sorted(ready + [s[:3] + ("",) for s in suspect])
             suspect = []
         trust_note = "" if draft_titles is not None else "（⚠️ 草稿箱取数失败，以下未排除线上草稿，不可直接采信）"
-        print(f"必填 {len(REQUIRED)} 项已齐、库内未成稿且草稿箱未命中候选的单位：{len(ready)} 条"
-              f"（另有 {len(done)} 条已发布/库内已成稿，用 --include-done 一并列出）"
+        mode = "宽松档（单位/截止/地点/公告日）" if a.ready_loose else f"严格档（必填 {len(gate)} 项全齐）"
+        print(f"[{mode}] 本地未成稿且草稿箱未命中候选的单位：{len(ready)} 条"
+              f"（已剔除报名截止已过期 {expired} 条；另有 {len(done)} 条已完成，`--include-done` 可列出）"
               + (f"；{len(suspect)} 条草稿箱候选已单列" if suspect else "")
               + trust_note)
+        if a.ready_loose:
+            print("⚠️ 宽松档只保证本地台账有的四项 —— **「用工性质」「面向届别」「学历」**"
+                  "以及资格红线必须回官方公告原文补齐后再动笔（红线 2）。")
         for dl, name, ds, _u in ready:
             print(f"  {dl or '—':<12} {name:<40} 稿件={ds}")
         # ── 同网申入口合并：同一入口 = 1 个写作单位（如 60 家农商行法人共用一个 51job 专题）
@@ -1006,9 +1025,9 @@ def main():
                 print(f"  {dl or '—':<12} {u:<44} ×{len(names):<3} "
                       f"如：{names[0]}…{names[-1] if len(names) > 1 else ''}")
         if suspect:
-            print(f"\n⚠️ 草稿箱有对应候选、但 ijob 显示库内未排 —— 先人工核实"
-                  f"（{len(suspect)} 条；确认同一公告后回 ijob 项目按其交接规则回填并复核该批次稿件，"
-                  f"确未发再用 --include-suspect 并回主名单）：")
+            print(f"\n⚠️ 草稿箱有对应候选、但本地状态显示未成稿 —— 先人工核实"
+                  f"（{len(suspect)} 条；确认同一公告后用 `--mark \"<单位>\" --to draft`"
+                  f"把状态推进到「已推草稿箱」；确未发再用 --include-suspect 并回主名单）：")
             for dl, name, _ds, draft_title, how in suspect:
                 print(f"  {dl or '—':<12} {name:<40} 草稿「{draft_title[:30]}」 [{how}]")
         if a.include_done:
@@ -1029,18 +1048,32 @@ def main():
                 for _k, (lbl, c, _w) in REQUIRED.items():
                     if (grade_deadline(r) if c == "deadline" else grade(r[c])) != "OK":
                         miss.append(lbl)
-                tail = "" if grade_gates(r) == "OK" else "  [红线未结构化]"
+                tail = "" if grade_gates(r) == "OK" else "  [红线未登记]"
                 print(f"{(r['full_name'] or r['company'])[:38]:<40} {len(miss):<6} "
                       + "、".join(miss) + tail)
         return
 
     for kw in a.keywords:
         hits = filter_rows(all_rows, kw)
+        patrol_hits = wsrc.patrol_for(kw, patrol_entries)
         if not hits:
-            print(f"[miss] ijob 无匹配批次：{kw}", file=sys.stderr)
+            if patrol_hits:
+                print(f"# 台账无「{kw}」批次，但**巡检报告有 {len(patrol_hits)} 条在架条目**"
+                      f"（台账未登记 ≠ 没在招）：")
+                print()
+                for line in _patrol_lines(patrol_hits):
+                    print(line)
+                print()
+                print("→ 打开公告原文确认仍在招 → 补台账（总表 `招聘信息` 新增一行）"
+                      "→ 再跑本脚本出投料单。⛔ 不要跳过投料单直接写稿。")
+                print()
+                continue
+            print(f"[miss] 本地台账与巡检报告都没有「{kw}」"
+                  "（⛔ 疑似凭空写 —— 先确认该单位确在招，再补台账/核对单位专名，别跳过投料单）",
+                  file=sys.stderr)
             continue
         for r in hits[: a.limit]:
-            txt = build_briefing(r, today)
+            txt = build_briefing(r, today, patrol_hits)
             if a.out:
                 os.makedirs(a.out, exist_ok=True)
                 name = (r["full_name"] or r["company"] or "未命名").replace("/", "_")
