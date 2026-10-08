@@ -63,7 +63,14 @@ SKILL_DEPS = {
     },
     "ima-skill": {},
     "job-ima": {},
-    "job-write": {},
+    "job-write": {
+        # emit_briefing.py → workspace_source.py 延迟 import openpyxl 读「单位与招聘信息总表.xlsx」；
+        # job-write/tests 亦在模块级 import openpyxl（CI offline-tests 同装）
+        "pip": ["openpyxl"],
+        "install_cmds": {
+            "pip": "pip install openpyxl",
+        },
+    },
     "mp-html": {
         # wx_dialect_check.py 硬依赖 bs4；job-write/school-write 的门禁脚本经 subprocess 调它
         "pip": ["beautifulsoup4"],
