@@ -55,6 +55,10 @@ SKILL_DEPS = {
     },
     "guide-write": {},
     "hospital-write": {},
+    "bulletin-write": {
+        # 官方公告重排引擎（2026-10-10 新增，B 线主骨架）
+        "bins": ["python3"],
+    },
     "ijob": {
         # ⚠️ 计划废弃（2026-09-30）：job-write 投料单已与其解耦，改读本工作区台账。
         # 新工作不要再依赖本技能；此处保留仅为兼容存量环境。
