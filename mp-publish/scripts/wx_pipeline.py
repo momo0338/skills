@@ -269,6 +269,7 @@ def main():
     # ⚠️ 必须重新取 token：STEP 3 的子进程可能因 40001 刷新过 token，父进程手里的旧 token 已作废，
     #    直接用旧 token 回读会拿到空结果，进而「假通过」。
     verify_ok = False
+    _hook_json_ok = False
     for _attempt in range(2):
         token = get_token()
         if not token:
@@ -321,10 +322,56 @@ def main():
             sys.exit(1)
         log("VERIFY", f"✅ draft/get 质量验收通过（标题/正文/容器/样式/图片URL 五项硬校验）")
         verify_ok = True
+        # ── 【2026-10-09 方案A】回读响应落盘 → hook② draft_ctl 零 API 回写 drafts 表 ──
+        try:
+            _hook_json = os.path.join(os.environ.get("WX_RUN_DIR") or "/tmp", "zj_draft_get.json")
+            with open(_hook_json, "w", encoding="utf-8") as _f:
+                json.dump({"media_id": resolved_media_id, "news_item": items}, _f, ensure_ascii=False)
+            _hook_json_ok = True
+        except Exception as _e:
+            _hook_json_ok = False
+            print(f"[hook] 回读落盘失败（不影响推送）: {_e}")
         break
     if not verify_ok:
         print("❌ 服务端回读验收失败，草稿是否可用需人工到后台确认")
         sys.exit(1)
+
+    # ── 内容流水线钩子（2026-10-08 方案 v3）：推送成功 → pipeline.db 自动 status=draft ──
+    # 容错设计：db/CLI/匹配 任一环节失败仅打印提示，绝不阻塞推送主流程。
+    # 【2026-10-09 修】title 缺失时跳过（旧版传字面量 "unknown-title" 去撞库，必落空）；
+    #   匹配词兜底用服务端回读标题（VERIFY 的 news 变量）。
+    _hook_json = os.path.join(os.environ.get("WX_RUN_DIR") or "/tmp", "zj_draft_get.json")
+    try:
+        hook = "/Users/zhugx/src/skills/job-write/scripts/content_ctl.py"
+        _t = (args.title or (news.get("title") if verify_ok else "") or "").strip()
+        if not _t:
+            print("[hook] content_ctl 跳过（无可用标题匹配词）")
+        elif os.path.exists(hook):
+            _r = subprocess.run(
+                ["/Users/zhugx/.workbuddy/binaries/python/envs/default/bin/python3",
+                 hook, "pushed", _t, "--media-id", resolved_media_id,
+                 "--source-url", (getattr(args, "source_url", None) or "")],
+                capture_output=True, text=True, timeout=30)
+            tail = (_r.stdout or _r.stderr or "").strip().splitlines()
+            print("[hook] content_ctl pushed: " + (tail[-1] if tail else f"exit={_r.returncode}"))
+    except Exception as _e:
+        print(f"[hook] content_ctl 跳过（不影响推送）: {_e}")
+
+    # ── hook②（2026-10-09 方案A）：drafts 表镜像秒级回写，复用 VERIFY 回读数据，零额外 API ──
+    try:
+        _ctl = "/Users/zhugx/src/skills/job-write/scripts/draft_ctl.py"
+        if _hook_json_ok and os.path.exists(_hook_json) and os.path.exists(_ctl):
+            _r2 = subprocess.run(
+                ["/Users/zhugx/.workbuddy/binaries/python/envs/default/bin/python3",
+                 _ctl, "--json", _hook_json, "--media-id", resolved_media_id, "--apply"],
+                capture_output=True, text=True, timeout=30)
+            tail2 = (_r2.stdout or _r2.stderr or "").strip().splitlines()
+            print("[hook] draft_ctl: " + (tail2[-1] if tail2 else f"exit={_r2.returncode}"))
+        else:
+            print("[hook] draft_ctl 跳过（回读未落盘）")
+    except Exception as _e:
+        print(f"[hook] draft_ctl 跳过（不影响推送）: {_e}")
+    # ── 钩子结束 ──
 
     if args.delete_old_media_id:
         log("STEP 5", f"清理指定的历史旧草稿 ({args.delete_old_media_id})...")
