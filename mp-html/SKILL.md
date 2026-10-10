@@ -14,6 +14,8 @@ metadata: {"openclaw":{"emoji":"🎨"}}
 
 ---
 
+> 🧰 **组装库（2026-10-09 升格）**：`scripts/layout_kit.py` ＝ 各 write 线共用的排版 HTML 生成骨架（Layout 类：段组件／速览四格／表格／CTA／内建断言）。各线生成器 `from layout_kit import Layout` 只写内容段；本技能同时承担「方言规范＋校验器＋组装库」三层。参考实现：`school-write/scripts/gen_ruc.py`。
+
 ## 一、HTML 标签 — 全量支持表
 
 ### ✅ 原样保留（推荐使用）
