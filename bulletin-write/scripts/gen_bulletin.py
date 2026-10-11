@@ -233,7 +233,7 @@ def write_source_md(cfg, out_md: str):
         for r in pt['rows']:
             md.append('| ' + ' | '.join(strip_bold(str(c)) for c in r) + ' |\n')
         if pt.get('footnote'):
-            md.append(f'\n{pt["footnote"]}\n')
+            md.append(f'\n{strip_bold(pt["footnote"])}\n')
     for heading, blocks in cfg.ORIGINAL:
         md.append(f'\n## {heading}\n' if heading else '\n')
         for kind, t in blocks:
@@ -242,7 +242,7 @@ def write_source_md(cfg, out_md: str):
             elif kind == 'note':
                 md.append(f'\n> {strip_bold(t)}\n')
             elif kind == 'sub':
-                md.append(f'\n**{t}**\n')
+                md.append(f'\n**{strip_bold(t)}**\n')
             elif kind == 'url':
                 md.append(f'\n{t}\n')
     md.append('\n## 常见问答\n')
