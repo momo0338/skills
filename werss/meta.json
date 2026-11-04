@@ -1,0 +1,10 @@
+{
+  "version": "1.0.0",
+  "required_binaries": [
+    {
+      "name": "python3",
+      "min_version": "3.8.0",
+      "reason": "Runs werss_cli.py using standard library urllib without third-party dependencies"
+    }
+  ]
+}

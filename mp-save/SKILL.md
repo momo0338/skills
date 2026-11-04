@@ -7,38 +7,64 @@ description: Use when user provides a WeChat official account article URL (mp.we
 
 ## Overview
 
-自动下载微信公众号文章并保存到 Obsidian vault 的正确分类目录，包含标准 frontmatter 和本地图片。
+自动下载微信公众号文章/长图海报并保存到 Obsidian vault 的正确分类目录，内置**形态自适应最佳路径（长图海报、多卡片、标准图文自适应）**、高清原图提取（`/0?` 通道）、智能防断字切片、标准 Frontmatter 生成与知识库落盘。
 
 ## When to Use
 
 - 用户提供微信公众号链接：`https://mp.weixin.qq.com/s/xxx`
-- 用户请求保存、收藏、下载文章
-- 用户说"用 opencli 保存这个"
+- 用户请求保存、收藏、下载文章或公告长图海报
+- 需要从微信文章提取高清原图、长图切片、或者归档至 Obsidian
 
 ## Workflow
 
 ```dot
 digraph weixin_save {
     "收到微信链接" [shape=doublecircle];
-    "下载文章" [shape=box];
-    "读取内容判断分类" [shape=box];
-    "生成frontmatter" [shape=box];
-    "保存到分类目录" [shape=box];
-    "验证保存成功" [shape=box];
+    "形态自适应探测与下载" [shape=box];
+    "智能路径：长图切片/多卡/图文" [shape=box];
+    "读取内容判断知识库分类" [shape=box];
+    "生成标准Frontmatter与Markdown" [shape=box];
+    "落盘至Vault目标目录" [shape=box];
     "完成" [shape=doublecircle];
 
-    "收到微信链接" -> "下载文章";
-    "下载文章" -> "读取内容判断分类";
-    "读取内容判断分类" -> "生成frontmatter";
-    "生成frontmatter" -> "保存到分类目录";
-    "保存到分类目录" -> "验证保存成功";
-    "验证保存成功" -> "完成";
+    "收到微信链接" -> "形态自适应探测与下载";
+    "形态自适应探测与下载" -> "智能路径：长图切片/多卡/图文";
+    "智能路径：长图切片/多卡/图文" -> "读取内容判断知识库分类";
+    "读取内容判断知识库分类" -> "生成标准Frontmatter与Markdown";
+    "生成标准Frontmatter与Markdown" -> "落盘至Vault目标目录";
+    "落盘至Vault目标目录" -> "完成";
 }
 ```
 
-## Step 1: Download Article
+## Step 1: 自动形态探测与高清下载（首选推荐）
 
-首选 opencli：
+技能内置了开箱即用的自适应下载脚本 `scripts/mp_download.py`，**零依赖登录态、免装浏览器扩展、自动跟随 302 穿透**：
+
+```bash
+python3 /Users/zhugx/src/skills/mp-save/scripts/mp_download.py "<微信文章URL>" --out-dir "/tmp/weixin-article"
+```
+
+### 🧠 自动形态判断与最佳路径（Auto-routing）
+
+脚本抓取后会自动分析正文字符数、行数及所有图片的实际像素尺寸，自动匹配最佳处理路径：
+
+| 检测形态 | 触发特征 | 自动执行的最佳路径 | 输出特点 |
+|---|---|---|---|
+| **`long_image`**<br>(长图/海报公告) | 含有超长图（高宽比≥2.5且高度≥2000，或单图≥800×2500） | ① 下载高清原图（`/0?`）<br>② **自动按 2000px 纵向切段 + 60px 重叠防断字**<br>③ 生成切片索引 `images/segs/` | 专供多模态 AI 读图、OCR 提取与长海报完整归档 |
+| **`multi_card`**<br>(多卡片推文) | 文字较少（≤25行），但含有 ≥3 张卡片海报 | ① 自动过滤 GIF 动图与微小装饰图<br>② 按原文阅读顺序全量抓取卡片图<br>③ 生成图集排版 Markdown | 适合多海报拼接类、轮播卡片类招聘公告 |
+| **`standard_article`**<br>(标准图文长文) | 正文字数充足（≥300字或段落 >25行） | ① 正文 HTML 转换为干净 Markdown<br>② 保留小标题、段落、引用与列表<br>③ 文中配图按原文插入位置本地化 | 适合评论、深度报道、图文通告、公众号长文 |
+
+#### 常用参数说明：
+- `--mode {auto,standard,long,multi}`：默认 `auto`（自动探测）；也可手动强制指定。
+- `--step 2000`：长图切片高度（默认 2000px）。
+- `--overlap 60`：长图切片上下重叠缓冲像素（默认 60px，防止刚好切断单行字）。
+- `--out-dir DIR`：输出目录，缺省自动在当前路径下以清洗后的文章标题建目录。
+
+---
+
+### Step 1 附录：备用 opencli 通道（需已登录扩展）
+
+如果用户明确要求使用 opencli：
 
 ```bash
 opencli weixin download --url "https://mp.weixin.qq.com/s/xxx" --output "/tmp/weixin-article"

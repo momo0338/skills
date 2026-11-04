@@ -132,16 +132,16 @@ def resolve_unit(con, title):
             r = con.execute('SELECT id,name FROM units WHERE name=?', (target,)).fetchone()
             return (r['id'], r['name'], f'歧义映射 {kw}→{target}') if r else \
                    (None, None, f'映射目标 {target} 不在 units')
-    # ⚠️ 不过滤 units.status：北京信托 status='written'（已写过）也是合法归属单位，
-    # status 语义是"写过没"而非"是否有效"。单位状态不该影响草稿归属判定。
-    rows = con.execute("SELECT id,name,category,status FROM units").fetchall()
+    # 2026-10-16 units.status 列已删（单位状态改为「其挂载信道的状态汇总」，见码上职业工作台）。
+    # 本函数不按状态过滤：草稿归属只看名称匹配。
+    rows = con.execute("SELECT id,name,category FROM units").fetchall()
     t_n = norm(title)
     cands = [r for r in rows if r['name'] and
              (r['name'] in title or (len(norm(r['name'])) >= 4 and norm(r['name']) in t_n))]
     if not cands:
         return None, None, '标题未匹配到任何 units.name'
     # 优先 active，其次名称最长
-    best = max(cands, key=lambda r: (r['status'] == 'active', len(r['name'])))
+    best = max(cands, key=lambda r: len(r['name']))
     return best['id'], best['name'], f'名称匹配→{best["name"]}（{best["category"]}）'
 
 

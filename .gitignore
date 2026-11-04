@@ -21,3 +21,9 @@ dy-cli/outputs/
 
 # 外部软链：指向 ego 安装目录（~/.local/share/ego/ego-skills），非本仓库资产
 /ego-browser
+/mashangzhiye-dev
+
+# 敏感凭据配置文件
+werss/config.json
+
+

@@ -22,11 +22,16 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 import time
 
 API_BASE = "https://api.weixin.qq.com"
 CRED_DIR = os.path.expanduser("~/.config/weixin")
-CACHE_DIR = os.path.expanduser("~/.cache/weixin")
+CACHE_DIR = os.environ.get("WX_CACHE_DIR") or (
+    os.path.expanduser("~/.cache/weixin")
+    if os.access(os.path.expanduser("~/.cache/weixin"), os.W_OK)
+    else os.path.join(tempfile.gettempdir(), "weixin_cache")
+)
 TOKEN_SAFETY_MARGIN = 300   # token 剩余有效期低于该秒数即视为过期，提前刷新
 
 # --------------------------------------------------------------------------- #

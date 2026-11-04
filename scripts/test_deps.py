@@ -49,7 +49,7 @@ def main():
     expected_skills = [
         "analyze-viral-commerce-video", "claude-real-video", "crawl4ai", "defuddle", "dy-cli",
         "dy-doudian", "dy-fanpai",
-        "dev-resource-accelerator", "fengniao-search", "jina-reader", "lux", "mptext-api", "opencli", "proxy",
+        "dev-resource-accelerator", "fengniao-search", "jina-reader", "lux", "opencli", "proxy",
         "qibook-company-profile", "qibook-company-wiki-deepresearch", "scrapling",
         "videodl", "yt-dlp", "zhihu-search",
     ]
@@ -147,11 +147,11 @@ def main():
          any("yt-dlp" in p for p in ytdlp_deps.get("pip", [])),
          f"pip={ytdlp_deps.get('pip', [])}")
 
-    # mptext-api: has pip install requests in markdown body
-    mp_deps = parse_skill_md_deps(skill_path_map["mptext-api"])
-    test("mptext-api parses pip from markdown body",
-         "requests" in mp_deps.get("pip", []),
-         f"pip={mp_deps.get('pip', [])}")
+    # firecrawl: has pip install firecrawl-py requests in markdown body
+    fc_deps = parse_skill_md_deps(skill_path_map["firecrawl"])
+    test("firecrawl parses pip from markdown body",
+         "requests" in fc_deps.get("pip", []),
+         f"pip={fc_deps.get('pip', [])}")
 
     # ============================================================
     # 6. Full dependency check per skill
@@ -188,9 +188,6 @@ def main():
             test(f"  {sname}: env check ran", len(missing["pip"]) == 0,
                  f"env missing={missing.get('env', [])}")
         elif sname == "zhihu-search":
-            test(f"  {sname}: env check ran", len(missing["pip"]) == 0,
-                 f"env missing={missing.get('env', [])}")
-        elif sname == "mptext-api":
             test(f"  {sname}: env check ran", len(missing["pip"]) == 0,
                  f"env missing={missing.get('env', [])}")
         else:

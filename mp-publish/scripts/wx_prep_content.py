@@ -29,7 +29,7 @@ css = re.sub(r'/\*.*?\*/', '', css, flags=re.S)  # 剥离注释，防污染选�
 
 # ---------- 1. 抽取 base64 图片 ----------
 # 2026-09-22 加固：允许包含换行/空格等空白字符，并在解码前清洗，防截断导致 broken data stream
-b64_pattern = re.compile(r'data:image/(jpeg|jpg|png);base64,([A-Za-z0-9+/=\s]+)')
+b64_pattern = re.compile(r'data:image/(jpeg|jpg|png|gif);base64,([A-Za-z0-9+/=\s]+)')
 imgmap = []
 idx = 0
 def save_img(m):

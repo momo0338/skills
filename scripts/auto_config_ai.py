@@ -54,16 +54,18 @@ SKILL_DEPS = {
         },
     },
     "guide-write": {},
-    "hospital-write": {},
-    "bulletin-write": {
+    "job-hospital-write": {},
+    "job-bulletin-write": {
         # 官方公告重排引擎（2026-10-10 新增，B 线主骨架）
         "bins": ["python3"],
     },
-    "ijob": {
-        # ⚠️ 计划废弃（2026-09-30）：job-write 投料单已与其解耦，改读本工作区台账。
-        # 新工作不要再依赖本技能；此处保留仅为兼容存量环境。
+    "job-poster-write": {
+        # 全文海报/长图类招聘公告转排版技能
         "bins": ["python3"],
-        "env": ["IJOB_HOME"],
+        "pip": ["pillow", "requests"],
+        "install_cmds": {
+            "pip": "pip install pillow requests",
+        },
     },
     "ima-skill": {},
     "job-ima": {},
@@ -85,13 +87,7 @@ SKILL_DEPS = {
     "mp-ops": {},
     "mp-publish": {},
     "mp-save": {},
-    "patrol-to-publish": {
-        # 自身脚本纯标准库；openpyxl 经 job-write/emit_briefing.py → workspace_source
-        # 读「单位与招聘信息总表.xlsx」，venv python 是 AGENTS.md 硬门禁
-        "bins": ["python3"],
-        "pip": ["openpyxl"],
-    },
-    "school-write": {
+    "job-school-write": {
         # 门禁脚本 verify_school_draft.py 用 Pillow 校验封面 900x383 RGB；方言校验经 mp-html 走 bs4
         "bins": ["python3"],
         "pip": ["pillow", "beautifulsoup4"],
@@ -135,11 +131,8 @@ SKILL_DEPS = {
             "npm": "npm install -g @jackwener/opencli",
         },
     },
-    "project-handover": {},
-    "recruit-monitor": {
-        # 巡检脚本工程读「单位与招聘信息总表.xlsx」（openpyxl）；ego-browser 仅空壳兜底
-        "bins": ["python3"],
-        "pip": ["openpyxl"],
+    "macos-native-media-tools": {
+        "bins": ["swiftc"],
     },
     "yt-dlp": {
         "bins": ["yt-dlp", "ffmpeg"],
@@ -219,14 +212,10 @@ SKILL_DEPS = {
             "pip": "pip install firecrawl-py",
         },
     },
-    "mptext-api": {
-        "pip": ["requests"],
-        "env": ["MPTEXT_API_KEY"],
-        "install_cmds": {
-            "pip": "pip install requests",
-        },
-    },
     "mp-search": {},
+    "werss": {
+        "bins": ["python3"],
+    },
     "gh-research": {
         "bins": ["gh"],
         "brew_bins": ["gh"],
@@ -241,7 +230,6 @@ SKILL_DEPS = {
             "pip": "pip install requests",
         },
     },
-    "net-reachability-diagnosis": {},
     "dev-resource-accelerator": {
         "bins": ["git", "curl"],
     },

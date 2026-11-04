@@ -56,11 +56,12 @@ class Layout:
                 f'padding:2px 8px;border-radius:4px;margin-right:8px;">{text}</span>'
                 f'<span style="color:{self.brand};font-size:15px;font-weight:800;">{sub}</span></section>')
 
-    def sec_title(self, t):
+    def sec_title(self, t, bold=True):
         # 竖线加重符挂在文字 span 的 border-left 上（2026-10-09）：空 span 微信客户端会剥掉不渲染
+        weight = "800" if bold else "500"
         return (f'<section style="margin:24px 0 12px;padding:0 14px;">'
                 f'<span style="border-left:4px solid {self.brand};padding-left:9px;'
-                f'font-size:18px;font-weight:800;color:{self.brand};">{t}</span></section>')
+                f'font-size:18px;font-weight:{weight};color:{self.brand};">{t}</span></section>')
 
     def p(self, txt, style=''):
         return f'<p style="margin:0 0 10px;font-size:15px;line-height:1.75;color:#334155;{style}">{txt}</p>'
@@ -110,16 +111,19 @@ class Layout:
                 'margin:0 0 6px;"><tr>' + ''.join(cell(a, b) for a, b in cells) + '</tr></table>')
 
     def th(self, t, w):
-        return (f'<td style="width:{w};background:{self.brand};background-color:{self.brand};color:#fff;'
+        # w 为百分比数值（如 14），必须带 % —— 2026-10-16 朱总对比截图发现裸数字无效导致首列被均分撑宽
+        return (f'<td width="{w}%" style="width:{w}%;background:{self.brand};background-color:{self.brand};color:#fff;'
                 f'font-size:12.5px;font-weight:700;padding:7px 3px;text-align:center;">{t}</td>')
 
     def td(self, t, w, bg, st=''):
-        return (f'<td style="width:{w};background:{bg};background-color:{bg};padding:5px 4px;'
+        return (f'<td width="{w}%" style="width:{w}%;background:{bg};background-color:{bg};padding:5px 4px;'
                 f'font-size:12.5px;color:#334155;{st}">{t}</td>')
 
     def table(self, headers, rows, widths, zebra='#f0f7f5', style=''):
         """通用表格：headers=[(文本,宽%)], rows=[[...]], widths=[..%]；zebra 斑马底色"""
-        h = '<section style="margin:0 0 10px;"><table style="width:100%;border-collapse:collapse;table-layout:fixed;">'
+        cg = '<colgroup>' + ''.join(f'<col style="width:{w}%;"/>' for w in widths) + '</colgroup>'
+        h = ('<section style="margin:0 0 10px;"><table style="width:100%;border-collapse:collapse;table-layout:fixed;">'
+             + cg)
         h += '<tr>' + ''.join(self.th(t, w) for t, w in zip(headers, widths)) + '</tr>'
         for i, r in enumerate(rows):
             bg = '#ffffff' if i % 2 else zebra

@@ -112,11 +112,13 @@ def log_event(con, article_id, etype, payload=None, actor='AI'):
 
 def find_article(con, kw):
     """按 id / media_id / 标题子串 找稿件，唯一命中才返回。"""
+    cols = {r[1] for r in con.execute("PRAGMA table_info(articles)").fetchall()}
     if kw.isdigit():
         r = con.execute('SELECT * FROM articles WHERE id=?', (int(kw),)).fetchone()
         if r: return r
-    r = con.execute('SELECT * FROM articles WHERE media_id=?', (kw,)).fetchone()
-    if r: return r
+    if 'media_id' in cols:
+        r = con.execute('SELECT * FROM articles WHERE media_id=?', (kw,)).fetchone()
+        if r: return r
     rs = con.execute('SELECT * FROM articles WHERE published_title LIKE ? OR meta LIKE ?',
                      (f'%{kw}%', f'%{kw}%')).fetchall()
     if len(rs) == 1: return rs[0]
