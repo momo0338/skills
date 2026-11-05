@@ -263,7 +263,9 @@ def cmd_gen(args):
                faq_bg=f.get('faq_bg', '#f5f9fd'), faq_border=f.get('border_light', '#d8e4f5'))
     h = L.doc_open(f"<title>{f['title']}</title>")
     brand_label = f.get('account_brand') or f.get('account_name') or '码上职业'
-    intro_prefix = f.get('intro', '')
+    intro_prefix = f.get('intro') or f.get('intro_prefix') or ''
+    if f.get('intro_prefix') and not f.get('intro'):
+        print("[gen] ⚠️ facts 里写的是 intro_prefix，已兼容读取；建议统一改为 intro")
     title_official = f.get('title_official', f.get('title', ''))
     intro = (intro_prefix + '依据：' + f.get('publisher', '') + ' ' + f.get('publish_date', '') + '《' +
              title_official + f'》原文，{brand_label}仅做排版整理，未改动原文表述。')
@@ -323,6 +325,58 @@ def cmd_gen(args):
 
 # ─────────────────────────── cover ───────────────────────────
 
+def _vision_ocr(path, timeout=180):
+    """调 macOS Vision 框架做本地 OCR（零 token，中文），返回 dict 或 None。
+    实测：2000px 高切片约 0.2-0.3s/段；整张 9000px+ 长图会降采样漏检，必须先按段切。"""
+    swift = '/usr/bin/swift'
+    script = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'vision_ocr.swift')
+    if not (os.path.exists(swift) and os.path.exists(script)):
+        return None
+    r = sh(f"'{swift}' '{script}' '{path}' --json")
+    if r.returncode != 0:
+        return None
+    try:
+        return json.loads(r.stdout)
+    except Exception:
+        return None
+
+
+def _auto_cover_box(im):
+    """用 OCR 定位「从顶部起的连续标题块」底部像素，给出不打字脸的裁切高度。
+    判定不靠绝对坐标，而靠行间距断档：从最顶行往下走，遇到与上一行间距 > 2.2 倍行高
+    就判定标题块结束（海报标题块之后通常是插图或大留白），避免抓到插图上误检的招牌字。
+    识别失败（无 swift / 无文本）返回 None，调用方回落默认 0~460。"""
+    probe_h = min(1600, im.height)
+    tmp = os.path.join('/tmp', f'_cover_probe_{os.getpid()}.png')
+    try:
+        im.crop((0, 0, im.width, probe_h)).save(tmp)
+        ocr = _vision_ocr(tmp)
+    finally:
+        if os.path.exists(tmp):
+            os.remove(tmp)
+    if not ocr or not ocr.get('lines'):
+        return None
+
+    rows = []
+    for l in ocr['lines']:
+        top = (1 - l['y1']) * probe_h
+        bot = (1 - l['y0']) * probe_h
+        rows.append((top, bot, bot - top, l.get('text', '')))
+    rows.sort(key=lambda r: r[0])          # 上 → 下
+    if not rows:
+        return None
+
+    block_bottom = rows[0][1]
+    for prev, cur in zip(rows, rows[1:]):
+        gap = cur[0] - prev[1]
+        if gap > max(prev[2] * 2.2, 40):   # 断档：标题块结束
+            break
+        block_bottom = max(block_bottom, cur[1])
+
+    h = block_bottom + int(probe_h * 0.05)  # 留 5% 呼吸位（宁可多留，不可切字）
+    return max(260, min(int(h), im.height))
+
+
 def cmd_cover(args):
     import glob
     from PIL import Image
@@ -359,7 +413,33 @@ def cmd_cover(args):
         line_dir = line_dir or '.'
 
     im = Image.open(src).convert('RGB')
-    crop = im.crop((0, args.top, im.width, args.bottom)).resize((900, 383), Image.LANCZOS)
+    if getattr(args, 'auto', False):
+        # 自动模式：OCR 定位标题块 → 装得下就直裁，装不下就「完整标题 + 模糊背景」合成
+        auto_h = _auto_cover_box(im)
+        if auto_h is None:
+            print('[cover] ⚠️ 自动定位失败，回落固定裁切 0~460')
+            auto_h = min(460, im.height)
+        target = (900, 383)
+        ratio = target[0] / target[1]
+        block = im.crop((0, 0, im.width, auto_h))
+        want_h = round(block.width / ratio)
+        if block.height <= want_h:
+            # 标题块比目标比例更扁：直接裁（不压扁）
+            crop = block.resize(target, Image.LANCZOS)
+            print(f'[cover] 自动定位 H={auto_h}px → 直裁')
+        else:
+            # 标题块比目标比例更方：模糊拉伸铺底 + 居中贴实图，保证标题零裁切
+            from PIL import ImageFilter, ImageEnhance
+            bg = block.resize(target, Image.LANCZOS).filter(ImageFilter.GaussianBlur(60))
+            bg = ImageEnhance.Brightness(bg).enhance(1.08)
+            fw = round(block.width * target[1] / block.height)
+            fg = block.resize((fw, target[1]), Image.LANCZOS)
+            canvas = bg.copy()
+            canvas.paste(fg, ((target[0] - fw) // 2, 0))
+            crop = canvas
+            print(f'[cover] 自动定位 H={auto_h}px → 模糊铺底({fw}px 居中实图)')
+    else:
+        crop = im.crop((0, args.top, im.width, args.bottom)).resize((900, 383), Image.LANCZOS)
     if args.out:
         out = args.out
     else:
@@ -369,6 +449,80 @@ def cmd_cover(args):
         out = os.path.join(target_dir, f"{prefix}{slug}-长图转排版-封面.png")
     crop.save(out)
     print(f'[cover] OK {out} ({crop.size[0]}x{crop.size[1]} ← 源 {src} y{args.top}~{args.bottom})')
+
+# ─────────────────────────── reslice ───────────────────────────
+
+def cmd_reslice(args):
+    """把 fetch 产出的「2000px + 60px 重叠」切片重切为无重叠发布切片（JPEG q86）。
+
+    背景：fetch 的 images/segs/*.png 为 AI 读图防断行留了 60px 重叠，
+    直接拿去 stack_b64_imgs 发布，接缝处会重复约 20px 内容（375px 视图）。
+    发布前必须跑本命令，产物落 images/publish/。
+    """
+    from PIL import Image
+    work = os.path.abspath(args.dir)
+    meta = json.load(open(os.path.join(work, 'meta.json'), encoding='utf-8'))
+    longs = [c for c in meta.get('images', []) if c.get('is_long')]
+    if args.parent:
+        longs = [c for c in meta.get('images', []) if c.get('idx') == args.parent] or longs
+    if not longs:
+        sys.exit('[reslice] 该工作目录无长图，无需重切')
+    parent = longs[0]
+    im = Image.open(parent['path']).convert('RGB')
+    out_dir = os.path.join(work, 'images', 'publish')
+    os.makedirs(out_dir, exist_ok=True)
+    y, paths = 0, []
+    while y < im.height:
+        bot = min(y + args.step, im.height)
+        p = os.path.join(out_dir, f'seg_{len(paths) + 1:02d}.jpg')
+        im.crop((0, y, im.width, bot)).save(p, 'JPEG', quality=args.quality, optimize=True, progressive=True)
+        print(f'  {os.path.basename(p)}  y{y}-{bot}  {round(os.path.getsize(p) / 1024)}KB')
+        paths.append(p)
+        y = bot
+    print(f'[reslice] {im.size[0]}x{im.size[1]} → {len(paths)} 段无重叠切片 → {out_dir}')
+
+    if args.facts:
+        f = json.load(open(args.facts, encoding='utf-8'))
+        # 只丢旧切片（images/segs/ 与 images/publish/），保留二维码卡片等附加图
+        def _is_slice(pth):
+            ap = os.path.abspath(pth)
+            return os.path.join(work, 'images', 'segs') in ap or os.path.join(work, 'images', 'publish') in ap
+        keep = [p for p in f.get('stack_b64_imgs', []) if not _is_slice(p)]
+        f['stack_b64_imgs'] = paths + keep
+        json.dump(f, open(args.facts, 'w', encoding='utf-8'), ensure_ascii=False, indent=2)
+        print(f"[reslice] facts 已更新：{len(paths)} 段切片 + {len(keep)} 张附加图")
+
+
+# ─────────────────────────── preview ───────────────────────────
+
+def cmd_preview(args):
+    """一次渲染 → 按 step 像素等分成 N 张图，替代「临时写 playwright 脚本 + 反复截图」。
+    默认 375 宽 @2x，等分 2400px，落 /tmp/preview_*.png"""
+    from playwright.sync_api import sync_playwright
+    from PIL import Image
+    html = os.path.abspath(args.html)
+    outdir = args.outdir
+    os.makedirs(outdir, exist_ok=True)
+    full = os.path.join(outdir, '_preview_full.png')
+    with sync_playwright() as pw:
+        b = pw.chromium.launch()
+        pg = b.new_page(viewport={'width': args.width, 'height': 900}, device_scale_factor=2)
+        pg.goto('file://' + html)
+        pg.wait_for_timeout(int(args.wait * 1000))
+        h = pg.evaluate('document.body.scrollHeight')
+        pg.screenshot(path=full, full_page=True)
+        b.close()
+    im = Image.open(full)
+    out, n = [], 0
+    for y in range(0, im.size[1], args.step):
+        n += 1
+        o = os.path.join(outdir, f'preview_{n}.png')
+        im.crop((0, y, im.size[0], min(y + args.step, im.size[1]))).save(o)
+        out.append(o)
+    print(f'[preview] 全页 {args.width}x{h} → {n} 张（每张 {args.step}px 高）')
+    for o in out:
+        print('  ', o)
+
 
 # ─────────────────────────── push ───────────────────────────
 
@@ -390,6 +544,10 @@ def cmd_push(args):
     cmd = (f"{sys.executable} '{publish_script}' --profile '{profile}' "
            f"--html '{htmlp}' --cover '{coverp}' --source-url '{f['source_url']}' "
            f"--digest '{f['digest']}'")
+    umid = getattr(args, 'update_media_id', None)
+    if umid:
+        cmd += f" --update-media-id '{umid}'"
+        print(f"[push] ♻️ 原位更新历史草稿: {umid}")
     r = subprocess.run(cmd, shell=True)
     sys.exit(r.returncode)
 
@@ -476,8 +634,23 @@ def main():
     p.add_argument('--slug', default='tmp')
     p.add_argument('--line-dir', dest='line_dir', default=None, help='落点目录（默认当前目录 . 或自动取自 facts.json）')
     p.add_argument('--out', default=None)
+    p.add_argument('--auto', action='store_true', help='OCR 自动定位标题块，避免切字（推荐）')
     p.set_defaults(fn=cmd_cover)
-    p = sub.add_parser('push'); p.add_argument('facts'); p.add_argument('--profile', default=None, help='公众号配置文件名（默认从 facts 读取或 fallback 到 mashang）'); p.set_defaults(fn=cmd_push)
+    p = sub.add_parser('reslice', help='把 fetch 的重叠切片重切为无重叠发布切片（发布前必跑）')
+    p.add_argument('dir', help='fetch 的 --dir 工作目录')
+    p.add_argument('--facts', default=None, help='可选：直接回写 facts.json 的 stack_b64_imgs')
+    p.add_argument('--parent', type=int, default=None, help='指定长图 idx（默认自动取第一张长图）')
+    p.add_argument('--step', type=int, default=2000)
+    p.add_argument('--quality', type=int, default=86)
+    p.set_defaults(fn=cmd_reslice)
+    p = sub.add_parser('preview', help='渲染 HTML 并等分成若干预览图（替代临时截图脚本）')
+    p.add_argument('html')
+    p.add_argument('--step', type=int, default=2400, help='每张预览图高度（px，含 2x 缩放前的逻辑像素）')
+    p.add_argument('--outdir', default='/tmp', help='输出目录（默认 /tmp）')
+    p.add_argument('--width', type=int, default=375)
+    p.add_argument('--wait', type=float, default=1.5, help='渲染后等待秒数')
+    p.set_defaults(fn=cmd_preview)
+    p = sub.add_parser('push'); p.add_argument('facts'); p.add_argument('--profile', default=None, help='公众号配置文件名（默认从 facts 读取或 fallback 到 mashang）'); p.add_argument('--update-media-id', dest='update_media_id', default=None, help='原地更新指定历史草稿（重排/改错不新增草稿）'); p.set_defaults(fn=cmd_push)
     p = sub.add_parser('postprocess'); p.add_argument('facts'); p.add_argument('--log', default=None, help='可选：追加记录发布日志的文件路径'); p.set_defaults(fn=cmd_postprocess)
     ap.add_argument('--facts-help', action='store_true')
     args = ap.parse_args()

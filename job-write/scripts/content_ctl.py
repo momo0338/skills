@@ -24,7 +24,10 @@ import sys
 from datetime import datetime
 
 DB = os.environ.get('PIPELINE_DB',
-                    '/Users/zhugx/codeup/obsidian/03-工作记录/码上职业/工具/内容流水线.db')
+                    '/Users/zhugx/src/mashangzhiye/data/内容流水线.db')
+# 2026-11-04 修正：原默认值 码上职业/工具/内容流水线.db 该目录已不存在，
+# 导致每次 push 后 content_ctl 都报 unable to open database file（静默失败）。
+# 真源见 AGENTS.md：src/mashangzhiye/data/内容流水线.db
 WORKSPACE = os.environ.get('PIPELINE_WS',
                            '/Users/zhugx/codeup/obsidian/03-工作记录/码上职业')
 VIEW_JSON = os.path.join(WORKSPACE, '内容状态视图.json')

@@ -17,6 +17,7 @@
 """
 import argparse
 import json
+import os
 import re
 import sqlite3
 import sys
@@ -24,7 +25,9 @@ import time
 import urllib.request
 from datetime import datetime
 
-DB = '/Users/zhugx/codeup/obsidian/03-工作记录/码上职业/工具/内容流水线.db'
+DB = os.environ.get('PIPELINE_DB',
+                    '/Users/zhugx/src/mashangzhiye/data/内容流水线.db')
+# 2026-11-04 修正：原指向 码上职业/工具/内容流水线.db（目录已不存在）
 UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X)'
 NOW = lambda: datetime.now().isoformat(timespec='seconds')
 

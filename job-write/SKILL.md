@@ -10,9 +10,10 @@ metadata:
 
 # Job-Write：招聘 / 校招 / 招考类图文专项引擎 (v1.3 · 分层加载)
 
-> 🆕 **v1.3（2026-09-30）· 数据源解耦**：投料单**不再依赖任何外部项目**——数据全部取自本工作区
-> （总表 `招聘信息`/`公司信息` ＋ `巡检记录/*监测.md` 在架分层 ＋ 顶层 **`内容状态.json`** 进度真源）；
-> 新增 `scripts/workspace_source.py` 与 `--state-init/--state-audit/--state-push-xlsx/--mark/--ready-loose` 命令族。
+> 🆕 **v1.4（2026-11-04）· 数据源统一为流水线 db**：投料单改读
+> `/Users/zhugx/src/mashangzhiye/data/内容流水线.db`（`units` + `announce_pool` + `drafts` ∪ `articles` + `monitor_state`）。
+> 🛑 总表 xlsx / `内容状态.json` / `巡检记录/*监测.md` 三套本地事实源已**全部废弃**；
+> `workspace_source.py` 已改为只读 db，`--state-init`/`--mark`/`--state-push-xlsx` 停用，状态以 db 为准。
 >
 > 🎯 **发布出口：本技能产出的全部内容固定推送到「码上职业」公众号**（`--profile mashang`），
 > **不推**满爸爱生活。账号机制详见 `mp-publish` §一.B。推送前必核对日志首行 `目标账号: mashang`。
@@ -38,7 +39,7 @@ metadata:
 
 | 脚本 | 用途 |
 |---|---|
-| `/Users/zhugx/src/skills/job-write/scripts/emit_briefing.py` | **写稿前先跑** —— 读本工作区三源（总表 xlsx + 巡检报告 + `内容状态.json`）出硬信息投料单／`--ready` 选活（含草稿箱对账）／`--state-init`·`--state-audit`·`--state-push-xlsx`·`--mark` 状态维护 |
+| `/Users/zhugx/src/skills/job-write/scripts/emit_briefing.py` | **写稿前先跑** —— 只读流水线 db 出硬信息投料单／`--ready` 选活（含草稿箱对账）／`--state-audit` 只读对账；状态由 db 维护，⛔ 不再写本地状态文件 |
 | `/Users/zhugx/src/skills/job-write/scripts/verify_draft.py` | **成稿后必跑** —— 三件套门禁质检 |
 | `/Users/zhugx/src/skills/job-write/scripts/build_cover.py` | 封面生成（母版 + logo 胶囊） |
 
@@ -48,7 +49,7 @@ metadata:
 
 ## 一、概述与定位（与 guide-write 的区别）
 
-> **解耦原则**：本技能聚焦招聘类文章的「写什么、怎么结构、怎么排雷、怎么吃长尾、怎么推」。招聘主数据只来自本工作区 `单位与招聘信息总表.xlsx` + `巡检记录/*监测.md` + `内容状态.json`；⛔ **不依赖任何外部项目/数据库**（原外部数据中枢 2026-09-30 已废弃解耦，禁止直连其数据库或解析其内部 CLI）。排版样式统一遵循 `mp-html` 原生方言，草稿推送交由 `mp-publish` 全链路执行（**账号固定 `mashang` = 码上职业**）。
+> **解耦原则**：本技能聚焦招聘类文章的「写什么、怎么结构、怎么排雷、怎么吃长尾、怎么推」。**硬信息只认官方公告原文**（人数/截止/岗位/学历，缺口写「公告未披露」）；写稿进度与判重真源＝`/Users/zhugx/src/mashangzhiye/data/内容流水线.db`（`drafts` ∪ `articles`）。🛑 **2026-11-04 朱总裁定：`单位与招聘信息总表.xlsx` 及「总表回填／巡检台账」机制已完全废弃**，不再作为数据源、不再回填、不再报备。排版样式统一遵循 `mp-html` 原生方言，草稿推送交由 `mp-publish` 全链路执行（**账号固定 `mashang` = 码上职业**）。
 
 | 维度 | guide-write（场馆攻略） | **job-write（招聘/校招）** |
 |---|---|---|
@@ -128,27 +129,23 @@ python3 /Users/zhugx/src/skills/job-write/scripts/emit_briefing.py --ready
 #    换账号：--profile <别名>（默认 mashang）；确认候选确未发才用 --include-suspect 并回主名单
 #    换工作区：--workspace DIR（默认 ~/codeup/obsidian/03-工作记录/码上职业，或环境变量 JOB_WORKSPACE）
 
-# ① 出投料单（机器搬本工作区总表台账 + 巡检报告在架条目 + 标缺口，禁止让模型自己去找硬信息）
+# ① 出投料单（机器读流水线 db 的 units/announce_pool + 在架条目，标缺口；禁止让模型自己找硬信息）
 python3 /Users/zhugx/src/skills/job-write/scripts/emit_briefing.py "<单位关键词>"
 
-# ② 投料单出现 ⛔ 缺口 → 先回官方补，补完**把核实结论回写 `内容状态.json`** 再动笔。
+# ② 投料单出现 ⛔ 缺口 → 先回官方公告原文补，把核实结论写进稿件再动笔。
 #    截止日为空/软词/哨兵日/历史「发布日 +30 天」占位，脚本均判「暂不可动笔」。
+#    ⛔ 状态只读，不再回写 内容状态.json，也不再 --mark 回填。
 
-# ③ 状态维护（写稿进度唯一真源＝顶层 `内容状态.json`）
-python3 …/emit_briefing.py --state-init [--force]   # 从总表与各线目录初始化状态文件
-python3 …/emit_briefing.py --state-audit           # 四方对账：状态文件 ↔ 总表两列 ↔ 各线 待发布/已发布 ↔ 台账登记
-python3 …/emit_briefing.py --state-push-xlsx       # 把状态文件单向回推总表两列（改 xlsx 前强制备份 /tmp）
-python3 …/emit_briefing.py --mark "<单位>" --to written|draft|published --facts KEY=VALUE --by 谁
-python3 …/emit_briefing.py --state-import-draftbox            # 草稿箱 → 状态文件（预演；加 --apply 落盘）
+# ③ 只读对账（真源＝db 的 drafts ∪ articles）
+python3 …/emit_briefing.py --state-audit           # db 进度 ↔ announce_pool 批次 ↔ 各线稿件目录
+python3 …/emit_briefing.py --state-import-draftbox # 草稿箱标题与 db 进度比对（只读预演）
 ```
 
-**为什么 ⓪ 不能跳（2026-09-21 立，2026-09-25 修正，2026-09-30 换真源）**：写稿进度只看本工作区顶层
-`内容状态.json` 的四态 —— `unwritten`（库内未排）/ `written`（本地已成稿）/
-`draft`（**已推微信草稿箱**，2026-09-30 新增档）/ `published`（线上已发布）。
-🔴 **「库内已成稿」既不等于已推微信草稿箱，更不等于已发布**。推完草稿箱、群发之后若没有
-`--mark` 回填，状态仍停在 `written`，照它选活就会重复劳动。
-故 `--ready` 内置对账，按状态文件 + 草稿箱标题匹配排除已完成批次：
-标题精确 → 状态文件可检索正文含标题 → 批次标题主体互含 → 单位主体相似 → 人工维护的简称/全称别名。
+**为什么 ⓪ 不能跳（2026-09-21 立，2026-11-04 换 db 真源）**：写稿进度只看流水线 db 的
+`drafts` ∪ `articles` —— 判真发表只认 `articles.published_title`，`drafts` 表示曾推草稿箱。
+🔴 **`status='published'` 不等于真发表、`status='draft'` 不等于草稿还在**，判活须回读微信草稿箱。
+故 `--ready` 内置对账，按 db 进度 + 草稿箱标题匹配排除已完成批次：
+标题精确 → db 进度表标题互含 → 批次标题主体互含 → 单位主体相似 → 人工维护的简称/全称别名。
 **正文多批次、标题多批次以及后三级弱匹配都只作人工核验候选，禁止自动回填或宣称确定失同步**；
 审计同时给原始草稿行数、唯一标题数、展示映射批次数和完整排除批次数，避免重复标题或同品牌旧批次
 放大统计。歧义命中仅优先展示“已发布 > 库内已成稿 > 库内未排”的记录，但 `--ready` 仍排除全部可能批次。
@@ -156,12 +153,11 @@ python3 …/emit_briefing.py --state-import-draftbox            # 草稿箱 → 
 同一网申入口的多条明细行（如 60 家农商行法人共用一个 51job 专题）会合并为 1 个写作单位。
 
 **截止日占位红线**：历史导入曾把未核实截止批量写成 `publish_date + 30 天`。
-脚本会降级此类日期，必须回官方核实后**把核实结论回写 `内容状态.json`**
-（`emit_briefing.py --mark "<单位>" --facts deadline=YYYY-MM-DD --by 谁` 留痕，
-并在总表 `招聘信息` sheet 的「截止日期」列改准，⚠️ 改 xlsx 前先 `/tmp` 备份）；
+脚本会降级此类日期，必须回官方公告原文核实后**把结论写进稿件**；
+⛔ db 台账只作线索、状态只读，不再回写 `内容状态.json`、不再改 xlsx 列；
 流程公告、导航页、长期招聘门户不应因有日期就进入普通倒计时选题池。
 
-🔴🔴 **`[miss] 本地台账无匹配批次` = 高危信号，不是"查不到而已"（2026-09-28 中国联通稿实测立规）**：
+🔴🔴 **`[miss] db 台账无匹配批次` = 高危信号，不是"查不到而已"（2026-09-28 中国联通稿实测立规）**：
 `emit_briefing.py "<单位关键词>"` 取不到台账行时有**两种输出，含义完全不同**：
 - `[miss] 本地台账与巡检报告都没有「<单位>」` —— 该单位**本工作区三源里都没有痕迹**。
   此时手上的稿子极可能是**绕过投料单、模型自拟硬信息写出来的**——不是"信息待补"，是**信息已假**。

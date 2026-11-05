@@ -4,6 +4,8 @@
 > **何时读**：要找公告源、实拉岗位、逆向报名站接口、跑巡检时
 > 读完回到 SKILL.md 继续；脚本路径均已写成绝对路径，与当前工作目录无关。
 > 返回：`job-write/SKILL.md`
+>
+> 🛑 **2026-11-04 朱总裁定：三套本地事实源全部废弃，统一改读流水线 db。** `workspace_source.py` 已重写为只读 db（`units`/`unit_sources`/`announce_pool`/`drafts`∪`articles`/`monitor_state`）；本文件涉及 xlsx、`内容状态.json`、巡检 md 的段落均为历史记录、⛔ 不再执行。硬信息只认官方公告原文。
 
 ---
 
@@ -11,8 +13,8 @@
 
 ### 1.1 源 A（**素材类**线索）：ima 知识库取公众号原文（批量场景）
 
-> 📌 **ima 只是"素材类"线索来源，不是本技能的主数据源。** 单位名录/批次/截止/状态
-> 一律以本工作区 `单位与招聘信息总表.xlsx` + `巡检记录/*监测.md` + `内容状态.json` 为准（见 §二）。
+> 📌 **ima 只是"素材类"线索来源，不是本技能的主数据源。** 硬信息一律以**官方公告原文**为准；
+> 写稿进度与判重真源＝流水线 db `drafts` ∪ `articles`（`单位与招聘信息总表.xlsx` 已废弃，见文首声明）。
 > 本节内容与对外部项目的依赖无关，讲的是"怎么把公众号原文捞成素材"。
 
 ```bash
@@ -120,7 +122,7 @@ const txt = await js(String.raw`(() => document.body.innerText.replace(/\n{2,}/g
   | ⚠️ **legacy TLS** | 报 `UNSAFE_LEGACY_RENEGOTIATION` / SSL 握手失败 | 换 `/usr/bin/curl`（LibreSSL）或 `--ciphers 'DEFAULT:@SECLEVEL=1'` | 农行 `career.abchina.com.cn`、交行 `job.bankcomm.com` |
   | ◐ **纯 SPA / 有盾** | 前端 200 但无内容；或 412/403 | `ego-browser` 渲染后读 DOM 或同源 fetch | 工行 `job.icbc.com.cn`、建行 `job.ccb.com`、南京银行 `job.njcb.com.cn`、江苏银行（412） |
 
-  > **逐家的入口 URL 不写在这里**——直接读本工作区顶层 `单位与招聘信息总表.xlsx` 的 `公司信息` sheet（`官网`／`招聘官网` 两列）与 `招聘信息` sheet（`网申入口`／`官方公告链接` 两列）取稳定业务对象；需要补录时**直接在该 xlsx 里加行**。内容技能不读取任何外部数据库字段或表结构。接口逆向见**附录 C**。
+  > **逐家的入口 URL 不写在这里**——🛑 `单位与招聘信息总表.xlsx` 及「在 xlsx 里加行补录」机制已完全废弃；单位名录与招聘官网入口改以流水线 db `units` / `unit_sources`（及官方公告原文）为准，⛔ 不再向任何 xlsx 加行。接口逆向见**附录 C**。
 - ⛔ **来源黑名单（2026-09-16 实证，银行专题）**：`yinhangzhaopin.com`《国有六大行2027秋招备考时间线》**六大行截止日期 6/6 全错**（中行写 10-10/官方 10-09、交行写 10-12/官方 10-18、邮储写 9-30/官方 10-07、工 10-09/官方 10-08、农 10-09/官方 10-08、建 10-10/官方 10-08）→ 该站一切日期/人数不用，其"6.4 万人缩招"等行业数据引用一律降级为"媒体估算"。上岸鸭/高顿/中公推算页同理，只当线索。
 - **银行公告直抓可行性**（09-16 实测）：中行官网公告页 ✅ `boc.cn/aboutboc/bi4/` 可 curl 直抓；邮储官网 ✅；农行 `career.abchina.com.cn` / 交行 `job.bankcomm.com` ❌ SSL 证书链/旧重协商屏障 → 改走"高校就业网镜像 + 官方号长海报 img alt + 多源交叉"钉死（三路原文一致即可升 ✅）。`mp.weixin.qq.com` 官方公告 WebFetch 只出标题（JS 渲染），opencli download 需浏览器扩展在跑，不稳 → 优先搜镜像站。
 - ⭐ **银行「分行级公告」的取数链路（2026-09-17 中行江苏实证，最完整的一条）**：总行全球公告 ≠ 分行公告，**真正的岗位矩阵与分行专属填报路径只在分行公告里**，而分行公告**官网上往往没有**。三步打通：
@@ -178,53 +180,55 @@ const txt = await js(String.raw`(() => document.body.innerText.replace(/\n{2,}/g
 
 ## 二、信息源清单与每日巡检（**本工作区自有**）
 
-招聘是**强时效**品类，靠人工想起来去搜必然漏。本工作区在 `巡检记录/*.py` 里配了**零依赖巡检管线**，每天跑出报告回答"今天新出了哪些招聘信息"。
+招聘是**强时效**品类，靠人工想起来去搜必然漏。采集链路每天把新公告写入流水线 db，投料单直接读 `announce_pool` 的在架条目回答"今天新出了哪些招聘信息"。
 
 > 2026-09-30 起**彻底解耦**：巡检脚本、数据源、报告、状态文件**全部在本工作区内**。
 > 原外部数据中枢（2026-09-30 已废弃解耦）与本技能再无任何关系 —— ⛔ 不引用、不回落、不依赖。
 >
-> **本工作区的三个事实源**（⛔ 不依赖任何外部项目/数据库）：
+> **唯一真源＝流水线 db**（`/Users/zhugx/src/mashangzhiye/data/内容流水线.db`）：
 >
-> | 事实源 | 位置 | 用途 |
+> | 事实源 | 表 | 用途 |
 > |---|---|---|
-> | **单位总表** | 顶层 `单位与招聘信息总表.xlsx` | `招聘信息` sheet = 在招批次台账（单位/类别/标题/地区/发布日/截止日/网申入口/公告链接/人数/学历/备注…）；`公司信息` sheet = 单位档案（名称/全称/性质/城市/官网/招聘官网/行业） |
-> | **巡检报告** | `巡检记录/YYYY-MM-DD-*-监测.md` | 四线（机关单位/电力电网/铁路/银行）在架公告分层：**有效 / 长期 / 待核**（已过期单列不混入主口径） |
-> | **内容状态** | 顶层 `内容状态.json` | 「写没写过 / 推没推草稿箱 / 发没发 / 归档在哪」的**唯一真源**；状态机 `unwritten → written → draft → published` |
+> | **单位档案** | `units` / `unit_sources` / `sources` | 单位全称、性质、城市、官网、招聘官网入口 |
+> | **批次台账** | `announce_pool` | 在招公告（标题 / 发布日 / 截止 / 公告链接 / 线别） |
+> | **写稿进度** | `drafts` ∪ `articles` | 判重与进度唯一真源（真发表只认 `articles.published_title`） |
+> | **在架分层** | `announce_pool` + `monitor_state` | 有效 / 长期 / 待核（替代巡检 md） |
 >
-> **本技能只做一件事**：读上述三个本地事实源取数 + 出投料单。
+> 🛑 `单位与招聘信息总表.xlsx`、`内容状态.json`、`巡检记录/*监测.md` 已全部废弃：
+> `workspace_source.py` 只读 db，不再读、不再写任何本地事实源文件。
+>
+> **本技能只做一件事**：从 db 取数 + 出投料单。
 > ```bash
 > # 选活：本地未成稿、草稿箱未命中的候选名单（严格档）
 > python3 /Users/zhugx/src/skills/job-write/scripts/emit_briefing.py --ready
-> # 出投料单（读总表 + 巡检报告）
+> # 出投料单（读 announce_pool + units + db 在架条目）
 > python3 /Users/zhugx/src/skills/job-write/scripts/emit_briefing.py "<单位关键词>"
-> # 状态维护：初始化 / 四方对账 / 状态文件回推总表 / 推进并回填
-> python3 …/emit_briefing.py --state-init [--force]
+> # 只读对账（状态由 db 维护，⛔ --state-init / --mark / --state-push-xlsx 已停用）
 > python3 …/emit_briefing.py --state-audit
-> python3 …/emit_briefing.py --state-push-xlsx
-> python3 …/emit_briefing.py --mark "<单位>" --to written|draft|published --facts KEY=VALUE --by 谁
 > ```
-> **加源、调巡检策略、改源健康口径、跑探活排障**＝直接改本工作区 `巡检记录/*.py` 与顶层
-> 总表 xlsx，**没有外部项目可回**（总表 xlsx git 未跟踪，改前必须 `/tmp` 备份）。
+> **加源、调巡检策略、改源健康口径**＝由采集链路写入 db 的 `sources`/`unit_sources`/`announce_pool`，
+> ⛔ 不再向任何 xlsx 加行、不再有 `/tmp` 备份流程。
+> 🔴 找不到工作区/流水线 db 时脚本**显式报错**，绝不降级成"没有可写单位"（防凭空写稿）。
 > 🔴 找不到工作区/状态文件时脚本**显式报错**，绝不降级成"没有可写单位"（防凭空写稿）。
 
 
 ### 2.1 双通道设计（都是免登录；**由本工作区巡检脚本执行**）
 
-> 以下是**机制说明**，用于判断线索可信度与时效性；由 `码上职业/巡检记录/*.py` 实现。
+> 以下是**机制说明**，用于判断线索可信度与时效性；由采集链路实现，结果落流水线 db。
 
 | 通道 | 手段 | 覆盖 | 速度 |
 |---|---|---|---|
 | 公众号通道 | HTTP 直抓搜狗微信搜索页并解析结果块（备选：浏览器搜索接口） | 全网公众号里的招聘文章，**能发现知识库里没有的新公告** | 秒级 |
 | 官网通道 | **三层管线**：①列表扫描（政府专栏/企业招聘站）→ ②招考适配器（直拉**岗位数组**）→ ③哨兵（SPA hash 变更告警） | 官方一手公告 + 岗位级增量 + SPA 变更探测 | 随源数而定 |
 
-- **去重靠快照**：见过的标题集合由本工作区 `巡检记录/snapshots/` 内的源快照维护，报告只报**本次新增**（对比上次快照）→ 每天跑、隔天跑都不重复刷屏。
+- **去重靠快照**：见过的标题集合由采集链路写入 db（`announce_pool` / `monitor_state`），投料单直接读 db 在架条目 → 每天跑、隔天跑都不重复刷屏。
 - **时效过滤必开**：公众号搜索按**相关度**排序，不加过滤会把陈旧文章当成新信息（实测「南京 校招」10 条命中里时效内 0 条，全是旧文）。
 - **搜狗结果里的链接是跳转链**（有时效/反爬，正文解析不可靠）→ 只作"发现"，原文链接另行溯源。
 
-### 2.2 选源原则（配置驱动，源数据在**本工作区总表**内）
+### 2.2 选源原则（配置驱动，源数据在**流水线 db** 内）
 
-- **源清单唯一真源＝顶层 `单位与招聘信息总表.xlsx`**：各线脚本读该 xlsx 对应 sheet 的「招聘官网」列（如 `公司信息` sheet 第 3 列性质=机关单位、`电网` sheet、`铁路` sheet、`银行` sheet G 列），去重后逐个监测。**加源 = 在总表加一行 + 重跑对应巡检脚本**，⛔ 不涉及任何外部项目。
-- **四线分流**：`gov_recruit_monitor.py`（机关单位）／`power_recruit_monitor.py`（电力电网）／`rail_recruit_monitor.py`（铁路）／`bank_recruit_monitor.py`（银行）四线监控，另有 `build_gov_index.py` 与 2 个审计脚本 —— 合计 **7 个脚本**，全部在 `码上职业/巡检记录/` 内，是本工作区资产，可改可直接跑。
+- **源清单真源＝流水线 db**（`units`/`unit_sources`/`announce_pool`）：各线按 db 中的单位与招聘官网入口去重后逐个监测。🛑 顶层 `单位与招聘信息总表.xlsx` 及「加源 = 在总表加一行」已完全废弃，⛔ 不再向 xlsx 加行、不再依赖 xlsx 巡检。
+- **四线分流**：`gov_recruit_monitor.py`（机关单位）／`power_recruit_monitor.py`（电力电网）／`rail_recruit_monitor.py`（铁路）／`bank_recruit_monitor.py`（银行）四线监控，另有 `build_gov_index.py` 与 2 个审计脚本 —— 结果统一写入流水线 db，投料单只读 db。
 - **抓取三层**：① 列表扫描（政府专栏/企业招聘站）→ ② 逐条抓文章页，提取**报名截止**并按「有效 / 长期 / 已过期 / 待核」重新分层 → ③ 噪音正则过滤（拟聘公示、取消公告、遴选、政策解读等）。SPA 空壳源在脚本内单独适配。
 - **要"招聘专栏列表页"，不要网站首页**；HIT/NOISE 正则过滤 + 排除栏目导航链接。
 - **源健康告警**：脚本在报告顶部列「⚠️ 告警」（解析出 0 条目 / HTTP 403 / 404 / 抓取异常）——防止"源坏了但报告显示无新增"的静默失效（最危险）。
@@ -267,19 +271,19 @@ const txt = await js(String.raw`(() => document.body.innerText.replace(/\n{2,}/g
 | `mp-search account` 报 `Page.goto: Page crashed` | Playwright **自带 Chromium** 在沙箱下渲染 mp.weixin.qq.com 必崩（浏览器本身能开 example.com，只微信站点崩，`--no-sandbox` 也无效） | 走系统 Chrome：`launch(channel="chrome")`，按 [系统 Chrome → 自带 Chromium] 顺序探测 |
 | urllib 抓政府网 `CERTIFICATE_VERIFY_FAILED` | 沙箱代理证书链问题（curl 正常） | 放宽 SSL 校验（只读公开页，`--verify-ssl` 可切回严格） |
 | `mp-search account` 要扫码 | 需**公众号管理员**扫码，无法无人值守 | 日常别用它；每周人工补一次号内全量列表 |
-| urllib 抓银行/企业站报 `UNSAFE_LEGACY_RENEGOTIATION` / `SSL_ERROR_SYSCALL` | TLS 指纹/旧重协商被拒（本机代理节点也会掐 TLS） | 本工作区巡检脚本 `fetch()` 已内置 **`/usr/bin/curl`（LibreSSL）兜底**；仍失败的源直接改 `码上职业/巡检记录/*.py` 的平台适配后重跑 |
+| urllib 抓银行/企业站报 `UNSAFE_LEGACY_RENEGOTIATION` / `SSL_ERROR_SYSCALL` | TLS 指纹/旧重协商被拒（本机代理节点也会掐 TLS） | 本工作区巡检脚本 `fetch()` 已内置 **`/usr/bin/curl`（LibreSSL）兜底**；仍失败的源改采集链路的平台适配后重跑（结果落 db） |
 | `-w "%CURLCODE%{http_code}"` 解析恒为 0 | curl 把 `%CURLCODE%` 输出成 `%CURLCODE200`（**无尾 %**） | rfind 标记不要带尾 `%`（探活脚本已修） |
-| 智联按届子站（`{品牌}{年份}.zhaopin.com`）403 | 届次站带反爬且过期即废 | 勿硬爬：公告首发看「江苏国资」公众号，拿到新址后**回本工作区总表 xlsx 更新「招聘官网」列并重跑巡检** |
+| 智联按届子站（`{品牌}{年份}.zhaopin.com`）403 | 届次站带反爬且过期即废 | 勿硬爬：公告首发看「江苏国资」公众号，拿到新址后**由采集链路更新 db 的 `sources`/`unit_sources` 并重跑采集** |
 
-### 2.5 落地位置（**全部在本工作区内**，⛔ 无外部项目）
+### 2.5 落地位置（唯一真源＝流水线 db）
 
-- **巡检脚本**：`码上职业/巡检记录/*.py` —— **7 个**（gov / power / rail / bank 四线监控 + `build_gov_index.py` + 2 个审计脚本），是本工作区资产，可改可直接跑。
-- **数据源**：工作区顶层 `单位与招聘信息总表.xlsx` —— `招聘信息` sheet = 在招批次台账；`公司信息` sheet 与各行业 sheet = 单位名录 + 招聘官网入口。⚠️ 该 xlsx **git 未跟踪，改前必须 `/tmp` 全文件备份**。
-- **巡检报告**：`码上职业/巡检记录/YYYY-MM-DD-*-监测.md`（机关单位 / 电力电网 / 铁路 / 银行四线），源快照落 `码上职业/巡检记录/snapshots/`。
-- **内容状态**：工作区顶层 `内容状态.json` —— 「写没写过 / 推没推草稿箱 / 发没发 / 归档在哪」的**唯一真源**；由 `emit_briefing.py --state-init / --state-audit / --state-push-xlsx / --mark` 维护。
-- ⛔ 旧入口 `00-信息源清单与每日巡检.md` / `01-官方站点源总表.md` 与 `工具/sources.yaml`、`工具/probe_sources.py` **已于 2026-09-21 废弃删除**。
-- 🔴 找不到工作区或 `内容状态.json` 时脚本**显式报错**，绝不降级成"没有可写单位"。
-- ⚠️ 当前**无** WorkBuddy 定时任务跑巡检 → 按需手动触发：`cd 码上职业/巡检记录 && python3 gov_recruit_monitor.py`（power / rail / bank 同理）。（数据复盘的 09:40 定时任务已于 2026-09-24 核查确认同样不存在，见 `mp-ops/references/analytics-mashang.md` §八）
+- **真源库**：`/Users/zhugx/src/mashangzhiye/data/内容流水线.db` —— `units`/`unit_sources`/`sources`（单位与招聘官网入口）、`announce_pool`（公告池）、`drafts` ∪ `articles`（写稿进度与判重）、`monitor_state`（巡检状态）。
+- **适配层**：`job-write/scripts/workspace_source.py` —— 只读 db，把 `announce_pool` + `units` 合成 legacy row，把 `drafts`/`articles` 合成只读状态视图，`emit_briefing.py` 直接消费。
+- **状态**：只读。真发表只认 `articles.published_title`；`--state-init` / `--mark` / `--state-push-xlsx` 已停用，⛔ 不再写 `内容状态.json`、不再回推 xlsx。
+- 🛑 顶层 `单位与招聘信息总表.xlsx`、`内容状态.json`、`巡检记录/*监测.md` 已全部废弃，不再读取、不再备份、不再回填。
+- ⛔ 旧入口 `00-信息源清单与每日巡检.md` / `01-官方站点源总表.md` 与 `工具/sources.yaml`、`工具/probe_sources.py` 已于 2026-09-21 废弃删除。
+- 🔴 找不到工作区或流水线 db 时脚本**显式报错**，绝不降级成"没有可写单位"。
+
 
 ---
 
@@ -382,7 +386,7 @@ const txt = await js(String.raw`(() => document.body.innerText.replace(/\n{2,}/g
 1. **`grep -a "@@@"` 会截断多行输出** —— 只有含 `@@@` 的那一行被打印，多行 `cliLog`（如 pretty-print 的 JSON）**全部丢失**，会让你误判「接口/资源不存在」。**调试时把输出压成单行**（`JSON.stringify(x)` 不加缩进参数）。
 2. `performance.getEntriesByType('resource')` 在这类门户上**拿不到业务接口**（条数很少）→ **别在这上面耗时间，直接读 DOM**。
 3. 候选 REST 路径（`/api/portal/job/list` 等）会**返回 SPA 外壳**（状态 200、内容 = index.html）—— **200 不代表接口存在**，用「返回长度 ≈ 外壳长度」当判据。
-4. 同类入口（ATS 已核实为北森）：南瑞继保 `nrec.zhiye.com/campus`；中核华兴 `cnecc.zhiye.com`、中国核电 `cnnc.zhiye.com`（北森类入口，统一登记在本工作区顶层 `单位与招聘信息总表.xlsx` 的「招聘官网」列）。
+4. 同类入口（ATS 已核实为北森）：南瑞继保 `nrec.zhiye.com/campus`；中核华兴 `cnecc.zhiye.com`、中国核电 `cnnc.zhiye.com`（北森类入口，统一登记在流水线 db `units`/`unit_sources`；总表 xlsx 已废弃）。
 
 ---
 

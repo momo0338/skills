@@ -31,12 +31,17 @@
 """
 import argparse
 import json
+import os
 import re
 import sqlite3
 import sys
 from datetime import datetime
 
-DEFAULT_DB = '/Users/zhugx/codeup/obsidian/03-工作记录/码上职业/工具/内容流水线.db'
+DEFAULT_DB = os.environ.get('PIPELINE_DB') or '/Users/zhugx/src/mashangzhiye/data/内容流水线.db'
+# 2026-11-04 修正：原指向 码上职业/工具/内容流水线.db（该目录已不存在，导致
+# wx_pipeline 的 hook① content_ctl / hook② draft_ctl 全部报 unable to open database file，
+# drafts 表长期漏登记 ⇒ 判重失真）。真源见 AGENTS.md：src/mashangzhiye/data/内容流水线.db。
+# 需要临时切库时用环境变量 PIPELINE_DB 覆盖。
 NOW = lambda: datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
 
 # ── 人工确认的单位映射（草稿标题片段 → units.name 精确值）──────────────

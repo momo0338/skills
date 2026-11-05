@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# 2026-11-04：job-write 的数据源已改为只读流水线 db；本文件其余技能的 openpyxl 依赖与总表无关，保持不变。
 """
 Momo Skills — 自动检测本机 AI 工具并配置技能共享
 自动扫描系统中的 Claude Code、Gemini/Antigravity、Codex、WorkBuddy、Trae、OpenCode、Cursor、Windsurf、OpenClaw 等 AI 助手配置，
@@ -70,12 +71,9 @@ SKILL_DEPS = {
     "ima-skill": {},
     "job-ima": {},
     "job-write": {
-        # emit_briefing.py → workspace_source.py 延迟 import openpyxl 读「单位与招聘信息总表.xlsx」；
-        # job-write/tests 亦在模块级 import openpyxl（CI offline-tests 同装）
-        "pip": ["openpyxl"],
-        "install_cmds": {
-            "pip": "pip install openpyxl",
-        },
+        # 2026-11-04 起 workspace_source.py 只读 sqlite3 标准库；xlsx 链路及旧测试已移除，无需 openpyxl
+        "pip": [],
+        "install_cmds": {},
     },
     "mp-html": {
         # wx_dialect_check.py 硬依赖 bs4；job-write/school-write 的门禁脚本经 subprocess 调它

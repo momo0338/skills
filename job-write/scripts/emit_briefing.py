@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# 2026-11-04 起：数据源统一改为流水线 db（units / announce_pool / drafts / articles / monitor_state）；xlsx 与本地状态文件链路已彻底移除。
 # -*- coding: utf-8 -*-
 """
 emit_briefing.py —— 从「码上职业」本工作区数据源生成写稿用 BRIEFING（给 AI 的投料单）
@@ -11,18 +12,21 @@ emit_briefing.py —— 从「码上职业」本工作区数据源生成写稿�
   - 质量的角度：找不到时模型会「合理补全」——这正是 09-18 紫金稿翻车的机理
     （非官方口径 60 名 / 11-02 截止被当成事实写进正文）。
 
-所以把「确定性部分」从提示词里拿走：由脚本从**本工作区台账**搬字段 + 显式标出缺口，
+所以把「确定性部分」从提示词里拿走：由脚本从**流水线 db 台账**搬字段 + 显式标出缺口，
 模型只做「表达转换」，不做信息检索，也不被允许推测。
 
-数据源（2026-09-30 起 —— 与本工作区「自闭环」口径对齐）
-======================================================
-**全部来自工作区自有事实源**（实现见同目录 `workspace_source.py`）：
-  ① `单位与招聘信息总表.xlsx`：`招聘信息`（批次台账）+ `公司信息`（单位档案）
-  ② `巡检记录/*监测.md`：最新巡检报告的在架分层（有效 / 长期 / 待核）
-  ③ `内容状态.json`：「写没写过 / 推没推草稿箱 / 发没发」的**唯一真源**
+数据源（2026-11-04 起 —— 统一改读流水线 db）
+============================================
+**全部来自 `/Users/zhugx/src/mashangzhiye/data/内容流水线.db`**（实现见 `workspace_source.py`）：
+  ① `units` + `unit_sources`/`sources` → 单位档案与招聘官网入口
+  ② `announce_pool`                   → 在招公告批次台账
+  ③ `drafts` ∪ `articles`             → 写稿进度 / 判重唯一真源
+  ④ `monitor_state` / `announce_pool` → 在架公告分层
 
-⛔ **不依赖任何外部项目或外部数据库**（2026-09-29 朱总裁定）。
-⚠️ 台账里的硬信息**一律只是线索**：人数/截止/岗位/学历仍须回**官方公告原文**逐条核。
+🛑 2026-11-04 朱总裁定：`单位与招聘信息总表.xlsx`、`内容状态.json`、
+   `巡检记录/*监测.md` 三套工作区自有事实源**全部废弃**，不再读取、不再回填。
+⚠️ db 里的硬信息**一律只是线索**：人数/截止/岗位/学历仍须回**官方公告原文**逐条核；
+   db 没有的字段留空，⛔ 不脑补。文中「台账」一律指 db 台账，不再指 xlsx。
 
 用法
 ====
@@ -47,24 +51,22 @@ emit_briefing.py —— 从「码上职业」本工作区数据源生成写稿�
   # 指定工作区根（默认 ~/codeup/obsidian/03-工作记录/码上职业，或 JOB_WORKSPACE）
   python3 emit_briefing.py --ready --workspace "/path/to/码上职业"
 
-  # 内容状态文件（唯一真源）：初始化 / 四方对账 / 回填 / 单向回推总表
-  python3 emit_briefing.py --state-init
+  # 状态只读视图（真源＝db 的 drafts ∪ articles）：
   python3 emit_briefing.py --state-audit
-  python3 emit_briefing.py --mark "国网江苏" --to written
-  python3 emit_briefing.py --state-push-xlsx
+  # ⛔ --state-init / --mark / --state-push-xlsx 已停用：状态不再写本地文件、不再回推 xlsx
 
 字段可信度三档
 ==============
-  OK     台账/状态文件里有确定值（含具体日期/具体人数）
+  OK     db 台账里有确定值（含具体日期/具体人数）
   VAGUE  软词、哨兵日或历史「发布日 +30 天」占位 → 不得写进正文，必须回官方补
   EMPTY  为空
 
-⛔ 补数口径：缺项一律**回官方公告原文核实**，核实结论写回 `内容状态.json` 的
-facts 袋（`--mark … --facts`）或人工维护该文件；本脚本只读总表，不替你改总表。
+⛔ 补数口径：缺项一律**回官方公告原文核实**；核实结论写进稿件（facts.json / 正文），
+⛔ 不再回写任何本地状态文件，本脚本只读 db，不替你改 db。
 
 草稿箱对账（2026-09-21 加）
 ==========================
-`内容状态.json` 的 state（unwritten / written / draft / published）**只是本工作区自己记的
+db 进度视图的 state（unwritten / written / draft / published）**只是台账记的
 进度**，**不等于微信草稿箱里一定没有、更不等于线上一定没发**。所以 `--ready` 在给名单前
 **强制与草稿箱对一次账**
 （标题精确 → 稿件正文含标题 → 批次标题主体互含 → 单位主体相似 → 人工维护简称/全称别名候选）。
@@ -96,7 +98,7 @@ DEFAULT_PROFILE = "mashang"
 PLACEHOLDER_DEADLINE = "2026-12-31"
 
 # 数据源错误类型由 workspace_source 提供（`wsrc.SourceError`）：
-# 「找不到工作区 / 状态文件」必须显式报错，绝不降级成「没有批次」。
+# 「找不到工作区 / 流水线 db」必须显式报错，绝不降级成「没有批次」。
 
 # ── 主档列 → briefing 字段 的映射（左=legacy 键, 右=(briefing键, 展示名)）
 FIELD_MAP = [
@@ -190,7 +192,7 @@ def grade_gates(row):
 def draft_state(row):
     """按可证实程度返回稿件状态；绝不把「本地有正文」推断成「已推微信草稿箱」。
 
-    优先用 `内容状态.json` 的 state（unwritten / written / draft / published）；
+    优先用 db 进度视图的 state（unwritten / written / draft / published）；
     缺该字段时回退到「可发布链接 + 正文长度」自证。
     """
     state = (row.get("content_state") or "").strip()
@@ -214,14 +216,14 @@ def draft_state(row):
 # 本工作区数据源适配（2026-09-30 起：数据全部来自工作区内部，无外部项目依赖）
 # ─────────────────────────────────────────────────────────────
 def load_workspace(workspace=None):
-    """定位工作区并载入批次台账 + 巡检在架条目。
+    """定位工作区并载入 db 批次台账 + 在架条目。
 
     返回 ``(ws, state, rows, patrol_entries, patrol_reports)``。
     任何一步失败都抛 ``wsrc.SourceError`` —— **绝不返回空数据**，
     因为「取不到」被当成「没有可写单位」正是凭空写稿的起点。
     """
     ws = wsrc.discover_workspace(workspace)
-    state = wsrc.load_state(ws)          # 缺状态文件 → 报错并提示 --state-init
+    state = wsrc.load_state(ws)          # db 的只读进度视图（不可用即报错）
     rows = wsrc.load_batches(ws, state)
     entries, reports = wsrc.load_patrol(ws)
     return ws, state, rows, entries, reports
@@ -577,16 +579,16 @@ def build_briefing(row, today, patrol=None):
 
     L.append(f"# BRIEFING · {kname}")
     L.append("")
-    L.append(f"> 机器生成于 {today} ｜ 数据源：**本工作区台账**"
-             f"（总表 `招聘信息` + `内容状态.json` + 巡检报告）｜ "
+    L.append(f"> 机器生成于 {today} ｜ 数据源：**流水线 db**"
+             f"（`units` + `announce_pool` + `drafts` ∪ `articles`）｜ "
              f"**本文件不是核实结论，是核实起点**")
     L.append(f"> 批次ID `{row['cid']}` ｜ 稿件进度：**{draft_state(row)}**"
              + ("" if row.get("state_known")
-                else "（⚠️ 状态文件缺该批次，进度取自总表旧列，建议先 `--state-audit`）"))
+                else "（db 进度表无该批次记录＝未写/未推，属正常）"))
     L.append("")
 
-    # ── A. 台账登记值（线索，不是结论）
-    L.append("## A. 台账登记硬信息（⚠️ **只是线索**：写进正文前必须与官方公告逐字对照）")
+    # ── A. db 线索值（线索，不是结论）
+    L.append("## A. db 线索字段（⚠️ **只是线索**：写进正文前必须与官方公告逐字对照）")
     L.append("")
     L.append("| 字段 | 值 | 可信度 |")
     L.append("|---|---|---|")
@@ -645,8 +647,8 @@ def build_briefing(row, today, patrol=None):
             L.append("")
     L.append("**补数红线**：")
     L.append("- ⛔ 培训号/聚合站的日期与人数一律不采（已实证 yinhangzhaopin.com 六大行日期 6/6 全错）")
-    L.append("- ✅ 认官方公告原文、报名站接口、政府网附件 xlsx；补完把结论**回写 `内容状态.json` "
-             "的 facts 袋**（`--mark … --facts`），不要只写进稿件")
+    L.append("- ✅ 认官方公告原文、报名站接口、政府网附件 xlsx；补完把结论写进稿件，"
+             "⛔ 不再回写任何本地状态文件（db 进度只读）")
     L.append("- ✅ 官方没写的（薪酬/食宿/经费渠道/专业明细）→ 正文写「**公告未披露**」，不代为断言")
     L.append("")
 
@@ -664,21 +666,21 @@ def build_briefing(row, today, patrol=None):
         L.append("⚠️ 「网络报名」≠ 在线系统：须回公告 §报名办法 逐字核（09-17 无锡实证：实为邮箱投递、以收件时间为准）。")
         L.append("⚠️ `--source-url` 优先级：网申系统 > 报名邮箱所在公告页 > 官网栏目页。")
     else:
-        L.append("⛔ 台账里该批次没有任何官方入口 —— 补数前先回单位官网/主管局公告栏"
-                 "补齐网申入口与公告原文这两项，并回写台账。")
+        L.append("⛔ db 台账里该批次没有任何官方入口 —— 补数前先回单位官网/主管局公告栏"
+                 "补齐网申入口与公告原文这两项，并把结论写进稿件。")
     L.append("")
 
-    # ── C2. 巡检报告的在架条目（比台账更新，用于确认「今天还开着」）
-    L.append("## C2. 巡检报告·在架条目（本工作区 `巡检记录/` 最新报告）")
+    # ── C2. db 在架条目（比台账更新，用于确认「今天还开着」）
+    L.append("## C2. db 在架条目（`announce_pool` / `monitor_state`）")
     L.append("")
     if patrol:
         L.extend(_patrol_lines(patrol))
         L.append("")
-        L.append("⚠️ 巡检报告的「有效/长期」是**抓取时点**的判断，发布与撤回都可能在抓取之后发生；"
+        L.append("⚠️ db 在架条目的「有效/长期」是**抓取时点**的判断，发布与撤回都可能在抓取之后发生；"
                  "写稿前仍须打开公告原文确认仍在招。")
     else:
-        L.append(f"（巡检报告里没匹配到「{kname}」的在架条目 —— 可能是台账登记的批次较新、"
-                 "报告尚未覆盖，或该公告不在四条巡检线内。**这不等于没在招**，"
+        L.append(f"（db 在架条目里没匹配到「{kname}」—— 可能是台账登记的批次较新、"
+                 "尚未被采集覆盖，或该公告不在四条巡检线内。**这不等于没在招**，"
                  "以官方公告原文为准。）")
     L.append("")
 
@@ -692,9 +694,8 @@ def build_briefing(row, today, patrol=None):
     L.append("- **主色**：⛔ 必须先跑 `logo 众数色` 取色，**严禁沿用上一篇色板**（09-17 南京银行误用江苏银行蓝）")
     if blocked:
         L.append(f"- ⛔ **暂不可动笔**：报名截止为软词、空值、哨兵日或历史「发布日 +30 天」占位"
-                 f"（当前值「{dl or '空'}」），定不了标题钩子与 SEO 摘要。先回官方钉死，"
-                 f"并把结论**回写 `内容状态.json`**（`--mark \"{kname}\" --to written "
-                 f"--facts deadline=YYYY-MM-DD`）。")
+                 f"（当前值「{dl or '空'}」），定不了标题钩子与 SEO 摘要。先回官方公告钉死，"
+                 f"把结论写进稿件；db 进度只读，⛔ 不再 `--mark` 回填。")
     else:
         L.append(f"- ✅ 报名截止已确定（{dl}），可动笔；三宫格、摘要、标题钩子用这个值。")
     L.append("")
@@ -713,37 +714,29 @@ def filter_rows(all_rows, keyword=None):
 
 
 def _print_state_audit(rep):
-    """打印四方对账报告（只读）。"""
+    """打印 db 对账报告（只读）。"""
     print(f"# 内容状态对账 · {datetime.now().strftime('%Y-%m-%d %H:%M')}")
-    print(f"# 真源：{rep['state_file']}")
+    print(f"# 真源：{rep['authority_db']} 的 drafts ∪ articles")
     print()
     print("## 一、五个数（口径不可混用）")
     sc = rep["state_counts"]
-    print(f"- 状态文件在册批次：**{rep['batches_in_state']}**"
-          f"（未排 {sc.get('unwritten', 0)} ｜ 已成稿 {sc.get('written', 0)}"
-          f" ｜ 已推草稿箱 {sc.get('draft', 0)} ｜ 已发布 {sc.get('published', 0)}）")
+    print(f"- db 进度表在册批次：**{rep['batches_in_state']}**"
+          f"（已推草稿箱 {sc.get('draft', 0)} ｜ 已发布 {sc.get('published', 0)}）")
     inv = rep["local_inventory"]
     print(f"- 本地库存（各线 `待发布/` 稿件数）：" + "、".join(f"{k.split('/')[0]} {v}" for k, v in inv.items()))
     arch = rep["local_archived"]
     total_arch = sum(arch.values())
     print(f"- 本地已归档（各线 `已发布/`）：**{total_arch}**"
           + ("　🔴 **这一档接近空 —— 红线 11「发布当天归档」事实上未执行**" if total_arch <= 2 else ""))
-    print(f"- 总表在册批次：{rep['batches_in_xlsx']} 行（内容状态分布 {rep['xlsx_counts']}）")
+    print(f"- 公告池有效批次（本次载入）：{rep['batches_in_db']} 行（进度分布 {rep['db_counts']}）")
     print()
-    print("## 二、状态文件 ↔ 总表旧列")
-    mm = rep["state_xlsx_mismatch"]
-    print(f"- 两处不一致：**{len(mm)}** 行")
+    print("## 二、db 进度 ↔ 公告池批次")
+    mm = rep["state_db_mismatch"]
+    print(f"- 状态不一致：**{len(mm)}** 行")
     for x in mm[:20]:
-        print(f"  - {x['unit']} ｜ {x['title']} ｜ json={x['json']} xlsx={x['xlsx']}")
-    if len(mm) > 20:
-        print(f"  …另有 {len(mm) - 20} 行")
-    miss = rep["xlsx_rows_missing_in_state"]
-    print(f"- 总表有、状态文件没有：**{len(miss)}** 行"
-          + ("（⛔ 状态文件是真源，缺行会让这些批次失去进度记录）" if miss else " ✅"))
-    if miss:
-        for x in miss[:10]:
-            print(f"  - {x['unit']} ｜ {x['xlsx'] or '（空）'}")
-        print("  → 修法：`--state-init --force` 重建，或 `--mark <单位> --to <状态>` 逐条补")
+        print(f"  - {x['unit']} ｜ {x['title']} ｜ progress={x['progress']} db={x['db']}")
+    miss = rep["db_rows_missing_in_state"]
+    print(f"- 公告池有、db 进度表无记录：**{len(miss)}** 行（＝未写/未推，属正常，不表示数据缺失）")
     print()
     print("## 三、已发布 ↔ 本地归档（红线 11）")
     na = rep["published_not_archived"]
@@ -753,7 +746,7 @@ def _print_state_audit(rep):
     if len(na) > 15:
         print(f"  …另有 {len(na) - 15} 条")
     print()
-    print("> ⛔ 本报告只读，不改任何文件。要推进状态用 `--mark`；要回推总表用 `--state-push-xlsx`。")
+    print("> ⛔ 本报告只读。进度以流水线 db 的 drafts/articles 为准；`--mark` 与 `--state-push-xlsx` 已停用。")
 
 
 def _apply_mark(workspace, keyword, to_state, facts_list, by):
@@ -766,8 +759,7 @@ def _apply_mark(workspace, keyword, to_state, facts_list, by):
         facts[k.strip()] = v.strip()
     state = wsrc.load_state(workspace)
     rows = wsrc.load_batches(workspace, state)
-    # 目标既可以是台账行，也可以是状态文件里已有的条目（各线目录补录的那批台账里没有），
-    # 合并去重后再落状态，避免「同一单位在状态文件里出现两条」。
+    # ⛔ --mark 已停用：状态为 db 只读视图，本函数仅保留以兼容调用，调用即报 state_readonly。
     targets = {}
     for r in rows:
         if keyword in " ".join(str(r.get(k) or "") for k in
@@ -778,7 +770,7 @@ def _apply_mark(workspace, keyword, to_state, facts_list, by):
             targets[((v.get("unit") or ""), (v.get("title") or ""))] = True
     if not targets:  # 哪儿都没有 → 也允许直接建（本地留痕优先）
         rec = wsrc.set_batch_state(workspace, keyword, "", to_state, by=by,
-                                   note="--mark 新建（台账与状态文件均无此批次）")
+                                   note="--mark 已停用（db 进度只读）")
         print(f"[ok] 新建并置为 {to_state}：{keyword}")
         return 1
     for unit, title in sorted(targets):
@@ -800,7 +792,7 @@ def main():
     ap.add_argument("--ready", action="store_true",
                     help="列出必填事实已齐、本地未成稿且草稿箱未命中候选的单位（选题池）")
     ap.add_argument("--ready-loose", action="store_true",
-                    help="选题宽松档：只要求「单位/截止/地点/公告发布日」齐（本地台账没有"
+                    help="选题宽松档：只要求「单位/截止/地点/公告发布日」齐（db 台账没有"
                          "用工性质与面向届别两列）；仍⛔必须回官方原文补齐后再动笔")
     ap.add_argument("--include-done", action="store_true",
                     help="配合 --ready：把已发布/已成稿/已推草稿箱的也列出来（防止重复写）")
@@ -817,48 +809,43 @@ def main():
     ap.add_argument("--workspace", metavar="DIR",
                     help=f"工作区根（默认 {wsrc.DEFAULT_WORKSPACE}；也可用环境变量 {wsrc.WORKSPACE_ENV}）")
     ap.add_argument("--state-init", action="store_true",
-                    help="从总表与各线目录初始化 `内容状态.json`（已存在则保留，配 --force 重建）")
+                    help="⛔ 已停用：状态由流水线 db 托管，无需初始化")
     ap.add_argument("--state-audit", action="store_true",
-                    help="四方对账：内容状态.json ↔ 总表两列 ↔ 各线 待发布/已发布 ↔ 台账登记")
+                    help="db 对账：drafts/articles 进度 ↔ announce_pool 批次 ↔ 各线稿件目录")
     ap.add_argument("--state-push-xlsx", action="store_true",
-                    help="把内容状态.json 单向回推总表两列（改 xlsx 前强制备份到 /tmp）")
-    ap.add_argument("--mark", metavar="关键词", help="把匹配到的批次状态推进到 --to")
+                    help="⛔ 已停用：总表 xlsx 已废弃，不再回推")
+    ap.add_argument("--mark", metavar="关键词", help="⛔ 已停用：状态只读，进度以 db 为准")
     ap.add_argument("--to", choices=list(wsrc.STATES), help="配合 --mark：目标状态")
     ap.add_argument("--facts", action="append", default=[], metavar="KEY=VALUE",
                     help="配合 --mark：回填已核实字段（可重复，如 --facts employment_nature=合同制）")
     ap.add_argument("--by", default="AI", help="配合 --mark：留痕人（默认 AI）")
-    ap.add_argument("--force", action="store_true", help="配合 --state-init：重建状态文件")
+    ap.add_argument("--force", action="store_true", help="（已停用）配合 --state-init")
     ap.add_argument("--state-import-draftbox", action="store_true",
-                    help="把微信草稿箱里的标题导入状态文件（状态=draft）；默认只预演，配 --apply 才落盘")
+                    help="只读预演：把微信草稿箱标题与 db 进度比对（不落盘）")
     ap.add_argument("--apply", action="store_true",
-                    help="配合 --state-import-draftbox：真的写状态文件（不加则 dry-run）")
+                    help="（已停用）配合 --state-import-draftbox；状态只读")
     ap.set_defaults(draftbox=True)
     ap.add_argument("--limit", type=int, default=3, help="每个关键词最多匹配几条，默认3")
     a = ap.parse_args()
 
     today = datetime.now().strftime("%Y-%m-%d %H:%M")
 
-    # ── 状态文件子命令（先于台账载入，因为它们的入口正是状态文件本身）
+    # ── 状态子命令（状态为流水线 db 的只读视图）
     try:
         if a.state_init:
             _ws = wsrc.discover_workspace(a.workspace)
             _state, info = wsrc.init_state(_ws, by=a.by, force=a.force)
-            print(f"[ok] {info['action']}：{info['path']}")
-            for k in ("seeded", "from_dirs", "batches"):
-                if k in info:
-                    print(f"     {k}: {info[k]}")
-            print("接着跑 `--state-audit` 看四方对账，把与总表旧列的差异先消掉。")
+            print(f"[ok] {info['action']}：真源 {info['authority']}")
+            print(f"     已推/已发批次: {info['batches']} ｜ {info['note']}")
             return
         if a.state_audit:
             _print_state_audit(wsrc.audit(wsrc.discover_workspace(a.workspace)))
             return
         if a.state_push_xlsx:
-            res = wsrc.push_state_to_xlsx(wsrc.discover_workspace(a.workspace))
-            print(f"[ok] 已回推总表：更新 {res['updated']} 行")
-            if res.get("backup"):
-                print(f"     备份 {res['backup']}\n     SHA-256 {res['sha256']}\n"
-                      f"     回滚 {res['rollback']}")
-            return
+            raise wsrc.SourceError(
+                "xlsx_retired",
+                "--state-push-xlsx 已停用：单位与招聘信息总表.xlsx 于 2026-11-04 废弃，"
+                "状态由流水线 db 的 drafts/articles 维护")
         if a.state_import_draftbox:
             _ws = wsrc.discover_workspace(a.workspace)
             titles, _mids = fetch_draft_titles(a.profile)
@@ -868,8 +855,8 @@ def main():
             res = wsrc.import_draft_titles(_ws, titles, apply=a.apply, by=a.by)
             print(f"# 草稿箱导入预演 · profile={a.profile} · 草稿 {len(titles)} 篇"
                   + ("" if not a.apply else "（已落盘）"))
-            print(f"# 与状态文件已匹配（跳过，不覆盖）：{len(res['skipped'])} 篇")
-            print(f"# 状态文件缺登记、将补为 draft：{len(res['planned'])} 篇")
+            print(f"# 与 db 进度已匹配（跳过）：{len(res['skipped'])} 篇")
+            print(f"# db 进度无记录（只读预演，不会补写）：{len(res['planned'])} 篇")
             for t in res["planned"]:
                 print(f"  + {wsrc._unit_from_title(t)[:26]:<28} ← {t[:52]}")
             if not a.apply and res["planned"]:
@@ -880,7 +867,7 @@ def main():
                 sys.exit("⛔ --mark 必须同时给 --to（unwritten/written/draft/published）")
             n = _apply_mark(wsrc.discover_workspace(a.workspace), a.mark, a.to, a.facts, a.by)
             if not n:
-                sys.exit(f"⛔ 台账与状态文件里都没有匹配「{a.mark}」的批次；"
+                sys.exit(f"⛔ db 台账与进度表里都没有匹配「{a.mark}」的批次；"
                          "先 `--state-init` 或核对单位专名。")
             return
     except wsrc.SourceError as exc:
@@ -947,19 +934,19 @@ def main():
         if desync:
             print(f"\n⛔ 确定失同步 {len(desync)} 行"
                   f"（{len(desync_titles)} 个唯一草稿标题 / {len(desync_cids)} 个候选批次）"
-                  " —— 人工核对公告/报名入口后，用 `--mark \"<单位>\" --to draft`"
-                  "把 `内容状态.json` 推进到「已推草稿箱」；语义/别名候选不自动计入：")
+                  " —— 人工核对公告/报名入口后回稿件核对；db 进度只读，"
+                  "⛔ 不再 `--mark` 回填；语义/别名候选不自动计入：")
             for cid, name, t in desync:
                 print(f"  - cid={cid} {name} ← {t[:44]}")
         return
 
     if a.ready or a.ready_loose:
-        # ⚠️ 「硬信息齐」≠「还没写」。稿件进度取自 `内容状态.json`（唯一真源）：
+        # ⚠️ 「硬信息齐」≠「还没写」。稿件进度取自 db 的 drafts ∪ articles：
         # published=已发布；draft=已推草稿箱；written=库内已成稿；unwritten=库内未排。
         # 不过滤就会把成稿单位混进选题池；草稿箱标题只作人工核验候选。
         DONE = ("已发布", "已推草稿箱", "库内已成稿")
-        # 严格档＝REQUIRED 全齐；宽松档＝只要本地台账真正持有的四项
-        # （用工性质/面向届别本工作区台账没有列，永远进不了严格档）。
+        # 严格档＝REQUIRED 全齐；宽松档＝只要 db 台账真正持有的四项
+        # （用工性质/面向届别 db 台账没有列，永远进不了严格档）。
         LOOSE_KEYS = {"unit", "deadline", "location", "announce_date"}
         gate = [(_k, _l, c, _w) for _k, (_l, c, _w) in REQUIRED.items()
                 if not a.ready_loose or _k in LOOSE_KEYS]
@@ -982,7 +969,7 @@ def main():
                 continue
             dl10 = (r["deadline"] or "").strip()[:10]
             if re.match(r"\d{4}-\d{2}-\d{2}$", dl10) and dl10 < today_s:
-                expired += 1          # 已过期≠选题池，必须剔除（本地台账含历史行）
+                expired += 1          # 已过期≠选题池，必须剔除（db 台账含历史行）
                 continue
             name = r["full_name"] or r["company"] or ""
             rec = (r["deadline"] or "", name, draft_state(r))
@@ -1007,7 +994,7 @@ def main():
               + (f"；{len(suspect)} 条草稿箱候选已单列" if suspect else "")
               + trust_note)
         if a.ready_loose:
-            print("⚠️ 宽松档只保证本地台账有的四项 —— **「用工性质」「面向届别」「学历」**"
+            print("⚠️ 宽松档只保证 db 台账有的四项 —— **「用工性质」「面向届别」「学历」**"
                   "以及资格红线必须回官方公告原文补齐后再动笔（红线 2）。")
         for dl, name, ds, _u in ready:
             print(f"  {dl or '—':<12} {name:<40} 稿件={ds}")
@@ -1058,18 +1045,18 @@ def main():
         patrol_hits = wsrc.patrol_for(kw, patrol_entries)
         if not hits:
             if patrol_hits:
-                print(f"# 台账无「{kw}」批次，但**巡检报告有 {len(patrol_hits)} 条在架条目**"
+                print(f"# db 台账无「{kw}」批次，但**在架条目有 {len(patrol_hits)} 条**"
                       f"（台账未登记 ≠ 没在招）：")
                 print()
                 for line in _patrol_lines(patrol_hits):
                     print(line)
                 print()
-                print("→ 打开公告原文确认仍在招 → 补台账（总表 `招聘信息` 新增一行）"
+                print("→ 打开公告原文确认仍在招 → 由采集链路补入 announce_pool"
                       "→ 再跑本脚本出投料单。⛔ 不要跳过投料单直接写稿。")
                 print()
                 continue
-            print(f"[miss] 本地台账与巡检报告都没有「{kw}」"
-                  "（⛔ 疑似凭空写 —— 先确认该单位确在招，再补台账/核对单位专名，别跳过投料单）",
+            print(f"[miss] db 台账与在架条目都没有「{kw}」"
+                  "（⛔ 疑似凭空写 —— 先确认该单位确在招，再核对单位专名，别跳过投料单）",
                   file=sys.stderr)
             continue
         for r in hits[: a.limit]:
