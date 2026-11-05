@@ -10,92 +10,28 @@ import datetime
 import json
 import os
 import sys
-import urllib.error
 import urllib.parse
-import urllib.request
 from pathlib import Path
+
+try:
+    from werss.client import load_config as _load_config_file, api_request as _client_request
+except ImportError:  # pragma: no cover - fallback for direct script execution
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    from werss.client import load_config as _load_config_file, api_request as _client_request
 
 
 def load_config(args):
-    """Load configuration in priority: CLI flags > Env vars > config.json > ~/.werss/config.json"""
-    base_url = args.base_url or os.environ.get("WERSS_BASE_URL")
-    ak = args.ak or os.environ.get("WERSS_ACCESS_KEY")
-    sk = args.sk or os.environ.get("WERSS_SECRET_KEY")
-
-    # Check local config file
-    skill_dir = Path(__file__).resolve().parent
-    local_cfg = skill_dir / "config.json"
-    user_cfg = Path.home() / ".werss" / "config.json"
-
-    file_cfg = {}
-    if local_cfg.exists():
-        try:
-            with open(local_cfg, "r", encoding="utf-8") as f:
-                file_cfg = json.load(f)
-        except Exception:
-            pass
-    elif user_cfg.exists():
-        try:
-            with open(user_cfg, "r", encoding="utf-8") as f:
-                file_cfg = json.load(f)
-        except Exception:
-            pass
-
-    if not base_url:
-        base_url = file_cfg.get("base_url") or "https://rss.mmdai.top"
-    if not ak:
-        ak = file_cfg.get("access_key")
-    if not sk:
-        sk = file_cfg.get("secret_key")
-
-    base_url = base_url.rstrip("/")
-    return base_url, ak, sk
+    """Load configuration: CLI flags > Env vars > config.json > ~/.werss/config.json"""
+    return _load_config_file(
+        base_url=args.base_url,
+        ak=args.ak,
+        sk=args.sk,
+    )
 
 
 def api_request(base_url, ak, sk, method, endpoint, params=None, data=None):
-    """Send an authenticated request to WeRSS API using AK/SK."""
-    if not ak or not sk:
-        raise ValueError("Missing Access Key or Secret Key. Please configure WERSS_ACCESS_KEY and WERSS_SECRET_KEY.")
-
-    url = f"{base_url}{endpoint}"
-    if params:
-        encoded_params = urllib.parse.urlencode(params)
-        url = f"{url}?{encoded_params}" if "?" not in url else f"{url}&{encoded_params}"
-
-    req_data = None
-    headers = {
-        "Authorization": f"AK-SK {ak}:{sk}",
-        "User-Agent": "WeRSS-CLI/1.0",
-        "Accept": "application/json",
-    }
-
-    if data is not None:
-        if isinstance(data, (dict, list)):
-            req_data = json.dumps(data).encode("utf-8")
-            headers["Content-Type"] = "application/json; charset=utf-8"
-        elif isinstance(data, str):
-            req_data = data.encode("utf-8")
-        elif isinstance(data, bytes):
-            req_data = data
-
-    req = urllib.request.Request(url, data=req_data, headers=headers, method=method)
-
-    try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            content_type = resp.headers.get("Content-Type", "")
-            raw = resp.read()
-            if "application/json" in content_type or raw.startswith(b"{") or raw.startswith(b"["):
-                return json.loads(raw.decode("utf-8"))
-            return raw.decode("utf-8", errors="replace")
-    except urllib.error.HTTPError as e:
-        err_msg = e.read().decode("utf-8", errors="replace")
-        try:
-            err_json = json.loads(err_msg)
-            return {"code": e.code, "error": err_json.get("detail", err_msg)}
-        except Exception:
-            return {"code": e.code, "error": err_msg}
-    except Exception as e:
-        return {"code": -1, "error": str(e)}
+    """Backward-compatible wrapper delegating to werss.client.api_request."""
+    return _client_request(base_url, ak, sk, method, endpoint, params=params, data=data)
 
 
 def cmd_subscribe(args, base_url, ak, sk):

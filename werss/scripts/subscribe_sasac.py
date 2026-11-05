@@ -1,13 +1,12 @@
-import urllib.request, urllib.parse, json, time, base64, csv, io
+import urllib.request, urllib.parse, json, time, base64, csv, io, sys
+from pathlib import Path
 
-CONFIG_FILE = '/Users/zhugx/src/skills/werss/config.json'
-with open(CONFIG_FILE, 'r') as f:
-    cfg = json.load(f)
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
+from werss.client import load_config, get_data_dir
 
-BASE_URL = cfg['base_url'].rstrip('/')
-AK = cfg['access_key']
-SK = cfg['secret_key']
+BASE_URL, AK, SK = load_config()
 AUTH_HEADER = {'Authorization': f'AK-SK {AK}:{SK}'}
+DATA_DIR = get_data_dir()
 
 # 全国 31 个省/直辖市/自治区 + 新疆兵团 + 国务院国资委
 PROVINCIAL_TARGETS = [
@@ -113,6 +112,6 @@ for target in PROVINCIAL_TARGETS:
 print(f"\n检索完成，共成功匹配 {len(matched_accounts)} / {len(PROVINCIAL_TARGETS)} 个省级国资公众号。")
 
 # 保存为临时结果
-with open('/Users/zhugx/src/skills/werss/sasac_matched.json', 'w', encoding='utf-8') as f:
+with open(DATA_DIR / 'sasac_matched.json', 'w', encoding='utf-8') as f:
     json.dump(matched_accounts, f, ensure_ascii=False, indent=2)
 

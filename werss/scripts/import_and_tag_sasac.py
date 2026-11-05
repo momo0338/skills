@@ -1,15 +1,14 @@
-import urllib.request, urllib.parse, json, time, base64, csv, io, datetime, uuid
+import urllib.request, urllib.parse, json, time, base64, csv, io, datetime, uuid, sys
+from pathlib import Path
 
-CONFIG_FILE = '/Users/zhugx/src/skills/werss/config.json'
-with open(CONFIG_FILE, 'r') as f:
-    cfg = json.load(f)
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
+from werss.client import load_config, get_data_dir
 
-BASE_URL = cfg['base_url'].rstrip('/')
-AK = cfg['access_key']
-SK = cfg['secret_key']
+BASE_URL, AK, SK = load_config()
 AUTH_HEADER = {'Authorization': f'AK-SK {AK}:{SK}'}
+DATA_DIR = get_data_dir()
 
-with open('/Users/zhugx/src/skills/werss/sasac_matched.json', 'r', encoding='utf-8') as f:
+with open(DATA_DIR / 'sasac_matched.json', 'r', encoding='utf-8') as f:
     accounts = json.load(f)
 
 # 添加湖南的融媒体官方平台“国资潇湘”作为高权重补充
@@ -108,7 +107,7 @@ else:
         print("标签更新响应:", put_res)
 
 # 3. 生成规范的 CSV 交付文件
-csv_file_path = '/Users/zhugx/src/skills/werss/provincial_sasac_mps.csv'
+csv_file_path = str(DATA_DIR / 'provincial_sasac_mps.csv')
 with open(csv_file_path, 'w', encoding='utf-8-sig', newline='') as f:
     out_writer = csv.writer(f)
     out_writer.writerow([

@@ -12,14 +12,13 @@ import sys
 import time
 import urllib.parse
 import urllib.request
+from pathlib import Path
 
-CONFIG_FILE = "/Users/zhugx/src/skills/werss/config.json"
-with open(CONFIG_FILE, "r") as f:
-    cfg = json.load(f)
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
+from werss.client import load_config, get_data_dir
 
-BASE_URL = cfg["base_url"].rstrip("/")
-AK = cfg["access_key"]
-SK = cfg["secret_key"]
+BASE_URL, AK, SK = load_config()
+DATA_DIR = get_data_dir()
 TAG_ID = "a2c22e73-d5c6-4536-8bc2-484a217ee85a"
 AUTH_HEADER = {"Authorization": f"AK-SK {AK}:{SK}"}
 
@@ -213,7 +212,7 @@ def main():
     print(f"\n[*] 检索完成：成功匹配 {len(matched)} / {len(KEY_SCHOOLS)} 所高校。")
 
     # 1. 批量保存为 key_university_employment_mps.csv
-    key_csv_path = "/Users/zhugx/src/skills/werss/key_university_employment_mps.csv"
+    key_csv_path = str(DATA_DIR / "key_university_employment_mps.csv")
     headers = ["school", "tier", "province", "mp_name", "alias", "mp_id", "fakeid", "feed_xml", "qr_code_url", "signature"]
     with open(key_csv_path, "w", encoding="utf-8-sig", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=headers)
@@ -296,12 +295,12 @@ def main():
         print(f"[✓] 成功为标签【大学就业中心】新增 {added_count} 个公众号，标签内目前共有 {len(all_tag_items)} 个公众号！")
 
     # 4. 生成双一流 + 重点本科两批高校的合并大表
-    combined_csv_path = "/Users/zhugx/src/skills/werss/university_employment_mps_all_combined.csv"
+    combined_csv_path = str(DATA_DIR / "university_employment_mps_all_combined.csv")
     combined_rows = []
     seen_ids = set()
 
     # 读原双一流表
-    old_csv_path = "/Users/zhugx/src/skills/werss/university_employment_mps_all.csv"
+    old_csv_path = str(DATA_DIR / "university_employment_mps_all.csv")
     if os.path.exists(old_csv_path):
         with open(old_csv_path, "r", encoding="utf-8-sig") as f:
             reader = csv.DictReader(f)

@@ -12,8 +12,41 @@ description: Manage and automate WeChat Official Accounts RSS feeds via WeRSS AP
 
 - **WeRSS API 文档**：`https://rss.mmdai.top/api/docs`
 - **默认服务节点**：`https://rss.mmdai.top`
-- **CLI 工具路径**：`/Users/zhugx/src/skills/werss/werss_cli.py`（零第三方依赖，基于 Python 3 标准库）
-- **配置文件路径**：`/Users/zhugx/src/skills/werss/config.json`
+- **CLI 工具路径**：`werss/werss_cli.py`（零第三方依赖，基于 Python 3 标准库）
+- **公共客户端模块**：`werss/client.py`（供 CLI 与业务脚本统一复用的 SDK）
+- **配置文件路径**：`werss/config.json`
+
+### 目录结构
+
+```
+werss/
+├── SKILL.md                  # 本文件
+├── werss_cli.py              # 核心 CLI 入口（订阅/列表/搜索/文章/同步/标签/导出/删除）
+├── client.py                 # 公共 SDK：配置加载、鉴权请求与各 API 封装
+├── config.json               # AK/SK 凭证（已 gitignore，不入库）
+├── config.json.example       # 配置模板
+├── data/                     # 数据文件目录
+│   ├── schools_beijing.csv               # 北京高校样本（入库）
+│   ├── university_employment_mps.opml    # 就业中心公众号 OPML 快照（入库）
+│   ├── university_employment_mps_all.csv # 就业中心公众号全量清单（入库）
+│   ├── key_university_employment_mps.csv            # 重点高校匹配结果（gitignore）
+│   ├── provincial_sasac_mps.csv                     # 省级国资委匹配结果（gitignore）
+│   ├── sasac_matched.json                           # 国资委匹配中间结果（gitignore）
+│   ├── thirdparty_*.json / thirdparty_recruitment_mps.csv # 第三方招聘号名单（gitignore）
+│   └── university_employment_mps_all_combined.csv   # 合并清单（gitignore）
+├── scripts/                  # 专项业务与维护脚本
+│   ├── search_schools.py         # 招生/就业双一流高校检索与批量订阅
+│   ├── search_key_schools.py     # 重点学科高校检索、打标签与导出
+│   ├── subscribe_sasac.py        # 全国省级国资委公众号检索匹配
+│   ├── import_and_tag_sasac.py   # 国资委公众号导入并打标签
+│   ├── fix_missing_covers.py     # 补齐缺失公众号头像
+│   └── test_sasac_match.py       # 国资委匹配算法手工核验脚本
+└── tests/                    # 自动化单元测试
+    └── test_client.py            # client.py 的 pytest 用例
+```
+
+> 业务脚本统一通过 `from werss.client import load_config, get_data_dir` 复用配置与客户端，
+> 读取/写入数据一律使用 `data/` 目录（`get_data_dir()` 返回绝对路径），不再硬编码个人机器路径。
 
 ---
 
@@ -34,7 +67,7 @@ description: Manage and automate WeChat Official Accounts RSS feeds via WeRSS AP
 自动下载文章、提取公众号元数据（名称、ID、Biz、头像）、自动入库并返回专属 RSS/Atom 链接：
 
 ```bash
-python3 /Users/zhugx/src/skills/werss/werss_cli.py subscribe --url "https://mp.weixin.qq.com/s/oJt-TI3D8EU-Yj8mZeWqKQ"
+python3 werss/werss_cli.py subscribe --url "https://mp.weixin.qq.com/s/oJt-TI3D8EU-Yj8mZeWqKQ"
 ```
 
 输出示例：
@@ -59,22 +92,22 @@ python3 /Users/zhugx/src/skills/werss/werss_cli.py subscribe --url "https://mp.w
 
 ```bash
 # 标准表格展示
-python3 /Users/zhugx/src/skills/werss/werss_cli.py list
+python3 werss/werss_cli.py list
 
 # 按关键词筛选
-python3 /Users/zhugx/src/skills/werss/werss_cli.py list --keyword "国资"
+python3 werss/werss_cli.py list --keyword "国资"
 
 # 输出完整 JSON 格式
-python3 /Users/zhugx/src/skills/werss/werss_cli.py list --json
+python3 werss/werss_cli.py list --json
 ```
 
 ### 3. 获取公众号的 Feed 链接
 ```bash
 # 获取单个公众号的三种订阅格式（RSS 2.0, Atom, JSON）
-python3 /Users/zhugx/src/skills/werss/werss_cli.py feed --id MP_WXS_2390216734
+python3 werss/werss_cli.py feed --id MP_WXS_2390216734
 
 # 获取全局聚合 RSS（所有已订阅公众号文章合集）
-python3 /Users/zhugx/src/skills/werss/werss_cli.py feed
+python3 werss/werss_cli.py feed
 # -> https://rss.mmdai.top/feed/all.xml
 ```
 
@@ -82,30 +115,30 @@ python3 /Users/zhugx/src/skills/werss/werss_cli.py feed
 当用户希望立即刷新某个公众号的文章时调用：
 
 ```bash
-python3 /Users/zhugx/src/skills/werss/werss_cli.py sync MP_WXS_2390216734
+python3 werss/werss_cli.py sync MP_WXS_2390216734
 ```
 
 ### 5. 查询公众号历史文章
 ```bash
 # 查询指定公众号最新文章
-python3 /Users/zhugx/src/skills/werss/werss_cli.py articles --mp-id MP_WXS_2390216734 --limit 5
+python3 werss/werss_cli.py articles --mp-id MP_WXS_2390216734 --limit 5
 
 # 按文章标题关键词检索
-python3 /Users/zhugx/src/skills/werss/werss_cli.py articles --keyword "招聘" --limit 10
+python3 werss/werss_cli.py articles --keyword "招聘" --limit 10
 ```
 
 ### 6. 在线全网搜索公众号
 如果用户只记得公众号名字而没有具体文章链接：
 
 ```bash
-python3 /Users/zhugx/src/skills/werss/werss_cli.py search "机器之心"
+python3 werss/werss_cli.py search "机器之心"
 ```
 
 ### 7. 导出 OPML 订阅文件
 导出标准 OPML 2.0 文件，可直接导入至任意第三方 RSS 阅读器：
 
 ```bash
-python3 /Users/zhugx/src/skills/werss/werss_cli.py export-opml -o /path/to/my_subscriptions.opml
+python3 werss/werss_cli.py export-opml -o /path/to/my_subscriptions.opml
 ```
 
 ### 8. 标签管理与标签聚合 Feed
@@ -113,18 +146,18 @@ python3 /Users/zhugx/src/skills/werss/werss_cli.py export-opml -o /path/to/my_su
 
 ```bash
 # 查看所有标签及其公众号数量和专属 Feed URL
-python3 /Users/zhugx/src/skills/werss/werss_cli.py tags
+python3 werss/werss_cli.py tags
 
 # 创建新标签
-python3 /Users/zhugx/src/skills/werss/werss_cli.py tags create --name "大学就业中心" --intro "高校就业指导中心"
+python3 werss/werss_cli.py tags create --name "大学就业中心" --intro "高校就业指导中心"
 
 # 为指定标签追加公众号
-python3 /Users/zhugx/src/skills/werss/werss_cli.py tags add --tag "大学就业中心" --mp-ids MP_WXS_3086031217 MP_WXS_3522786087
+python3 werss/werss_cli.py tags add --tag "大学就业中心" --mp-ids MP_WXS_3086031217 MP_WXS_3522786087
 ```
 
 ### 9. 删除公众号订阅
 ```bash
-python3 /Users/zhugx/src/skills/werss/werss_cli.py delete MP_WXS_2390216734
+python3 werss/werss_cli.py delete MP_WXS_2390216734
 ```
 
 ---
@@ -156,7 +189,7 @@ Content-Type: application/json
 
 ## 凭证保护与环境变量覆盖
 
-本技能在 `/Users/zhugx/src/skills/werss/config.json` 中配置了预设凭证，同时支持以下环境变量覆盖：
+本技能在 `werss/config.json` 中配置了预设凭证，同时支持以下环境变量覆盖：
 
 ```bash
 export WERSS_BASE_URL="https://rss.mmdai.top"

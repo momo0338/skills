@@ -203,23 +203,9 @@ SCHOOLS_DATA = [
 
 
 def load_credentials():
-    skill_dir = Path(__file__).resolve().parent
-    cfg_file = skill_dir / "config.json"
-    base_url = os.environ.get("WERSS_BASE_URL", "https://rss.mmdai.top")
-    ak = os.environ.get("WERSS_ACCESS_KEY")
-    sk = os.environ.get("WERSS_SECRET_KEY")
-
-    if cfg_file.exists():
-        try:
-            with open(cfg_file, "r", encoding="utf-8") as f:
-                d = json.load(f)
-                base_url = d.get("base_url") or base_url
-                ak = d.get("access_key") or ak
-                sk = d.get("secret_key") or sk
-        except Exception:
-            pass
-
-    return base_url.rstrip("/"), ak, sk
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
+    from werss.client import load_config
+    return load_config()
 
 
 def search_school_mp(school_name, short_names, base_url, ak, sk):
@@ -485,7 +471,7 @@ def main():
         print(f"[*] 准备批量订阅 {len(mps_to_import)} 个匹配到的官方公众号到 WeRSS...")
         batch_subscribe_mps(mps_to_import, base_url, ak, sk)
         print(f"\n[✓] 全量聚合 Feed 链接: {base_url}/feed/all.xml")
-        print(f"[✓] 可使用 CLI 查看最新状态: python3 /Users/zhugx/src/skills/werss/werss_cli.py list")
+        print("[✓] 可使用 CLI 查看最新状态: python3 werss/werss_cli.py list")
 
 
 if __name__ == "__main__":

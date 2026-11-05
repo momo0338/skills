@@ -1,12 +1,10 @@
-import urllib.request, urllib.parse, json, time
+import urllib.request, urllib.parse, json, time, sys
+from pathlib import Path
 
-CONFIG_FILE = '/Users/zhugx/src/skills/werss/config.json'
-with open(CONFIG_FILE, 'r') as f:
-    cfg = json.load(f)
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
+from werss.client import load_config
 
-BASE_URL = cfg['base_url'].rstrip('/')
-AK = cfg['access_key']
-SK = cfg['secret_key']
+BASE_URL, AK, SK = load_config()
 AUTH_HEADER = {'Authorization': f'AK-SK {AK}:{SK}'}
 
 PROVINCES = [

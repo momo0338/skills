@@ -28,14 +28,14 @@ dy-cli/outputs/
 # 敏感凭据配置文件
 werss/config.json
 
-# werss 检索/导出中间数据文件
-werss/key_university_employment_mps.csv
-werss/provincial_sasac_mps.csv
-werss/sasac_matched.json
-werss/thirdparty_enriched.json
-werss/thirdparty_recruitment_mps.csv
-werss/thirdparty_subscribed.json
-werss/university_employment_mps_all_combined.csv
+# werss 检索/导出过程数据文件（保留 data/schools_beijing.csv 等基础样本）
+werss/data/key_university_employment_mps.csv
+werss/data/provincial_sasac_mps.csv
+werss/data/sasac_matched.json
+werss/data/thirdparty_enriched.json
+werss/data/thirdparty_recruitment_mps.csv
+werss/data/thirdparty_subscribed.json
+werss/data/university_employment_mps_all_combined.csv
 
 
 
