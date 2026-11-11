@@ -39,3 +39,13 @@ werss/data/university_employment_mps_all_combined.csv
 
 
 
+
+# 公告重排稿件数据（70篇历史稿本地保留，不入库）
+job-bulletin-write/scripts/data/
+
+# werss 检索/导出过程数据文件（清单/进度 CSV）
+werss/benke_employment_search_清单.csv
+werss/benke_univ_search_progress.csv
+werss/市级国资委_公众号清单.csv
+werss/市级国资委_未找到城市.csv
+werss/本科就业中心_订阅清单.csv

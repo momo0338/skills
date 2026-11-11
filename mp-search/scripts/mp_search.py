@@ -400,6 +400,44 @@ def handle_search(args):
         print(md_content)
 
 
+def handle_channel_e(args):
+    """转发到通道 E：搜狗真实链 / 正文 Markdown / 公众号主体反查。"""
+    try:
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        import sogou_channel_e
+    except ImportError as e:
+        print(f"[通道E] 模块加载失败: {e}", file=sys.stderr)
+        sys.exit(2)
+
+    if args.command == "content":
+        cmd = ["content", args.url]
+        if args.referer:
+            cmd += ["--referer", args.referer]
+        if args.output:
+            cmd += ["-o", args.output]
+        rc = sogou_channel_e.main(cmd)
+        if rc:
+            sys.exit(rc)
+        return
+
+    if args.command == "who":
+        cmd = ["accounts", args.keyword, "-n", str(args.limit),
+               "--probe", str(args.probe), "--delay", str(args.delay)]
+    else:
+        cmd = ["search", args.keyword, "-n", str(args.limit),
+               "-p", str(args.page), "--body-limit", str(args.body_limit),
+               "--delay", str(args.delay)]
+        if args.with_body:
+            cmd.append("--with-body")
+    if args.output:
+        cmd += ["-o", args.output]
+    if args.format_md:
+        cmd += ["--format-md", args.format_md]
+    rc = sogou_channel_e.main(cmd)
+    if rc:
+        sys.exit(rc)
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="MP-Search: 微信文章与官方标准短链检索采集工具"
@@ -441,6 +479,32 @@ def main():
     format_parser.add_argument("input_file", help="搜一搜采集数据 JSON 文件路径")
     format_parser.add_argument("-o", "--output", help="输出 Markdown 文件路径 (默认标准输出)")
 
+    sogou_parser = subparsers.add_parser(
+        "sogou", help="通道E：搜狗检索 → 官方签名链 → 正文 Markdown（含新版 content_noencode 兜底）")
+    sogou_parser.add_argument("keyword", help="搜索关键词")
+    sogou_parser.add_argument("-n", "--limit", type=int, default=10, help="返回条数 (默认 10)")
+    sogou_parser.add_argument("-p", "--page", type=int, default=1, help="页码 (默认 1)")
+    sogou_parser.add_argument("--with-body", action="store_true", help="同时抓取正文 Markdown")
+    sogou_parser.add_argument("--body-limit", type=int, default=3, help="抓正文的篇数上限 (默认 3)")
+    sogou_parser.add_argument("--delay", type=float, default=1.2, help="请求间隔秒数 (默认 1.2)")
+    sogou_parser.add_argument("-o", "--output", help="输出 JSON 文件路径")
+    sogou_parser.add_argument("--format-md", help="输出 Markdown 表格文件路径")
+
+    who_parser = subparsers.add_parser(
+        "who", help="通道E：按关键词反查公众号主体（搜狗 type=1 已失效的免费替代方案）")
+    who_parser.add_argument("keyword", help="搜索关键词")
+    who_parser.add_argument("-n", "--limit", type=int, default=5, help="返回主体数 (默认 5)")
+    who_parser.add_argument("--probe", type=int, default=6, help="探测文章篇数 (默认 6)")
+    who_parser.add_argument("--delay", type=float, default=1.2, help="请求间隔秒数 (默认 1.2)")
+    who_parser.add_argument("-o", "--output", help="输出 JSON 文件路径")
+    who_parser.add_argument("--format-md", help="输出 Markdown 表格文件路径")
+
+    content_parser = subparsers.add_parser(
+        "content", help="通道E：直接抓取一篇微信文章的正文 Markdown")
+    content_parser.add_argument("url", help="文章链接（可为通道E解析出的签名链）")
+    content_parser.add_argument("--referer", default="", help="来源页，通常为搜狗跳转链接")
+    content_parser.add_argument("-o", "--output", help="输出 JSON 文件路径")
+
     args = parser.parse_args()
 
     if args.command == "search":
@@ -453,6 +517,8 @@ def main():
         handle_account(args)
     elif args.command == "format":
         handle_format(args)
+    elif args.command in ("sogou", "who", "content"):
+        handle_channel_e(args)
     else:
         parser.print_help()
         sys.exit(1)

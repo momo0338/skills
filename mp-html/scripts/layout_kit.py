@@ -110,6 +110,33 @@ class Layout:
         return ('<table style="width:100%;border-collapse:collapse;table-layout:fixed;'
                 'margin:0 0 6px;"><tr>' + ''.join(cell(a, b) for a, b in cells) + '</tr></table>')
 
+    def qr_card(self, title, src, sub='', foot1='', foot2='', qr_size=176, max_width=270):
+        """扫码投递卡（朱总 2026-11-05 定标准）：标题／副题／二维码／两行脚注。
+        · 用于「有二维码投递渠道」的公告，把二维码从长图里拎出来独立成卡，放进投递信息板块；
+          原文长图仍完整保留在下方（不删不改），卡片只是把关键入口前置。
+        · src 必须是 base64 data URI（外链会被微信防盗链吞掉，且三检要求外链=0）。
+        · max_width 默认 270，确保 320px 视口下（容器 padding 10×2）零溢出。"""
+        parts = [f'<section style="max-width:{max_width}px;margin:6px auto 16px;background:{self.bg};'
+                 f'border:1px solid {self.border};border-radius:12px;padding:14px 16px;text-align:center;">']
+        if title:
+            parts.append(f'<section style="font-size:15px;font-weight:800;color:{self.dark};'
+                         f'line-height:1.5;">{title}</section>')
+        if sub:
+            parts.append(f'<section style="font-size:11.5px;color:#64748b;line-height:1.6;'
+                         f'margin-top:2px;">{sub}</section>')
+        parts.append(f'<section style="margin:10px 0 8px;"><img src="{src}" '
+                     f'style="width:{qr_size}px;height:{qr_size}px;display:block;margin:0 auto;'
+                     f'border:1px solid {self.border};border-radius:6px;background:#ffffff;" '
+                     f'alt="扫码投递"/></section>')
+        if foot1:
+            parts.append(f'<section style="font-size:12px;color:#273244;font-weight:700;'
+                         f'line-height:1.6;">{foot1}</section>')
+        if foot2:
+            parts.append(f'<section style="font-size:11px;color:#94a3b8;line-height:1.6;'
+                         f'margin-top:2px;">{foot2}</section>')
+        parts.append('</section>')
+        return ''.join(parts)
+
     def th(self, t, w):
         # w 为百分比数值（如 14），必须带 % —— 2026-10-16 朱总对比截图发现裸数字无效导致首列被均分撑宽
         return (f'<td width="{w}%" style="width:{w}%;background:{self.brand};background-color:{self.brand};color:#fff;'
@@ -120,10 +147,14 @@ class Layout:
                 f'font-size:12.5px;color:#334155;{st}">{t}</td>')
 
     def table(self, headers, rows, widths, zebra='#f0f7f5', style=''):
-        """通用表格：headers=[(文本,宽%)], rows=[[...]], widths=[..%]；zebra 斑马底色"""
-        cg = '<colgroup>' + ''.join(f'<col style="width:{w}%;"/>' for w in widths) + '</colgroup>'
-        h = ('<section style="margin:0 0 10px;"><table style="width:100%;border-collapse:collapse;table-layout:fixed;">'
-             + cg)
+        """通用表格：headers=[(文本,宽%)], rows=[[...]], widths=[..%]；zebra 斑马底色
+
+        ⛔ 不输出 <colgroup>（2026-11-05 无锡市属国企稿实测）：微信会剥离 <col> 上的
+        width，留下 style="" 空样式，服务端 draft/get 验收判「空 style 会丢样式」不通过。
+        列宽已由 th/td 的 width 属性 + style:width 双写承担，table-layout:fixed 下
+        按首行 th 的宽度分配，移除 colgroup 后列宽渲染结果不变。
+        """
+        h = ('<section style="margin:0 0 10px;"><table style="width:100%;border-collapse:collapse;table-layout:fixed;">')
         h += '<tr>' + ''.join(self.th(t, w) for t, w in zip(headers, widths)) + '</tr>'
         for i, r in enumerate(rows):
             bg = '#ffffff' if i % 2 else zebra

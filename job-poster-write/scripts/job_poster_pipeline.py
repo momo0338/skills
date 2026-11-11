@@ -246,9 +246,45 @@ def cmd_facts_check(args):
                 sys.exit(f"[FATAL] 划重点含敏感词「{bad}」且 raw_evidence 无出处：{it[:50]}")
     if f['deadline'] not in ('公告未披露',) and not re.search(r'20\d{2}', str(f['deadline'])):
         sys.exit(f"[FATAL] deadline 非常规格式（用 2026-11-13 或 '公告未披露'）：{f['deadline']}")
+    # 扫码投递卡约定（朱总 2026-11-05 定）：原文有二维码投递渠道时，须把 QR 抽出来独立成卡放进投递板块
+    has_qr = bool(f.get('qr_card')) or any(s.get('qr_card') for s in f.get('sections', []))
+    hay = ' '.join([str(f.get('apply', '')), str(f.get('positions', ''))] +
+                   [str(s.get('title', '')) + ' '.join(map(str, s.get('paras') or []))
+                    for s in f.get('sections', [])])
+    if ('扫码' in hay or '二维码' in hay) and not has_qr:
+        print("[facts-check] ⚠️ 提示：正文提到扫码/二维码，但未提供 qr_card —— 按约定应把二维码抽成独立卡放进投递板块")
+    # ── 2026-11-10 新增：来源小字长度与形态校验（WARN 不阻断）
+    # 教训：r33 中济通篇 source_note 改了 12 次，每次都是折词/孤字，
+    # 单篇吃掉约 8 分钟。根因是写太长（>60 字）+ 塞了完整 URL。
+    sn = str(f.get('source_note') or '')
+    if len(sn) > 60:
+        print(f"[facts-check] ⚠️ source_note {len(sn)} 字，超过 60 —— "
+              f"过长极易在 375px 折出「转/发」「整/理」这类孤字，建议压到 50 字内再 gen")
+    if re.search(r'https?://\S{12,}', sn):
+        print("[facts-check] ⚠️ source_note 含长 URL —— 长网址必然折行断词，"
+              "建议只留域名或不写，完整地址放正文表格")
     print(f"[facts-check] ✅ 全部通过（title {len(f['title'])} / digest {len(f['digest'])} / 划重点 {len(f['highlight_items'])} 条）")
 
 # ─────────────────────────── gen ───────────────────────────
+
+def _qr_card_html(L, qc):
+    """把扫码投递卡渲染成 HTML（朱总 2026-11-05 定标准）。
+    qc = {title, sub, img, foot1, foot2, qr_size?}；img 为本地图片路径，转 base64 内联（外链=0）。"""
+    import base64
+    img = qc.get('img')
+    if not img or not os.path.exists(img):
+        print(f"[gen] ⚠️ qr_card.img 不存在，跳过扫码卡: {img}")
+        return ''
+    ext = os.path.splitext(img)[1].lower()
+    mime = 'image/png' if ext == '.png' else 'image/jpeg'
+    src = f'data:{mime};base64,' + base64.b64encode(open(img, 'rb').read()).decode()
+    return L.qr_card(title=qc.get('title', '扫码进入报名系统'),
+                     sub=qc.get('sub', ''),
+                     src=src,
+                     foot1=qc.get('foot1', ''),
+                     foot2=qc.get('foot2', ''),
+                     qr_size=int(qc.get('qr_size', 176)))
+
 
 def cmd_gen(args):
     kit_script = find_skill_file('mp-html', 'scripts/layout_kit.py')
@@ -272,6 +308,7 @@ def cmd_gen(args):
     h += L.highlight_card(sub=f['highlight_sub'], intro=intro,
                           items=f['highlight_items'], numbers=[f'{i}.' for i in range(1, len(f['highlight_items']) + 1)])
     h += L.quad_grid([tuple(g) for g in f['grid']])
+    qr_rendered = False
     for sec in f.get('sections', []):
         h += L.sec_title(sec['title'])
         if sec.get('table'):
@@ -283,6 +320,11 @@ def cmd_gen(args):
         if sec.get('paras'):
             for p in sec['paras']:
                 h += L.note(p) if sec.get('as_note') else L.p(p)
+        if sec.get('qr_card'):
+            h += _qr_card_html(L, sec['qr_card'])
+            qr_rendered = True
+    if f.get('qr_card') and not qr_rendered:
+        h += _qr_card_html(L, f['qr_card'])
     work = f['work_dir']
     meta = json.load(open(os.path.join(work, 'meta.json')))
     url_by_idx = {c['idx']: c['url'] for c in meta['images']}
@@ -322,6 +364,27 @@ def cmd_gen(args):
     out = os.path.join(target_dir, f"{f['date_tag']}-{f['slug']}-长图转排版.html")
     open(out, 'w', encoding='utf-8').write(full)
     print(f"[gen] OK {out}\n[gen] section {o}/{c} | <strong> {full.count('<strong>')} | {round(len(full)/1048576,2)}MB")
+    _run_cell_wrap_check(args.facts)
+
+
+def _run_cell_wrap_check(facts_path):
+    """gen 后自动跑表格折行预检（2026-11-10 新增）。
+
+    当天 8 篇里 6 篇因列宽不足折出单字成行，每次都要
+    「改 facts → gen → preview → 看图」四步往返（约 40s/轮）。
+    这里提前算出来，把返工压到 0~1 轮。
+    """
+    script = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'wx_cell_wrap_check.py')
+    if not os.path.exists(script):
+        return
+    try:
+        r = subprocess.run([sys.executable, script, facts_path],
+                           capture_output=True, text=True, timeout=30)
+        out = (r.stdout or '').strip()
+        if out:
+            print(out)
+    except Exception as e:
+        print(f"[gen] 折行预检跳过：{e}")
 
 # ─────────────────────────── cover ───────────────────────────
 

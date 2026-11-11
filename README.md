@@ -1,6 +1,6 @@
 # Momo Skills Core Library (AI Agent 技能库)
 
-> 包含 **51 个通用与专项 AI Agent 技能**，覆盖大模型自主浏览器操作、全站深度爬虫、网页正文提取、智能视频看懂抽帧、媒体音视频下载、万站 CLI 操作、抖音专项 CLI、抖音「我的」个人数据整理、抖音带货翻拍、抖音小店经营数据、千川投流决策、研发资源加速、网络代理管理、企业情报深度调研、微信公众号采集与管理（WeRSS）、本地视频语音转写、GitHub 仓库深度数据调研、公众号技术专栏自动化采写、本地 xlsx 数据治理与安全迁移、**医院招聘图文（job-hospital-write）**、**官方公告重排（job-bulletin-write）**、**长图海报转排版（job-poster-write）**、**教育招聘图文（job-school-write）**等场景。
+> 包含 **52 个通用与专项 AI Agent 技能**，覆盖大模型自主浏览器操作、全站深度爬虫、网页正文提取、智能视频看懂抽帧、媒体音视频下载、万站 CLI 操作、抖音专项 CLI、抖音「我的」个人数据整理、抖音带货翻拍、抖音小店经营数据、千川投流决策、研发资源加速、网络代理管理、企业情报深度调研、微信公众号采集与管理（WeRSS）、本地视频语音转写、GitHub 仓库深度数据调研、公众号技术专栏自动化采写、本地 xlsx 数据治理与安全迁移、**医院招聘图文（job-hospital-write）**、**官方公告重排（job-bulletin-write）**、**长图海报转排版（job-poster-write）**、**教育招聘图文（job-school-write）**等场景。
 
 ---
 
@@ -41,6 +41,7 @@
 | **[gh-research](./gh-research)** | `gh-research/` | GitHub 开源项目深度数据调研（秒级抽取实时 Stars/Forks/Release 版本/多语言分布/README 核心功能提炼） | `gh` (GitHub CLI) |
 | **[gh-write](./gh-write)** | `gh-write/` | 微信公众号「GitHub 项目推荐」专栏文章自动化采写（融合 GitHub 技术数据与搜一搜双维度舆情，生成移动端科技卡片 UI 与草稿脚手架） | Python, Markdown |
 | **[competition-write](./competition-write)** | `competition-write/` | 中小学白名单/正规科技赛事爆款图文采写 SOP（隐秘绿色通道、历史获奖公约数、本地化选题、高转发裂变） | Markdown（无外部依赖） |
+| **[quarkpanso](./quarkpanso)** | `quarkpanso/` | 夸克盘搜资源搜索（QuarkPanSo.com，返回标题/文件预览/分享时间/详情页链接，仅夸克网盘，公开接口秒回 + 浏览器兜底） | Python 3（标准库） |
 | **[geomap](./geomap)** | `geomap/` | 高转化自媒体地图图说海报生成（省市地铁/高校分布/品牌门店，GeoJSON + D3 投影，1080×2160 竖屏信息图） | Python, GeoJSON, D3-geo |
 | **[github-cli](./github-cli)** | `github-cli/` | 基于 gh CLI 的 GitHub 仓库数据提取（issue/PR/release/workflow/API） | `gh` (GitHub CLI) |
 | **[guide-write](./guide-write)** | `guide-write/` | 通用场馆攻略采写（公园/景区/博物馆/高校，五步骨架 + 长尾标题 + 去 AI 味） | Python `PIL`（EXIF 提取，可选 pillow-heif） |

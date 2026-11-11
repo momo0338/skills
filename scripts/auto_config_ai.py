@@ -306,6 +306,10 @@ SKILL_DEPS = {
             "pip": "pip install requests pyyaml",
         },
     },
+    "quarkpanso": {
+        # 夸克盘搜资源搜索：scripts/search.py 只用 Python 标准库 urllib，无需第三方依赖
+        "bins": ["python3"],
+    },
 }
 
 # ============================================================================
