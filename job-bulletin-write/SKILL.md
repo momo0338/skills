@@ -39,12 +39,15 @@ version: 0.4.0
 #    岗位表以「页面图片」内嵌的（正文无附件链接时 grep 页面 <img>）→下载 png 后多模态直接读表；
 #    附件直下返回 HTML=防盗链 → curl 加 -e "<公告页URL>" Referer 重下；
 #    合并单元格以 extract_text 版面序复原，别漏行
-# ⑥ 填 config → 生成排版（内建断言见 §五）：
-python3 ~/src/skills/bulletin-write/scripts/gen_bulletin.py <config.py 路径>
+# ⑥ 填 data/*.json → 生成排版（内建断言见 §五、JSON 壳见 §3.2）：
+python3 ~/src/skills/bulletin-write/scripts/gen_bulletin_json.py data/<file_stem>.json
 # ⑦ 封面：build_cover.py --type 社招；无干净官方 logo → 纯母版不加胶囊（⛔ 不自制底版）
 #    （工作目录不在公告页时，--out 用绝对路径）
 # ⑧ 推送：wx_pipeline.py --profile mashang --html ... --cover ... --source-url ... --digest "手动摘要≤120字"
 #    ⛔ 本骨架的 HTML 无 SEO 摘要块，--digest 必须显式给（gen 结束时会打印 DIGEST），否则落到自动兜底
+#    ⛔ 推送前先 `wx_draft.py list --count 5` 复核草稿箱：同一条链接可能有多路会话并行处理，
+#      db `drafts` 查重只反映推送前的状态，对推送窗口内别人刚推的稿子完全无感
+#      （2026-11-11 江西省港口集团稿：查重三表全 0 通过，push 后发现草稿箱已有同名稿，只能删自己那篇）
 # ⑨ 回填：emit_briefing --mark "<单位>" --to draft --facts "..."；总表该行 内容状态→draft
 #    ⛔ --facts 必须是 KEY=VALUE 分号连接（如「岗位=15岗23人；报名=10-16 17:00截止」），纯叙述文本会被拒；
 #      总表检索词用单位全名子串（注意「经开区」匹配不到「经济开发区」这类简称/全称差异）
@@ -53,7 +56,8 @@ python3 ~/src/skills/bulletin-write/scripts/gen_bulletin.py <config.py 路径>
 
 ## 三、config 编写规范（每篇唯一要写的东西）
 
-复制 `scripts/config_example.py` 填空；真实成稿样例在 `references/samples/`（复用时改 OUT 路径）。
+**新稿写纯数据 JSON**：复制 `scripts/data/_schema_example.json` 填空，生成用 `python3 scripts/gen_bulletin_json.py data/<file_stem>.json`（详见 §3.2）。
+真实成稿样例在 `scripts/data/*.json`（共 70 篇历史稿，可直接参照/改 `_ws` 复用）。以下字段语义 py 配置与 JSON 完全一致。
 
 - `TITLE`：≤64 字，前 21 字带钩子（单位+人数/亮点）；
 - `DIGEST`：≤120 字单行，含截止时间、硬门槛、入口（域名/地点/电话）；
@@ -85,6 +89,29 @@ kind 支持 `raw`（原样插入，调用方自备合法 layout_kit 片段）／
 | 单位卡与总览表内容重复 | 同一数据渲染两遍，篇幅翻倍 | 二选一；或总览表只留速查列并标「见下/见后」 |
 | `write_source_md` 不认新字段 | 源稿 md 缺新区块，三件套不同步 | 改造 `write_source_md` 一并渲染 `EXTRA_SECTIONS` |
 
+### 3.2 JSON 壳工作流（数据/样板分离，2026-11-11 全量迁移落定）
+
+新稿**写纯数据 JSON**，不再写 py 样板代码（历史 70 篇 py cfg 已全量迁移为 `data/*.json` 并删除）。主入口：
+
+```bash
+# 主方式（纯数据 JSON，70 篇历史稿均在 scripts/data/）
+python3 scripts/gen_bulletin_json.py data/<file_stem>.json
+# 兜底：gen_bulletin.py 仍在（供 gen_bulletin_json 内部调用 / 应急 py cfg）
+python3 scripts/gen_bulletin.py <config.py 路径>
+```
+
+- `scripts/bulletin_spec.py`：壳模块，从 JSON 构造 gen_bulletin 可消费的 cfg 对象（补 WS/OUT/SOURCE_MD 路径、Layout、默认品牌色、渲染 `layouts` 里的表格、`_notes`→核查履历）。
+- `scripts/gen_bulletin_json.py`：薄封装，`gen_bulletin.py` 未改一行，断言语义与之一致。
+- `scripts/data/_schema_example.json`：字段 schema 示例，新稿照此填空。
+- 表格：`layouts` 里每个表存 `{"__html__": "<原样 layout_kit 片段>"}` 最稳（**字节级零风险**）；确知与主 Layout 同主题色时也可存 `{"headers":[...],"rows":[...],"widths":[...]}` 由壳重新渲染。⚠️ 部分老稿用了**独立主题色 Layout**（如烟草 BG_TABLE 斑马纹 #F2F7FD），改结构化重渲染会变色——故一律内联原 HTML 为默认。
+- **`_notes`**：原 py cfg 头部 docstring 的硬信息核查履历，搬家进 JSON 的 `_notes` 字段，不丢。
+
+**迁移工具**（历史 70 篇 py cfg 已全量转 data/*.json）：
+- `scripts/cfg2json.py`：单篇 py cfg → JSON（`python3 cfg2json.py cfg_xxx.py out.json`）。
+- `scripts/batch_migrate.py`：批量迁移 + **字节级校验**（`--write` 才落盘；dry-run 默认）。迁移后必须 `TOTAL n | OK n | MISMATCH 0`。
+- 迁移纪律：转换后逐篇比对 `gen_bulletin.build(cfg)` vs `build(bulletin_spec.load_spec(json))` **字节完全一致**才落盘；有外部数据依赖（读 /tmp 临时文件）的老稿若数据不可重建则删除（2026-11-11 删安徽选调北大、甘肃选调两篇死稿）。
+- **2026-11-11 已完成全量迁移：70 篇 py cfg 已转 data/*.json 并删除。** `cfg2json.py`/`batch_migrate.py` 保留作历史归档工具（日后若再有 py cfg 可复转）。日常写稿只用 JSON。
+
 ## 四、硬纪律（红线，违者打回）
 
 1. **原文一字不改**：只拆段、加粗、长条款转小字。改写=回退到解读稿模式，⛔；
@@ -115,6 +142,10 @@ kind 支持 `raw`（原样插入，调用方自备合法 layout_kit 片段）／
 | 机关线巡检报告投料单 [miss] | parse_patrol_report 列序与机关线报告不符（待修） | 按「补台账→重跑投料单」路径绕过 |
 | 岗位表以页面图片内嵌 | 附件列表里找不到简介表 → 误判「无岗位明细」 | 正文无附件链接时 grep 页面 `<img>`，下载 png 后多模态直读 |
 | 旧版 .xls | openpyxl BadZipFile | `xlrd`（venv 已装） |
+| **「扫码领取附件」是草料/短链活码**（如 `qr61.cn/xxx/yyy`） | curl 只拿到 SPA 空壳（约 10KB，正文 0 行）；内置浏览器打开是 iPhone mockup **静态图**——文件列表是图片不是 DOM，`dom_cua_get_visible_dom` 只返回「PC小程序打开／关闭 Markdown」两个按钮，截图又超 10MiB 上限。2026-11-11 江西省港口集团稿在此耗掉 12 轮仍一无所获，被迫出「无岗位表」的降级稿 | **用 ego-browser 打开活码页，取 `document.body.innerText`（是 Markdown），其中 `ncstatic.clewm.net` 的链接就是 4 个附件的 PDF/docx 直链**，下载后 pdfplumber / openpyxl 解析 ⇒ 一步到位拿到完整岗位表。⛔ 别猜 API、别反复截图 |
+| **`*.pzhl.net` 人事考试平台公告页**（普众互联系，安徽/多省国企常用） | ①用 utf-8 读全是乱码（`ʡͨعɼ޹˾`）；②按行 split 会把「10.2」「亿元」「（一）报名。」拆成独立行，段落支离破碎、易漏条款 | ①页面是 **GBK**：`raw.decode('gbk')`；②正文按 **`<P[^>]*>(.*?)</P>`** 正则切段、去 `<SPAN>` 后即得完整段落（比按行切干净得多）；③页内 `href` 常**直接给出岗位表 PDF 直链**（`img2026.pzhl.net/exampzhlnet/年月/xxx.pdf`），pdfplumber 一次提全表。2026-11-11 安徽通航稿据此拿到 9 岗 9 人 |
+| **来源小字写完却没出现在成品里** | `gen_bulletin` 的顶层 `SOURCE_NOTE` 只进源稿 md 与机检参考集，**不渲染进 HTML**——源稿 md 里看得到、HTML 产物里搜不到 | 把来源小字作为 `('note', …)` 追加到 `ORIGINAL` **最后一节的 blocks 末尾**（参照 `data/2026-10-13-2027国考公告-公告重排.json`：末节 `None` ＋ note「国家公务员局　2026年10月」）。⚠️ 已连栽两次（2026-11-11 江西港口、同日安徽通航），出稿前必须 grep 成品确认关键串在位 |
+| **海报印的网址打不开** | 2026-11 已连中两例：内蒙古能源集团猎聘网址 404（正确为 `wow` 非 `www`、项目号少一位）；安徽通航 `ahgxzc.pzhl.net` 404（正确为 `ahgzcz`，xzc↔zcz 印反） | 一切入口**以公告正文与二维码解出的地址为准**，海报印刷件一律 curl 实测；不一致时在划重点、来源小字、FAQ 三处如实披露，`source_url` 用公告页 |
 | `--facts` 非 KEY=VALUE | `--mark` 报 facts_invalid，状态没回填 | facts 用「岗位=…；报名=…」分号连接格式 |
 | **改完标题直接重推** | 草稿箱多出一篇同名稿（`--update-auto` 查重对改后标题失效） | 迭代稿一律 `wx_pipeline.py --update-media-id <旧 media_id>` 原位更新，禁裸推 |
 | **FAQ 问句写「是正式编制吗？」** | gen_bulletin 指纹词机检拦（`正式编制` 在 FINGERPRINTS，原文无此词） | 改问「是编制还是合同制？」（单用「编制」放行，且贴真实搜索句） |
@@ -138,7 +169,7 @@ kind 支持 `raw`（原样插入，调用方自备合法 layout_kit 片段）／
 5. 状态回填：db `drafts` 表（`draft_ctl` hook 自动 INSERT/UPDATE；`content_ctl` 报 `no such column: media_id` 属 schema 漂移，不影响 draft_ctl 真源）＋总表该行 内容状态→draft；
 6. 群发后当天归档（git mv 进 `已发布/`）＋台账/状态推 published。
 
-## 七、写作纪律（填 config 时的人工检查项）
+## 七、写作纪律（填 data/*.json 时的人工检查项）
 
 | 纪律 | 要点 |
 |---|---|
