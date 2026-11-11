@@ -176,7 +176,7 @@ Content-Type: application/json
 
 | 操作 | HTTP 方法 | API 路径 | 参数说明 |
 | :--- | :--- | :--- | :--- |
-| **文章链接订阅** | `POST` | `/api/v1/wx/mps/by_article` | Query 参数: `url=<文章完整URL>` |
+| **文章链接订阅** | `POST` | `/api/v1/wx/mps/by_article` | Query 参数: `url=<文章完整URL>`（含 `~` 损坏短链自动复原，见下）|
 | **公众号列表** | `GET` | `/api/v1/wx/mps` | Query 参数: `page=1&size=20&keyword=...` |
 | **手动添加** | `POST` | `/api/v1/wx/mps` | JSON Body: `{"mp_name": "名称"}` |
 | **更新抓取** | `GET` | `/api/v1/wx/mps/update/{mp_id}` | Query 参数: `start_page=0&end_page=1` |
@@ -184,6 +184,20 @@ Content-Type: application/json
 | **文章列表** | `GET` | `/api/v1/wx/articles` | Query 参数: `mp_id=...&keyword=...&limit=20` |
 | **导出 OPML** | `GET` | `/api/v1/wx/export/mps/opml` | 返回 XML 格式的 OPML 文件 |
 | **删除订阅** | `DELETE` | `/api/v1/wx/mps/{mp_id}` | 路径参数为公众号唯一 ID |
+
+#### 短链 `~` 损坏自动复原（v2 新增）
+
+微信短链 `mp.weixin.qq.com/s/<短码>` 的短码是 base64url，合法字符集为
+`A-Z a-z 0-9 - _`，**不包含 `~`**。若链接在复制/传输中被改写（常见为 `_`
+→ `~`，也可能 `-` → `~`），`client.subscribe_by_article()` 会：
+
+1. 先用**原始链接**请求（合法的 `~` 也不受影响）；
+2. 失败且短码含 `~` 时，分别尝试 `~→_`、`~→-` 两个候选，取第一个成功；
+3. 全部失败则返回原始错误，CLI 明确提示"链接可能已损坏，请重新复制"。
+
+> 不做盲目的全局替换：因为 `-` 与 `_` 是两个不同的合法字符，一刀切
+> `~→_` 会把真正的连字符改坏（已实测反例）。修复结果在响应里带
+> `_repair_note` / `_repaired_url` 便于追溯。
 
 ---
 

@@ -38,13 +38,16 @@ def cmd_subscribe(args, base_url, ak, sk):
     """Add a subscription by WeChat article link or MP name."""
     if args.url:
         print(f"[*] Parsing WeChat article: {args.url}")
-        res = api_request(
-            base_url, ak, sk,
-            method="POST",
-            endpoint="/api/v1/wx/mps/by_article",
-            params={"url": args.url}
-        )
-        if isinstance(res, dict) and res.get("code") == 0:
+        # Use the client's non-destructive repair logic: try the URL as-is first,
+        # then if its short code contains a '~' (never valid in a WeChat /s/ code)
+        # try '~'->'_' and '~'->'-' candidates and take the first success.
+        from werss.client import WeRssClient
+        _c = WeRssClient(base_url=base_url, ak=ak, sk=sk)
+        res = _c.subscribe_by_article(args.url)
+        if isinstance(res, dict) and res.get("_repair_note"):
+            print(f"[!] 检测到短链含非法字符 '~'，已自动复原 ({res.get('_repair_note')})")
+            print(f"    修正后链接: {res.get('_repaired_url')}")
+        if isinstance(res, dict) and res.get("code") == 0 and ((res.get("data") or {}).get("mp_id") or ((res.get("data") or {}).get("mp_info") or {}).get("mp_name")):
             data = res.get("data", {})
             mp_id = data.get("mp_id") or data.get("id")
             mp_info = data.get("mp_info") or {}
@@ -74,7 +77,19 @@ def cmd_subscribe(args, base_url, ak, sk):
             print("=" * 50)
             return 0
         else:
+            # All candidates (original + ~->_ + ~->-) failed.
+            fe = ""
+            if isinstance(res, dict):
+                dd = res.get("data")
+                if isinstance(dd, dict):
+                    fe = dd.get("fetch_error") or ""
             print(f"[✗] 订阅失败: {res}")
+            if "~" in (args.url or ""):
+                print("[!] 提示: 该短链含 '~'，微信短码合法字符只有 [A-Za-z0-9_-]，"
+                      "'~' 通常是被改写损坏。已尝试 '~'->'_' 与 '~'->'-' 均未成功，"
+                      "链接可能已损坏，请重新复制原始链接。")
+            elif fe:
+                print(f"[!] 提示: 抓取失败 ({fe})，可能是微信侧限流/环境异常，稍后重试。")
             return 1
     elif args.name:
         print(f"[*] Adding MP by name: {args.name}")

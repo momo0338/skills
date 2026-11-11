@@ -158,12 +158,100 @@ class WeRssClient:
     # -------------------------------------------------------------------------
 
     def subscribe_by_article(self, url: str) -> Dict[str, Any]:
-        """Subscribe to a WeChat Official Account by parsing an article URL."""
-        return self.request(
+        """Fetch the publisher (and subscribe) for a WeChat article URL.
+
+        WeChat short links (``mp.weixin.qq.com/s/<code>``) use base64url codes
+        whose alphabet is ``A-Z a-z 0-9 - _``. The character ``~`` is NOT part
+        of that alphabet, so a ``~`` in the code always means the link was
+        corrupted in transit (commonly ``_`` -> ``~``, but ``-`` -> ``~`` is
+        also possible). Because ``-`` and ``_`` are two *different* valid
+        characters, a blind ``~ -> _`` replacement is WRONG -- it can corrupt a
+        genuine ``-``.
+
+        Strategy (non-destructive, never guesses):
+          1. Try the URL exactly as given (a legit ``~`` would still work).
+          2. If it fails and the code contains ``~``, try ``~ -> _`` and
+             ``~ -> -`` as separate candidate URLs and take the first success.
+          3. If every candidate fails, surface the original error so callers
+             can report "link appears corrupted" instead of a silent empty hit.
+        """
+        # 1) original, untouched
+        res = self.request(
             method="POST",
             endpoint="/api/v1/wx/mps/by_article",
             params={"url": url},
         )
+        if not self._is_by_article_empty(res):
+            return res
+
+        short = self._extract_short_code(url)
+        if short is None or "~" not in short:
+            # no ambiguity to repair -> fall back to the existing retry-on-empty
+            return self._retry_empty_by_article(url, res)
+
+        # 2) ~ may have replaced '_' or '-'; try both, in that order
+        for repl in ("_", "-"):
+            cand = url.replace("~", repl)
+            if cand == url:
+                continue
+            r = self.request(
+                method="POST",
+                endpoint="/api/v1/wx/mps/by_article",
+                params={"url": cand},
+            )
+            if not self._is_by_article_empty(r):
+                if isinstance(r, dict):
+                    r.setdefault("_repaired_url", cand)
+                    r.setdefault("_repair_note", f"~ -> {repl}")
+                return r
+
+        # 3) all candidates failed -> return the original result (caller reports)
+        return res
+
+    @staticmethod
+    def _extract_short_code(url: str):
+        """Return the ``/s/<code>`` short code of a WeChat article URL, if any."""
+        try:
+            import re
+
+            m = re.search(r"/s/([A-Za-z0-9_~-]+)/?$", url or "")
+            return m.group(1) if m else None
+        except Exception:
+            return None
+
+    @staticmethod
+    def _is_by_article_empty(res: Any) -> bool:
+        """True when a by_article response carries no publisher identity."""
+        if not isinstance(res, dict):
+            return True
+        if res.get("code") not in (0, None):
+            return True
+        data = res.get("data") or {}
+        if not isinstance(data, dict):
+            return True
+        mi = data.get("mp_info") or {}
+        name = mi.get("mp_name") if isinstance(mi, dict) else None
+        return not (name or data.get("mp_id"))
+
+    def _retry_empty_by_article(self, url: str, last_res: Any) -> Any:
+        """Retry an empty by_article a few times (env-anomaly / rate-limit)."""
+        import time
+
+        for _ in range(3):
+            if isinstance(last_res, dict):
+                fe = ((last_res.get("data") or {}).get("fetch_error") or "") if isinstance(last_res.get("data"), dict) else ""
+                if "当前环境异常" not in fe:
+                    break
+            time.sleep(10)
+            r = self.request(
+                method="POST",
+                endpoint="/api/v1/wx/mps/by_article",
+                params={"url": url},
+            )
+            if not self._is_by_article_empty(r):
+                return r
+            last_res = r
+        return last_res
 
     def subscribe_by_name(self, mp_name: str) -> Dict[str, Any]:
         """Subscribe directly by Official Account name."""
